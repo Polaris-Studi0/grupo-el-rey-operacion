@@ -1,0 +1,33 @@
+-- 1. Crea primero estos usuarios en Supabase: Authentication > Users.
+-- 2. Sustituye todos los correos de ejemplo.
+-- 3. Ejecuta este archivo en SQL Editor.
+
+with assignments(email, full_name, role, branch_id) as (values
+  ('admin@tudominio.com',           'Administrador Polaris',              'admin'::public.app_role,   null::text),
+  ('caja.aures@tudominio.com',      'Caja Robledo Aures',                 'cashier'::public.app_role, 'b1'),
+  ('caja.diamante80@tudominio.com', 'Caja Robledo Diamante - Calle 80',   'cashier'::public.app_role, 'b2'),
+  ('caja.santacruz@tudominio.com',  'Caja Santa Cruz',                    'cashier'::public.app_role, 'b3'),
+  ('caja.sangabriel@tudominio.com', 'Caja San Gabriel, Itagüí',           'cashier'::public.app_role, 'b4'),
+  ('caja.diamante85@tudominio.com', 'Caja Robledo Diamante - Diagonal 85','cashier'::public.app_role, 'b5'),
+  ('caja.floresta@tudominio.com',   'Caja Floresta',                      'cashier'::public.app_role, 'b6'),
+  ('caja.la80@tudominio.com',       'Caja La 80',                         'cashier'::public.app_role, 'b7'),
+  ('caja.laestrella@tudominio.com', 'Caja La Estrella',                   'cashier'::public.app_role, 'b8'),
+  ('caja.campovaldez@tudominio.com','Caja Campo Valdez',                  'cashier'::public.app_role, 'b9'),
+  ('caja.prado@tudominio.com',      'Caja San Antonio de Prado',          'cashier'::public.app_role, 'b10')
+)
+update public.profiles as profile
+set full_name=assignments.full_name,
+    role=assignments.role,
+    branch_id=assignments.branch_id,
+    active=true,
+    updated_at=now()
+from assignments
+join auth.users as account on lower(account.email)=lower(assignments.email)
+where profile.id=account.id;
+
+-- Verificación: deben aparecer once filas, una administrativa y diez de caja.
+select account.email, profile.full_name, profile.role, profile.branch_id, branch.name as branch_name
+from public.profiles as profile
+join auth.users as account on account.id=profile.id
+left join public.branches as branch on branch.id=profile.branch_id
+order by profile.role, profile.branch_id;
