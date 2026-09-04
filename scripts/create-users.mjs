@@ -39,11 +39,19 @@ function hiddenQuestion(prompt) {
       else resolve(value);
     }
 
-    function onData(character) {
-      if (character === "\u0003") finish(new Error("Operación cancelada."));
-      else if (character === "\r" || character === "\n") finish();
-      else if (character === "\u007f") value = value.slice(0, -1);
-      else value += character;
+    function onData(chunk) {
+      for (const character of chunk) {
+        if (character === "\u0003") {
+          finish(new Error("Operación cancelada."));
+          return;
+        }
+        if (character === "\r" || character === "\n") {
+          finish();
+          return;
+        }
+        if (character === "\u007f") value = value.slice(0, -1);
+        else value += character;
+      }
     }
     input.on("data", onData);
   });
@@ -68,12 +76,21 @@ async function main() {
   if (!/^\S+@\S+\.\S+$/.test(adminEmail)) throw new Error("El correo del administrador no es válido.");
   if (!/^[a-z0-9.-]+\.[a-z]{2,}$/i.test(domain)) throw new Error("El dominio no es válido.");
 
-  const secret = (await hiddenQuestion("Nueva llave sb_secret de Supabase (entrada oculta): ")).trim();
+  const secret = (await hiddenQuestion("Nueva llave sb_secret de Supabase (entrada oculta): "))
+    .replaceAll("\u001b[200~", "")
+    .replaceAll("\u001b[201~", "")
+    .replaceAll(/\s/g, "")
+    .trim();
   if (!secret.startsWith("sb_secret_")) throw new Error("Debes usar una llave nueva que empiece por sb_secret_.");
 
   const supabase = createClient(SUPABASE_URL, secret, {
     auth: { autoRefreshToken: false, persistSession: false },
   });
+  const { error: keyError } = await supabase.auth.admin.listUsers({ page: 1, perPage: 1 });
+  if (keyError) {
+    throw new Error(`Supabase rechazó la llave antes de crear usuarios: ${keyError.message}`);
+  }
+  console.log("✓ Llave administrativa validada\n");
   const accounts = [
     { email: adminEmail, name: "Administrador Grupo El Rey", role: "admin", branchId: null },
     ...branches.map(([branchId, slug, name]) => ({
