@@ -30,8 +30,15 @@ export async function listStaff(profile){
 }
 export async function listEvents(profile){
   if(isDemoMode) return demoStore.listEvents(profile);
-  const { data, error } = await supabase.from("order_events").select("*, order:orders(order_number,branch_id)").order("created_at",{ascending:false}).limit(500);
-  if(error) throw error; return data;
+  const pageSize=1000;
+  const rows=[];
+  for(let from=0;;from+=pageSize){
+    const { data, error } = await supabase.from("order_events").select("*, order:orders(order_number,branch_id)").order("created_at",{ascending:false}).range(from,from+pageSize-1);
+    if(error) throw error;
+    rows.push(...data);
+    if(data.length<pageSize) break;
+  }
+  return rows;
 }
 export async function saveOrder(values, profile){
   if(isDemoMode) return demoStore.saveOrder(values,profile);

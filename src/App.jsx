@@ -228,23 +228,65 @@ function CourierManager({ couriers, onSave }){
   return <section className="manager"><div className="section-title"><div><p className="eyebrow">EQUIPO DE ENTREGA</p><h2>Domiciliarios</h2></div></div><div className="manager-grid"><form className="panel courier-form" onSubmit={submit}><h3>{editing?"Editar domiciliario":"Agregar domiciliario"}</h3><label>Nombre<input value={form.name} onChange={e=>setForm({...form,name:e.target.value})} required/></label><label>Placa<input value={form.plate} onChange={e=>setForm({...form,plate:e.target.value.toUpperCase()})} required/></label><label>Teléfono<input value={form.phone} onChange={e=>setForm({...form,phone:e.target.value})} required/></label><label>Proveedor<input value={form.provider} onChange={e=>setForm({...form,provider:e.target.value})}/></label><label className="check"><input type="checkbox" checked={form.active} onChange={e=>setForm({...form,active:e.target.checked})}/> Disponible para asignar</label><button className="primary">{editing?"Guardar cambios":"Agregar"}</button>{editing&&<button type="button" onClick={()=>{setEditing(null);setForm(empty);}}>Cancelar</button>}</form><div className="panel courier-list">{couriers.map(item=><article key={item.id}><span className={item.active?"available":"offline"}/><div><b>{item.name}</b><small>{item.plate} · {item.phone}</small><em>{item.provider}</em></div><button onClick={()=>edit(item)}>Editar</button></article>)}</div></div></section>;
 }
 
-function AuditLog({ events, orders, couriers }){
-  const labels={created:"Pedido creado",updated:"Pedido actualizado",courier_assigned:"Domiciliario asignado",payment_receipt_uploaded:"Comprobante adjuntado",status_changed:"Estado actualizado",ready:"Marcado como listo",dispatch:"Entregado al domiciliario",pickup:"Entregado al cliente",delivered:"Entrega final confirmada",cancelled:"Pedido cancelado"};
-  const fieldLabels={status:"Estado",branch_id:"Sede",customer_name:"Cliente",customer_phone:"Teléfono",delivery_address:"Dirección",delivery_zone:"Zona",items:"Productos",total:"Subtotal de productos",delivery_fee:"Costo del domicilio",payment_method:"Medio de pago",source:"Origen",customer_notes:"Nota del cliente",internal_notes:"Nota interna",courier_id:"Domiciliario frecuente",courier_name:"Nombre del domiciliario",courier_plate:"Placa",courier_provider:"Plataforma",eta_minutes:"Tiempo estimado",promised_at:"Hora prometida",handoff_staff_name:"Responsable de caja",payment_receipt_name:"Comprobante",fulfillment_type:"Modalidad"};
-  const showValue=(field,value)=>{
-    if(value==null||value==="")return "Sin definir";
-    if(field==="status")return STATUS[value]?.label||value;
-    if(field==="payment_method")return PAYMENT[value]||value;
-    if(field==="branch_id")return BRANCHES.find(item=>item.id===value)?.name||value;
-    if(field==="courier_id")return couriers.find(item=>item.id===value)?.name||value;
-    if(field==="items")return `${value.length} producto(s)`;
-    if(field==="total"||field==="delivery_fee")return formatMoney(value);
-    if(field==="eta_minutes")return `${value} minutos`;
-    if(field==="promised_at")return formatDateTime(value);
-    if(field==="fulfillment_type")return value==="delivery"?"Domicilio":"Recogida en tienda";
-    return String(value);
-  };
-  return <section><div className="section-title"><div><p className="eyebrow">HISTORIAL INALTERABLE</p><h2>Trazabilidad completa</h2></div><span>{events.length} movimientos</span></div><div className="audit panel">{events.length===0?<div className="empty compact"><h3>Aún no hay movimientos</h3><p>Las acciones realizadas aparecerán aquí.</p></div>:events.map(event=>{const order=event.order||orders.find(item=>item.id===event.order_id);const actor=event.actor_name||"Sistema";const changed=event.before_data?Object.keys(fieldLabels).filter(key=>JSON.stringify(event.before_data?.[key])!==JSON.stringify(event.after_data?.[key])):Object.keys(fieldLabels).filter(key=>event.after_data?.[key]!=null);return <article key={event.id}><i/><div><b>{labels[event.action]||event.action}</b><p>#{order?.order_number||event.after_data?.order_number||"Pedido"} · Usuario: {actor}{event.staff_name?` · Responsable: ${event.staff_name}`:""}</p><small>{formatDateTime(event.created_at)}</small>{changed.length>0&&<details><summary>Ver {event.before_data?"cambios":"datos registrados"}</summary><dl>{changed.map(field=><div key={field}><dt>{fieldLabels[field]}</dt>{event.before_data&&<dd><small>Antes</small>{showValue(field,event.before_data[field])}</dd>}<dd><small>{event.before_data?"Después":"Valor"}</small>{showValue(field,event.after_data?.[field])}</dd></div>)}</dl></details>}</div><span>{event.actor_role||"sistema"}</span></article>;})}</div></section>;
+const AUDIT_LABELS={created:"Pedido creado",updated:"Pedido actualizado",courier_assigned:"Domiciliario asignado",payment_receipt_uploaded:"Comprobante adjuntado",status_changed:"Estado actualizado",ready:"Marcado como listo",dispatch:"Entregado al domiciliario",pickup:"Entregado al cliente",delivered:"Entrega final confirmada",cancelled:"Pedido cancelado"};
+const AUDIT_FIELDS={status:"Estado",branch_id:"Sede",customer_name:"Cliente",customer_phone:"Teléfono",delivery_address:"Dirección",delivery_zone:"Zona",items:"Productos",total:"Subtotal de productos",delivery_fee:"Costo del domicilio",payment_method:"Medio de pago",source:"Origen",customer_notes:"Nota del cliente",internal_notes:"Nota interna",courier_id:"Domiciliario frecuente",courier_name:"Nombre del domiciliario",courier_plate:"Placa",courier_phone:"Teléfono del domiciliario",courier_provider:"Plataforma",eta_minutes:"Tiempo estimado",promised_at:"Hora prometida",handoff_staff_name:"Responsable de caja",payment_receipt_name:"Comprobante",fulfillment_type:"Modalidad"};
+
+function auditValue(field,value,couriers){
+  if(value==null||value==="")return "Sin definir";
+  if(field==="status")return STATUS[value]?.label||value;
+  if(field==="payment_method")return PAYMENT[value]||value;
+  if(field==="branch_id")return BRANCHES.find(item=>item.id===value)?.name||value;
+  if(field==="courier_id")return couriers.find(item=>item.id===value)?.name||value;
+  if(field==="items")return value.map(item=>`${item.qty}× ${item.name}`).join(" · ");
+  if(field==="total"||field==="delivery_fee")return formatMoney(value);
+  if(field==="eta_minutes")return `${value} minutos`;
+  if(field==="promised_at")return formatDateTime(value);
+  if(field==="fulfillment_type")return value==="delivery"?"Domicilio":"Recogida en tienda";
+  return String(value);
+}
+
+function changedAuditFields(event){
+  return event.before_data
+    ? Object.keys(AUDIT_FIELDS).filter(key=>JSON.stringify(event.before_data?.[key])!==JSON.stringify(event.after_data?.[key]))
+    : Object.keys(AUDIT_FIELDS).filter(key=>event.after_data?.[key]!=null);
+}
+
+function TraceabilityDrawer({ order, events, couriers, onClose, onOpenReceipt }){
+  const courier=courierFor(order,couriers);
+  const chronological=[...events].sort((a,b)=>new Date(a.created_at)-new Date(b.created_at));
+  const grandTotal=Number(order.total||0)+Number(order.delivery_fee||0);
+  return <div className="overlay"><button className="backdrop" aria-label="Cerrar" onClick={onClose}/><aside className="drawer trace-drawer"><button className="close" onClick={onClose}>×</button>
+    <div className="trace-case-heading"><div><p className="eyebrow">EXPEDIENTE DEL PEDIDO</p><h2>#{order.order_number}</h2><span>{order.branch?.name||BRANCHES.find(branch=>branch.id===order.branch_id)?.name}</span></div><StatusPill status={order.status}/></div>
+    <section className="trace-case-summary"><div><small>CLIENTE</small><b>{order.customer_name}</b><span>{order.customer_phone}</span></div><div><small>TOTAL COBRADO</small><b>{formatMoney(grandTotal)}</b><span>{PAYMENT[order.payment_method]}</span></div><div><small>MODALIDAD</small><b>{order.fulfillment_type==="delivery"?"Domicilio":"Recogida"}</b><span>{order.fulfillment_type==="delivery"?order.delivery_zone:order.branch?.name}</span></div></section>
+    {order.payment_receipt_path?<section className="trace-receipt available"><div><span>✓</span><p><small>COMPROBANTE DE TRANSFERENCIA</small><b>{order.payment_receipt_name}</b><em>{order.payment_receipt_uploaded_at?`Adjuntado ${formatDateTime(order.payment_receipt_uploaded_at)}`:"Disponible"}</em></p></div><button onClick={()=>onOpenReceipt(order.payment_receipt_path)}>Ver comprobante</button></section>:<section className="trace-receipt"><div><span>—</span><p><small>COMPROBANTE DE TRANSFERENCIA</small><b>Sin comprobante adjunto</b><em>Este pedido no tiene un archivo asociado.</em></p></div></section>}
+    <section className="trace-operational"><h3>Datos operativos</h3><dl><div><dt>Dirección</dt><dd>{order.fulfillment_type==="delivery"?order.delivery_address:"Recoge en sede"}</dd></div><div><dt>Domiciliario</dt><dd>{courier?`${courier.name} · ${courier.provider} · ${courier.plate}`:"Sin asignar"}</dd></div><div><dt>Responsable de entrega</dt><dd>{order.handoff_staff_name||"Pendiente"}</dd></div><div><dt>Costo del domicilio</dt><dd>{formatMoney(order.delivery_fee||0)}</dd></div></dl></section>
+    <section className="trace-history"><div className="trace-history-title"><div><p className="eyebrow">LÍNEA DE TIEMPO</p><h3>Todo lo que ha pasado</h3></div><span>{chronological.length} movimientos</span></div>
+      {chronological.length===0?<div className="empty compact"><h3>Sin movimientos registrados</h3></div>:<div className="trace-event-list">{chronological.map(event=>{const fields=changedAuditFields(event);return <article key={event.id} className="trace-event"><div className="trace-event-axis"><i/><span/></div><div className="trace-event-body"><div className="trace-event-top"><div><b>{AUDIT_LABELS[event.action]||event.action}</b><p>{event.actor_name||"Sistema"}{event.staff_name?` · Responsable físico: ${event.staff_name}`:""}</p></div><time>{formatDateTime(event.created_at)}</time></div>{fields.length>0&&<details><summary>{event.before_data?"Ver cambios realizados":"Ver información registrada"}</summary><dl>{fields.map(field=><div key={field}><dt>{AUDIT_FIELDS[field]}</dt>{event.before_data&&<dd><small>Antes</small><span>{auditValue(field,event.before_data[field],couriers)}</span></dd>}<dd><small>{event.before_data?"Después":"Valor"}</small><span>{auditValue(field,event.after_data?.[field],couriers)}</span></dd></div>)}</dl></details>}</div></article>;})}</div>}
+    </section>
+  </aside></div>;
+}
+
+function AuditLog({ events, orders, couriers, onOpenReceipt }){
+  const [query,setQuery]=useState("");
+  const [branch,setBranch]=useState("all");
+  const [selectedId,setSelectedId]=useState(null);
+  const records=useMemo(()=>orders.map(order=>{
+    const orderEvents=events.filter(event=>event.order_id===order.id).sort((a,b)=>new Date(b.created_at)-new Date(a.created_at));
+    return {order,events:orderEvents,lastEvent:orderEvents[0]||null};
+  }).filter(record=>{
+    const term=query.trim().toLowerCase();
+    const haystack=`${record.order.order_number} ${record.order.customer_name} ${record.order.customer_phone} ${record.order.delivery_zone||""}`.toLowerCase();
+    return (branch==="all"||record.order.branch_id===branch)&&(!term||haystack.includes(term));
+  }).sort((a,b)=>new Date(b.lastEvent?.created_at||b.order.updated_at)-new Date(a.lastEvent?.created_at||a.order.updated_at)),[orders,events,query,branch]);
+  const selectedOrder=orders.find(order=>order.id===selectedId);
+  const selected=selectedOrder?{order:selectedOrder,events:events.filter(event=>event.order_id===selectedId)}:null;
+  const receiptCount=orders.filter(order=>order.payment_receipt_path).length;
+  return <section className="trace-page"><div className="section-title"><div><p className="eyebrow">EXPEDIENTES OPERATIVOS</p><h2>Trazabilidad por pedido</h2></div><span>{orders.length} pedidos · {events.length} movimientos</span></div>
+    <div className="trace-overview"><article><small>PEDIDOS REGISTRADOS</small><strong>{orders.length}</strong><span>Con historial individual</span></article><article><small>CON COMPROBANTE</small><strong>{receiptCount}</strong><span>Archivos protegidos</span></article><article><small>ENTREGADOS</small><strong>{orders.filter(order=>order.status==="delivered").length}</strong><span>Proceso finalizado</span></article></div>
+    <div className="trace-filters"><label className="search"><span>⌕</span><input value={query} onChange={event=>setQuery(event.target.value)} placeholder="Buscar número, cliente, teléfono o zona"/></label><select value={branch} onChange={event=>setBranch(event.target.value)}><option value="all">Todas las sedes</option>{BRANCHES.map(item=><option key={item.id} value={item.id}>{item.name}</option>)}</select></div>
+    <div className="trace-order-list panel"><div className="trace-order-head"><span>Pedido</span><span>Cliente / sede</span><span>Último movimiento</span><span>Soportes</span><span/></div>{records.length===0?<div className="empty compact"><h3>No encontramos pedidos</h3><p>Prueba con otro número, cliente o sede.</p></div>:records.map(record=><button className="trace-order-record" key={record.order.id} onClick={()=>setSelectedId(record.order.id)}><div><b>#{record.order.order_number}</b><StatusPill status={record.order.status}/></div><div><b>{record.order.customer_name}</b><span>{record.order.branch?.name||BRANCHES.find(item=>item.id===record.order.branch_id)?.name}</span></div><div><b>{record.lastEvent?AUDIT_LABELS[record.lastEvent.action]||record.lastEvent.action:"Pedido registrado"}</b><span>{formatDateTime(record.lastEvent?.created_at||record.order.created_at)}</span><small>{record.events.length} movimiento{record.events.length===1?"":"s"}</small></div><div>{record.order.payment_receipt_path?<span className="trace-support yes">✓ Comprobante</span>:<span className="trace-support">Sin archivo</span>}</div><i>→</i></button>)}</div>
+    {selected&&<TraceabilityDrawer order={selected.order} events={selected.events} couriers={couriers} onClose={()=>setSelectedId(null)} onOpenReceipt={onOpenReceipt}/>}
+  </section>;
 }
 
 function App(){
@@ -331,7 +373,7 @@ function App(){
       : filtered.filter(order=>statusFilter==="all"||(statusFilter==="active"?["preparing","ready","dispatched"].includes(order.status):order.status===statusFilter));
   return <div className={`app-shell ${profile.role==="cashier"?"cashier-shell":"admin-shell"}`}><Sidebar profile={profile} page={page} setPage={setPage} onLogout={logout}/><main className="main"><Header profile={profile} onLogout={logout}/>{error&&<div className="error-banner"><span>{error}</span><button onClick={()=>setError("")}>×</button></div>}
     {page==="orders"||page==="ready"||page==="history"?<><Summary orders={orders}/><section className="orders-section"><div className="section-title"><div><p className="eyebrow">{profile.role==="admin"?"TODAS LAS SEDES":"COLA EN TIEMPO REAL"}</p><h2>{page==="history"?"Historial":page==="ready"?"Pendientes por despacho":"Pedidos"} <span>{effectiveOrders.length}</span></h2></div>{profile.role==="admin"&&<button className="primary" onClick={()=>setEditor(false)}>+ Nuevo pedido</button>}</div><div className="filters"><label className="search"><span>⌕</span><input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Buscar pedido, cliente o producto"/></label>{profile.role==="admin"&&<select value={branchFilter} onChange={e=>setBranchFilter(e.target.value)}><option value="all">Todas las sedes</option>{BRANCHES.map(item=><option key={item.id} value={item.id}>{item.name}</option>)}</select>}{page==="orders"&&<select value={statusFilter} onChange={e=>setStatusFilter(e.target.value)}><option value="active">Activos</option><option value="all">Todos los estados</option>{Object.entries(STATUS).map(([value,item])=><option key={value} value={value}>{item.label}</option>)}</select>}</div>{profile.role==="cashier"?<CashierOrders orders={effectiveOrders} couriers={couriers} onOpen={setDetail} onTransition={handleTransition} onHandoff={(order,action)=>setHandoff({order,action})}/>:<OrdersTable orders={effectiveOrders} couriers={couriers} profile={profile} onOpen={setDetail} onEdit={setEditor} onAssign={setAssignment} onTransition={handleTransition}/>}</section></>:null}
-    {page==="staff"&&profile.role==="admin"&&<StaffManager staff={staff} onSave={handleStaff}/>} {page==="couriers"&&profile.role==="admin"&&<CourierManager couriers={couriers} onSave={handleCourier}/>} {page==="audit"&&profile.role==="admin"&&<AuditLog events={events} orders={orders} couriers={couriers}/>}<footer><span>Polaris Studio · Grupo Almacenes El Rey</span><span>{isDemoMode?"Modo demostración":"Datos protegidos y sincronizados"}</span></footer></main>
+    {page==="staff"&&profile.role==="admin"&&<StaffManager staff={staff} onSave={handleStaff}/>} {page==="couriers"&&profile.role==="admin"&&<CourierManager couriers={couriers} onSave={handleCourier}/>} {page==="audit"&&profile.role==="admin"&&<AuditLog events={events} orders={orders} couriers={couriers} onOpenReceipt={handleOpenReceipt}/>}<footer><span>Polaris Studio · Grupo Almacenes El Rey</span><span>{isDemoMode?"Modo demostración":"Datos protegidos y sincronizados"}</span></footer></main>
     {detail&&<OrderDetail order={orders.find(item=>item.id===detail.id)||detail} couriers={couriers} profile={profile} onClose={()=>setDetail(null)} onEdit={order=>{setDetail(null);setEditor(order);}} onAssign={order=>{setDetail(null);setAssignment(order);}} onTransition={handleTransition} onHandoff={(order,action)=>{setDetail(null);setHandoff({order,action});}} onReceipt={handleReceipt} onOpenReceipt={handleOpenReceipt}/>} {editor!==null&&<OrderEditor order={editor||null} onClose={()=>setEditor(null)} onSave={handleSaveOrder}/>} {assignment&&<AssignmentModal order={assignment} couriers={couriers} onClose={()=>setAssignment(null)} onSave={handleAssign}/>} {handoff&&<HandoffModal order={handoff.order} action={handoff.action} staff={staff} onClose={()=>setHandoff(null)} onConfirm={handleTransition}/>} {toast&&<div className="toast">✓ {toast}</div>}
   </div>;
 }
