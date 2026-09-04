@@ -10,7 +10,8 @@
     "preview": "vite preview",
     "check": "eslint .",
     "setup:users": "node scripts/create-users.mjs",
-    "reset:admin": "node scripts/reset-admin-password.mjs"
+    "reset:admin": "node scripts/reset-admin-password.mjs",
+    "fix:auth": "node scripts/fix-auth-config.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.57.4",
