@@ -13,6 +13,12 @@ Aplicación web de pedidos con dos perfiles:
 - Varios productos por pedido y cálculo automático del total.
 - Estados: en preparación, pendiente por despacho, despachado, entregado y cancelado.
 - Asignación o reasignación de domiciliario y tiempo estimado.
+- Domiciliarios ocasionales de Rappi, DiDi u otra plataforma sin agregarlos al directorio permanente.
+- Directorio opcional de domiciliarios frecuentes o de planta.
+- Personal de caja administrable por sede y registro de quién entrega físicamente cada pedido.
+- Hora exacta de entrega al domiciliario o al cliente que recoge.
+- Costo del domicilio separado del subtotal y total cobrado al cliente.
+- Comprobantes de transferencia privados (JPG, PNG, WEBP o PDF, máximo 5 MB).
 - Actualización en tiempo real entre administrador y caja.
 - Bitácora automática con estado anterior, estado posterior, usuario y fecha.
 - Buscador y filtros por sede y estado.
@@ -46,13 +52,14 @@ La clave `anon` es pública y está protegida por las políticas de la base de d
 
 ## Base de datos
 
-El esquema está en:
+El esquema inicial y sus ampliaciones están en:
 
 ```text
 supabase/migrations/202609030001_initial.sql
+supabase/migrations/202609040002_operational_traceability.sql
 ```
 
-El archivo crea las diez sedes, usuarios por perfil, domiciliarios, pedidos, eventos de auditoría, políticas de seguridad y sincronización en tiempo real.
+Ejecuta los archivos en ese orden. La segunda migración agrega el personal de caja, domiciliarios ocasionales, costo del domicilio y comprobantes privados sin borrar los pedidos existentes.
 
 Los datos opcionales para pruebas están en `supabase/demo_seed.sql`. No deben ejecutarse en producción.
 

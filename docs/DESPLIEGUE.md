@@ -30,7 +30,8 @@ Referencias: [precios de Supabase](https://supabase.com/pricing), [regiones de S
 3. Generar una contraseña fuerte para la base de datos y guardarla en un gestor de contraseñas.
 4. Abrir **SQL Editor**.
 5. Copiar y ejecutar todo el archivo `supabase/migrations/202609030001_initial.sql`.
-6. No ejecutar `demo_seed.sql` en producción.
+6. Copiar y ejecutar después `supabase/migrations/202609040002_operational_traceability.sql`.
+7. No ejecutar `demo_seed.sql` en producción.
 
 ## 2. Crear los usuarios
 
@@ -47,6 +48,8 @@ caja.santacruz@tudominio.com
 ```
 
 El correo funciona como nombre de usuario. Cada sede recibe el mismo enlace de la plataforma, su propio correo y una contraseña inicial. El perfil guardado en la base de datos determina automáticamente qué vista y qué sede puede ver; no hay que crear diez enlaces diferentes.
+
+La cuenta de acceso identifica a la sede. Los nombres de las personas que atienden caja se administran desde **Personal de caja** dentro del panel administrador. En el momento de entregar un pedido al domiciliario o al cliente, la sede debe seleccionar quién hizo la entrega; la plataforma registra por separado la cuenta de la sede, la persona responsable, la fecha y la hora.
 
 Después de crear el administrador, ejecutar en SQL Editor, reemplazando el correo:
 
@@ -81,7 +84,7 @@ Identificadores de sede:
 | b9 | Campo Valdez |
 | b10 | San Antonio de Prado |
 
-No compartas una cuenta entre sedes: la bitácora necesita identificar quién realizó cada acción.
+No compartas una cuenta entre sedes. Dentro de una misma sede puede usarse su cuenta operativa y seleccionar en cada entrega a la persona de caja correspondiente.
 
 ## 3. Obtener variables públicas
 
@@ -128,9 +131,9 @@ Las variables de Supabase quedan incorporadas durante la compilación. Cada actu
 
 - Desactivar el registro público de usuarios.
 - Exigir contraseñas únicas y fuertes.
-- Crear una cuenta individual por responsable.
+- Crear una cuenta operativa distinta para cada sede y mantener actualizado el listado de personal de caja.
 - Revisar que cada cajera tenga la sede correcta.
-- Mantener únicamente las variables públicas de Supabase en Vercel.
+- Mantener únicamente las variables públicas de Supabase en Cloudflare.
 - Mientras se use Supabase Free, programar exportaciones manuales y conservarlas fuera de Supabase.
 - Pasar a Supabase Pro cuando la plataforma se convierta en el registro oficial y no sea aceptable perder información desde el último respaldo.
 - Definir retención de datos y aviso de tratamiento de datos personales.
@@ -144,12 +147,13 @@ Antes de comenzar la operación real:
 1. El administrador crea un pedido para cada sede.
 2. Cada cajera confirma que solo ve los pedidos de su sede.
 3. Caja marca el pedido como listo.
-4. Administración asigna domiciliario y tiempo estimado.
-5. Caja confirma la entrega al domiciliario.
+4. Administración asigna un domiciliario ocasional con nombre, placa y plataforma, agrega el costo del domicilio y adjunta un comprobante de prueba.
+5. Caja confirma la entrega al domiciliario y selecciona la persona responsable.
 6. Administración confirma la entrega final.
-7. Se revisa la bitácora y se confirma que todos los movimientos muestran usuario y hora.
+7. Se revisa la bitácora y se confirma que muestra cuenta, responsable, fecha, hora y cambios del pedido.
 8. Se prueba un pedido de recogida en tienda.
-9. Se prueba la visualización desde un celular real.
+9. Se asigna un domiciliario frecuente y se confirma que permanece disponible para otros pedidos.
+10. Se prueba la visualización desde un celular real.
 
 ## Integraciones posteriores
 

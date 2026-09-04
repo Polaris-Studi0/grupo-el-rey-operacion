@@ -3,6 +3,8 @@ import { BRANCHES } from "./constants.js";
 const ORDERS_KEY = "el-rey-platform-orders-v1";
 const EVENTS_KEY = "el-rey-platform-events-v1";
 const COURIERS_KEY = "el-rey-platform-couriers-v1";
+const STAFF_KEY = "el-rey-platform-staff-v1";
+const receiptUrls = new Map();
 
 const now = Date.now();
 const minutesAgo = minutes => new Date(now - minutes * 60_000).toISOString();
@@ -11,6 +13,13 @@ const initialCouriers = [
   { id: "c1", name: "Carlos Ramírez", plate: "KDP 42F", phone: "300 555 0142", provider: "Independiente", active: true },
   { id: "c2", name: "Juan Esteban López", plate: "DWL 73G", phone: "301 555 0188", provider: "inDrive", active: true },
   { id: "c3", name: "Mateo Gómez", plate: "FZX 19H", phone: "302 555 0164", provider: "DiDi Entregas", active: true }
+];
+
+const initialStaff = [
+  { id:"s1", branch_id:"b1", full_name:"Laura Morales", active:true },
+  { id:"s2", branch_id:"b1", full_name:"Diana Gómez", active:true },
+  { id:"s3", branch_id:"b2", full_name:"Carolina Restrepo", active:true },
+  { id:"s4", branch_id:"b6", full_name:"María Elena Ruiz", active:true }
 ];
 
 const initialOrders = [
@@ -30,17 +39,23 @@ function read(key, fallback){
 }
 function write(key, value){ localStorage.setItem(key, JSON.stringify(value)); }
 function withRelations(order, couriers){
-  return { ...order, branch: BRANCHES.find(item => item.id === order.branch_id), courier: couriers.find(item => item.id === order.courier_id) || null };
+  const savedCourier=couriers.find(item => item.id === order.courier_id) || null;
+  return {
+    delivery_fee:0,courier_name:savedCourier?.name||null,courier_plate:savedCourier?.plate||null,
+    courier_phone:savedCourier?.phone||null,courier_provider:savedCourier?.provider||null,
+    handoff_staff_id:null,handoff_staff_name:null,payment_receipt_path:null,
+    ...order,branch:BRANCHES.find(item => item.id === order.branch_id),courier:savedCourier
+  };
 }
 function addEvent(orderId, action, before, after, actor){
   const events = read(EVENTS_KEY, []);
-  events.unshift({ id: crypto.randomUUID(), order_id: orderId, action, before_data:before, after_data:after, created_at:new Date().toISOString(), actor_name:actor?.full_name || "Sistema", actor_role:actor?.role || "system" });
+  events.unshift({ id: crypto.randomUUID(), order_id: orderId, action, before_data:before, after_data:after, created_at:new Date().toISOString(), actor_name:actor?.full_name || "Sistema", actor_role:actor?.role || "system", staff_member_id:["dispatch","pickup"].includes(action)?after?.handoff_staff_id:null, staff_name:["dispatch","pickup"].includes(action)?after?.handoff_staff_name:null });
   write(EVENTS_KEY, events);
 }
 
 export const demoStore = {
   reset(){
-    write(ORDERS_KEY, initialOrders); write(COURIERS_KEY, initialCouriers); write(EVENTS_KEY, []);
+    write(ORDERS_KEY, initialOrders); write(COURIERS_KEY, initialCouriers); write(STAFF_KEY,initialStaff); write(EVENTS_KEY, []);
   },
   async listOrders(profile){
     const couriers = read(COURIERS_KEY, initialCouriers);
@@ -50,6 +65,11 @@ export const demoStore = {
       .sort((a,b) => new Date(b.created_at) - new Date(a.created_at));
   },
   async listCouriers(){ return read(COURIERS_KEY, initialCouriers); },
+  async listStaff(profile){
+    return read(STAFF_KEY,initialStaff)
+      .filter(member=>profile.role==="admin"||member.branch_id===profile.branch_id)
+      .map(member=>({...member,branch:BRANCHES.find(branch=>branch.id===member.branch_id)}));
+  },
   async listEvents(profile){
     const allowed = new Set((await this.listOrders(profile)).map(order => order.id));
     return read(EVENTS_KEY, []).filter(event => allowed.has(event.order_id));
@@ -65,18 +85,32 @@ export const demoStore = {
     }
     const before = structuredClone(orders[index]);
     orders[index] = { ...orders[index], ...values, updated_at:timestamp, updated_by:profile.id };
-    const action = before.courier_id !== orders[index].courier_id ? "courier_assigned" : before.status !== orders[index].status ? "status_changed" : "updated";
+    const courierChanged=["courier_id","courier_name","courier_plate","courier_phone","courier_provider"]
+      .some(field=>before[field]!==orders[index][field]);
+    if(courierChanged&&orders[index].courier_name){
+      orders[index].courier_assigned_at=timestamp;
+      orders[index].courier_assigned_by=profile.id;
+    }
+    const action = courierChanged ? "courier_assigned" : before.payment_receipt_path !== orders[index].payment_receipt_path ? "payment_receipt_uploaded" : before.status !== orders[index].status ? "status_changed" : "updated";
     write(ORDERS_KEY, orders); addEvent(values.id,action,before,orders[index],profile); return orders[index];
   },
-  async transition(orderId, action, profile){
+  async transition(orderId, action, profile, staffId=null){
     const orders = read(ORDERS_KEY, initialOrders);
     const index = orders.findIndex(order => order.id === orderId);
     if(index < 0) throw new Error("Pedido no encontrado");
     const before = structuredClone(orders[index]);
     const timestamp = new Date().toISOString();
     if(action === "ready" && before.status === "preparing") orders[index] = {...before,status:"ready",ready_at:timestamp};
-    else if(action === "dispatch" && before.status === "ready" && before.fulfillment_type === "delivery" && before.courier_id) orders[index] = {...before,status:"dispatched",dispatched_at:timestamp};
-    else if(action === "pickup" && before.status === "ready" && before.fulfillment_type === "pickup") orders[index] = {...before,status:"delivered",delivered_at:timestamp};
+    else if(action === "dispatch" && before.status === "ready" && before.fulfillment_type === "delivery" && (before.courier_id||before.courier_name)){
+      const staff=read(STAFF_KEY,initialStaff).find(member=>member.id===staffId&&member.branch_id===before.branch_id&&member.active);
+      if(!staff) throw new Error("Selecciona la persona de caja que realizó la entrega");
+      orders[index] = {...before,status:"dispatched",dispatched_at:timestamp,handoff_staff_id:staff.id,handoff_staff_name:staff.full_name};
+    }
+    else if(action === "pickup" && before.status === "ready" && before.fulfillment_type === "pickup"){
+      const staff=read(STAFF_KEY,initialStaff).find(member=>member.id===staffId&&member.branch_id===before.branch_id&&member.active);
+      if(!staff) throw new Error("Selecciona la persona de caja que realizó la entrega");
+      orders[index] = {...before,status:"delivered",delivered_at:timestamp,handoff_staff_id:staff.id,handoff_staff_name:staff.full_name};
+    }
     else if(action === "delivered" && profile.role === "admin" && before.status === "dispatched") orders[index] = {...before,status:"delivered",delivered_at:timestamp};
     else throw new Error("Ese movimiento no está permitido en el estado actual");
     orders[index].updated_at = timestamp; orders[index].updated_by = profile.id;
@@ -87,5 +121,22 @@ export const demoStore = {
     const index = couriers.findIndex(item => item.id === values.id);
     if(index < 0) couriers.unshift({...values,id:crypto.randomUUID()}); else couriers[index] = {...couriers[index],...values};
     write(COURIERS_KEY,couriers); return couriers;
+  },
+  async saveStaff(values){
+    const staff=read(STAFF_KEY,initialStaff);
+    const index=staff.findIndex(item=>item.id===values.id);
+    const saved=index<0?{...values,id:crypto.randomUUID()}: {...staff[index],...values};
+    if(index<0)staff.unshift(saved);else staff[index]=saved;
+    write(STAFF_KEY,staff);return saved;
+  },
+  async attachReceipt(order,file,profile){
+    const path=`demo/${order.id}/${crypto.randomUUID()}`;
+    receiptUrls.set(path,URL.createObjectURL(file));
+    return this.saveOrder({...order,payment_receipt_path:path,payment_receipt_name:file.name,payment_receipt_mime_type:file.type,payment_receipt_size:file.size,payment_receipt_uploaded_at:new Date().toISOString()},profile);
+  },
+  getReceiptUrl(path){
+    const url=receiptUrls.get(path);
+    if(!url)throw new Error("El comprobante de demostración ya no está disponible. Vuelve a adjuntarlo.");
+    return url;
   }
 };
