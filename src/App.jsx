@@ -146,16 +146,26 @@ const blankOrder = { branch_id:"b1",fulfillment_type:"delivery",status:"preparin
 
 function OrderEditor({ order, onClose, onSave }){
   const [form,setForm] = useState(()=>structuredClone(order||blankOrder));
+  const [receiptFile,setReceiptFile] = useState(null);
+  const [fileError,setFileError] = useState("");
   const [busy,setBusy] = useState(false);
   const total = form.items.reduce((sum,item)=>sum+Number(item.qty||0)*Number(item.unit_price||0),0);
   const change = (key,value)=>setForm(current=>({...current,[key]:value}));
   const changeItem = (index,key,value)=>setForm(current=>({...current,items:current.items.map((item,itemIndex)=>itemIndex===index?{...item,[key]:value}:item)}));
   const removeItem = index=>setForm(current=>({...current,items:current.items.filter((_,itemIndex)=>itemIndex!==index)}));
-  async function submit(event){ event.preventDefault(); setBusy(true); try{await onSave({...form,total});}finally{setBusy(false);} }
+  function receiptChange(event){
+    const file=event.target.files?.[0]||null;
+    const allowed=["image/jpeg","image/png","image/webp","application/pdf"];
+    if(file&&!allowed.includes(file.type)){setReceiptFile(null);setFileError("Usa una imagen JPG, PNG, WEBP o un PDF.");return;}
+    if(file&&file.size>5*1024*1024){setReceiptFile(null);setFileError("El comprobante debe pesar máximo 5 MB.");return;}
+    setReceiptFile(file);setFileError("");
+  }
+  async function submit(event){ event.preventDefault(); if(fileError)return;setBusy(true); try{await onSave({...form,total},receiptFile);}finally{setBusy(false);} }
   return <div className="overlay"><button className="backdrop" aria-label="Cerrar" onClick={onClose}/><section className="modal editor"><button className="close" onClick={onClose}>×</button><p className="eyebrow">{order?"EDITAR PEDIDO":"NUEVO PEDIDO"}</p><h2>{order?`#${order.order_number}`:"Registrar venta"}</h2>
     <form onSubmit={submit}>
       <div className="form-grid"><label>Sede<select value={form.branch_id} onChange={e=>change("branch_id",e.target.value)}>{BRANCHES.map(branch=><option key={branch.id} value={branch.id}>{branch.name}</option>)}</select></label><label>Modalidad<select value={form.fulfillment_type} onChange={e=>setForm(current=>({...current,fulfillment_type:e.target.value,courier_id:e.target.value==="pickup"?null:current.courier_id,delivery_fee:e.target.value==="pickup"?0:current.delivery_fee}))}><option value="delivery">Domicilio</option><option value="pickup">Recogida en tienda</option></select></label><label>Cliente<input value={form.customer_name} onChange={e=>change("customer_name",e.target.value)} required /></label><label>Teléfono<input value={form.customer_phone} onChange={e=>change("customer_phone",e.target.value)} required /></label>{form.fulfillment_type==="delivery"&&<><label>Dirección<input value={form.delivery_address} onChange={e=>change("delivery_address",e.target.value)} required /></label><label>Zona o barrio<input value={form.delivery_zone} onChange={e=>change("delivery_zone",e.target.value)} required /></label><label>Costo del domicilio para el cliente<input type="number" min="0" step="500" value={form.delivery_fee||0} onChange={e=>change("delivery_fee",Number(e.target.value))}/></label></>}<label>Medio de pago<select value={form.payment_method} onChange={e=>change("payment_method",e.target.value)}>{Object.entries(PAYMENT).map(([value,label])=><option key={value} value={value}>{label}</option>)}</select></label><label>Origen<input value={form.source} onChange={e=>change("source",e.target.value)} placeholder="WhatsApp, Instagram…" /></label>{order&&<label>Estado<select value={form.status} onChange={e=>change("status",e.target.value)}>{Object.entries(STATUS).map(([value,item])=><option key={value} value={value}>{item.label}</option>)}</select></label>}</div>
       <fieldset><legend>Productos</legend>{form.items.map((item,index)=><div className="item-row" key={index}><label>Producto<input value={item.name} onChange={e=>changeItem(index,"name",e.target.value)} required /></label><label>Cantidad<input type="number" min="1" value={item.qty} onChange={e=>changeItem(index,"qty",Number(e.target.value))} required /></label><label>Precio unitario<input type="number" min="0" step="100" value={item.unit_price} onChange={e=>changeItem(index,"unit_price",Number(e.target.value))} required /></label>{form.items.length>1&&<button type="button" className="remove" onClick={()=>removeItem(index)}>×</button>}</div>)}<button type="button" className="add-line" onClick={()=>change("items",[...form.items,{qty:1,name:"",unit_price:0}])}>+ Agregar producto</button><div className="calculated-total">TOTAL CON DOMICILIO <strong>{formatMoney(total+Number(form.delivery_fee||0))}</strong></div></fieldset>
+      <section className="editor-receipt"><div><b>Comprobante de pago</b><span>Opcional · puedes adjuntarlo ahora o hacerlo después desde el detalle del pedido.</span>{order?.payment_receipt_name&&!receiptFile&&<small>Actual: {order.payment_receipt_name}</small>}{receiptFile&&<small>Seleccionado: {receiptFile.name}</small>}{fileError&&<small className="form-error">{fileError}</small>}</div><label className="upload-button">{receiptFile?"Cambiar archivo":order?.payment_receipt_path?"Reemplazar":"Seleccionar archivo"}<input type="file" accept="image/jpeg,image/png,image/webp,application/pdf" onChange={receiptChange}/></label></section>
       <div className="form-grid"><label className="wide">Indicaciones del cliente<textarea value={form.customer_notes||""} onChange={e=>change("customer_notes",e.target.value)} /></label><label className="wide">Nota interna<textarea value={form.internal_notes||""} onChange={e=>change("internal_notes",e.target.value)} /></label></div>
       <div className="modal-actions"><button type="button" onClick={onClose}>Cancelar</button><button className="primary" disabled={busy}>{busy?"Guardando…":"Guardar pedido"}</button></div>
     </form>
@@ -285,9 +295,15 @@ function App(){
     return (branchFilter==="all"||order.branch_id===branchFilter)&&(!term||haystack.includes(term));
   }),[orders,search,branchFilter]);
 
-  async function handleSaveOrder(values){
-    try{await saveOrder(values,profile);setEditor(null);setDetail(null);await refresh();setToast(values.id?"Pedido actualizado y registrado en la trazabilidad.":"Pedido creado correctamente.");return true;}
+  async function handleSaveOrder(values,receiptFile=null){
+    let savedOrder;
+    try{savedOrder=await saveOrder(values,profile);}
     catch(saveError){setError(`No se pudo guardar: ${saveError.message}`);return false;}
+    if(receiptFile){
+      try{await uploadPaymentReceipt(savedOrder,receiptFile,profile);}
+      catch(receiptError){setEditor(null);setDetail(null);await refresh();setError(`El pedido quedó guardado, pero el comprobante no pudo adjuntarse: ${receiptError.message}. Puedes volver a subirlo desde el detalle del pedido.`);return true;}
+    }
+    setEditor(null);setDetail(null);await refresh();setToast(receiptFile?(values.id?"Pedido y comprobante actualizados correctamente.":"Pedido creado con su comprobante."):(values.id?"Pedido actualizado y registrado en la trazabilidad.":"Pedido creado correctamente."));return true;
   }
   async function handleTransition(order,action,staffId=null){
     try{await transitionOrder(order.id,action,profile,staffId);setDetail(null);setHandoff(null);await refresh();setToast(["dispatch","pickup"].includes(action)?"Entrega registrada con fecha, hora y responsable.":"Movimiento registrado con fecha y hora.");return true;}
