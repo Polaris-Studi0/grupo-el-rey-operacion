@@ -40,6 +40,19 @@ async function validMetaSignature(rawBody,signatureHeader,appSecret){
 
 async function sha256(value){return bytesToHex(await crypto.subtle.digest("SHA-256",value));}
 
+function supabaseKey(env){
+  return env.SUPABASE_SECRET_KEY||env.SUPABASE_SERVICE_ROLE_KEY||"";
+}
+
+function supabaseHeaders(env,additionalHeaders={}){
+  const apiKey=supabaseKey(env);
+  const headers={apikey:apiKey,"content-type":"application/json",...additionalHeaders};
+  // Las nuevas llaves sb_secret_* se autentican únicamente mediante apikey.
+  // Authorization: Bearer se conserva solo para la llave JWT service_role heredada.
+  if(apiKey&&!apiKey.startsWith("sb_secret_"))headers.authorization=`Bearer ${apiKey}`;
+  return headers;
+}
+
 function describeWebhook(payload){
   const change=payload?.entry?.[0]?.changes?.[0];
   const value=change?.value||{};
@@ -49,10 +62,10 @@ function describeWebhook(payload){
 }
 
 async function persistInbox(payload,eventKey,eventType,env){
-  if(!env.SUPABASE_URL||!env.SUPABASE_SERVICE_ROLE_KEY)throw new Error("Supabase inbox is not configured");
+  if(!env.SUPABASE_URL||!supabaseKey(env))throw new Error("Supabase inbox is not configured");
   const result=await fetch(`${env.SUPABASE_URL}/rest/v1/whatsapp_webhook_inbox?on_conflict=event_key`,{
     method:"POST",
-    headers:{apikey:env.SUPABASE_SERVICE_ROLE_KEY,authorization:`Bearer ${env.SUPABASE_SERVICE_ROLE_KEY}`,"content-type":"application/json",prefer:"resolution=ignore-duplicates,return=minimal"},
+    headers:supabaseHeaders(env,{prefer:"resolution=ignore-duplicates,return=minimal"}),
     body:JSON.stringify({event_key:eventKey,event_type:eventType,payload})
   });
   if(!result.ok)throw new Error(`Supabase inbox respondió ${result.status}`);
@@ -61,7 +74,7 @@ async function persistInbox(payload,eventKey,eventType,env){
 async function supabaseRpc(name,body,env){
   const result=await fetch(`${env.SUPABASE_URL}/rest/v1/rpc/${name}`,{
     method:"POST",
-    headers:{apikey:env.SUPABASE_SERVICE_ROLE_KEY,authorization:`Bearer ${env.SUPABASE_SERVICE_ROLE_KEY}`,"content-type":"application/json"},
+    headers:supabaseHeaders(env),
     body:JSON.stringify(body)
   });
   if(!result.ok)throw new Error(`Supabase RPC ${name} respondió ${result.status}`);
@@ -149,7 +162,7 @@ async function sendWhatsApp(request,env){
 }
 
 function health(env){
-  return json({ok:true,webhookVerification:Boolean(env.WHATSAPP_VERIFY_TOKEN),signatureVerification:Boolean(env.WHATSAPP_APP_SECRET),inbox:Boolean(env.SUPABASE_URL&&env.SUPABASE_SERVICE_ROLE_KEY),automation:Boolean(env.N8N_WEBHOOK_URL&&env.N8N_WEBHOOK_SECRET),outboundMessaging:Boolean(env.WHATSAPP_ACCESS_TOKEN&&env.WHATSAPP_PHONE_NUMBER_ID&&env.N8N_GATEWAY_SECRET)});
+  return json({ok:true,webhookVerification:Boolean(env.WHATSAPP_VERIFY_TOKEN),signatureVerification:Boolean(env.WHATSAPP_APP_SECRET),inbox:Boolean(env.SUPABASE_URL&&supabaseKey(env)),automation:Boolean(env.N8N_WEBHOOK_URL&&env.N8N_WEBHOOK_SECRET),outboundMessaging:Boolean(env.WHATSAPP_ACCESS_TOKEN&&env.WHATSAPP_PHONE_NUMBER_ID&&env.N8N_GATEWAY_SECRET)});
 }
 
 export default {

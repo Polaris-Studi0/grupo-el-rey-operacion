@@ -3,6 +3,7 @@
   "name": "grupo-el-rey-operacion",
   "compatibility_date": "2026-09-03",
   "main": "./src/worker.js",
+  "keep_vars": true,
   "assets": {
     "directory": "./dist",
     "not_found_handling": "single-page-application",

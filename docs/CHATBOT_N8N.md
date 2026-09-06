@@ -107,7 +107,8 @@ Configurar como secretos, nunca como variables `VITE_` ni dentro de Git:
 - `WHATSAPP_ACCESS_TOKEN`: token permanente de usuario del sistema, no el token temporal de prueba.
 - `WHATSAPP_PHONE_NUMBER_ID`: ID del número de producción.
 - `SUPABASE_URL`: URL del proyecto.
-- `SUPABASE_SERVICE_ROLE_KEY`: llave exclusiva del backend.
+- `SUPABASE_SECRET_KEY`: llave moderna `sb_secret_*`, exclusiva del backend y creada específicamente para el Worker.
+- `SUPABASE_SERVICE_ROLE_KEY`: compatibilidad temporal con la llave JWT heredada; no configurarla si existe `SUPABASE_SECRET_KEY`.
 - `N8N_WEBHOOK_URL`: URL de producción del flujo de entrada.
 - `N8N_WEBHOOK_SECRET`: secreto que n8n compara al recibir eventos.
 - `N8N_GATEWAY_SECRET`: secreto que n8n envía al endpoint `/api/whatsapp/send`.

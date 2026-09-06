@@ -73,6 +73,8 @@ Las instrucciones completas para Supabase Free, Cloudflare Pages, GoDaddy y los 
 
 La arquitectura y puesta en marcha del chatbot con n8n están en [docs/CHATBOT_N8N.md](docs/CHATBOT_N8N.md).
 
+El Worker utiliza una llave moderna `sb_secret_*` guardada únicamente como `SUPABASE_SECRET_KEY` en los secretos de Cloudflare. La llave heredada `service_role` se admite solo como transición y nunca debe almacenarse en el repositorio ni exponerse al navegador.
+
 ## Verificación
 
 ```bash
