@@ -145,8 +145,9 @@ export const demoStore = {
     write(STAFF_KEY,staff);return saved;
   },
   async listChatbotData(){
-    return {contacts:[demoContact],conversations:structuredClone(initialConversations),messages:structuredClone(initialMessages),tasks:read(TASKS_KEY,initialTasks),knowledge:read(KNOWLEDGE_KEY,initialKnowledge),inventory:read(INVENTORY_KEY,initialInventory)};
+    return {contacts:[demoContact],conversations:structuredClone(initialConversations),messages:structuredClone(initialMessages),attachments:[],tasks:read(TASKS_KEY,initialTasks),knowledge:read(KNOWLEDGE_KEY,initialKnowledge),inventory:read(INVENTORY_KEY,initialInventory)};
   },
+  getChatAttachmentUrl(){throw new Error("No hay un archivo de demostración asociado.");},
   async saveKnowledge(values){
     const records=read(KNOWLEDGE_KEY,initialKnowledge);
     const saved={...values,id:values.id||crypto.randomUUID(),updated_at:new Date().toISOString()};

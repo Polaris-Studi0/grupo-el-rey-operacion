@@ -60,9 +60,10 @@ El esquema inicial y sus ampliaciones están en:
 supabase/migrations/202609030001_initial.sql
 supabase/migrations/202609040002_operational_traceability.sql
 supabase/migrations/202609050003_whatsapp_commerce.sql
+supabase/migrations/202609050004_whatsapp_hardening.sql
 ```
 
-Ejecuta los archivos en ese orden. La tercera migración prepara el comercio conversacional de WhatsApp, el control humano y el inventario auditable sin borrar los pedidos existentes.
+Ejecuta los archivos en ese orden. La tercera migración prepara el comercio conversacional; la cuarta agrega recepción durable, reintentos con lease, adjuntos privados, estados de Meta inmutables e inventario idempotente. Ninguna borra pedidos existentes.
 
 Los datos opcionales para pruebas están en `supabase/demo_seed.sql`. No deben ejecutarse en producción.
 

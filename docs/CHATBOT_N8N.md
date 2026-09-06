@@ -7,14 +7,14 @@ El asistente orienta sobre sedes, horarios, promociones y productos previamente 
 ## Flujo principal
 
 1. Meta envía el evento firmado al Worker de Cloudflare en `/api/whatsapp/webhook`.
-2. El Worker valida la firma, guarda el evento original en `whatsapp_webhook_inbox` y lo reenvía a n8n con una clave interna.
-3. n8n descarta eventos duplicados usando `x-elrey-event-key`.
+2. El Worker valida la firma y guarda el evento original en `whatsapp_webhook_inbox` **antes** de responder a Meta.
+3. El Worker toma un lease atómico y lo reenvía a n8n con `x-elrey-event-key`, `x-elrey-lease-id` y el secreto interno. n8n debe responder `2xx` únicamente cuando el flujo haya terminado correctamente.
 4. n8n crea o actualiza el contacto y abre su conversación.
 5. Si no existe autorización vigente, envía el aviso de privacidad y espera una respuesta explícita.
 6. Con autorización, clasifica la intención y obtiene la sede desde el contexto de la landing, el historial o una pregunta directa.
 7. Las reglas determinísticas consultan conocimiento, catálogo e inventario. OpenAI redacta la respuesta únicamente con esos datos.
-8. Si falta una confirmación, n8n crea un registro en `human_tasks`, marca la conversación como `waiting_human` y envía la notificación al administrador.
-9. Al resolver el pendiente desde el panel, n8n retoma la conversación y responde al cliente.
+8. Si falta una confirmación, n8n llama `create_human_task` con una clave idempotente. La función crea el pendiente, marca la conversación como `waiting_human` y agrega la notificación a `automation_outbox`.
+9. Al resolver el pendiente desde el panel se agrega `human_task.completed` al outbox. El flujo de pendientes lo reclama con lease, retoma la conversación y registra el resultado.
 10. Cada mensaje, decisión, autorización, reserva y movimiento queda registrado en Supabase.
 
 ## Aviso de privacidad inicial
@@ -55,7 +55,7 @@ Se crea `credit_application` para que caja gestione la solicitud. No se afirma q
 
 - `available_qty` representa unidades físicas confirmadas.
 - `reserved_qty` impide ofrecer dos veces la misma unidad.
-- `reserve_chat_inventory` crea una reserva con expiración y un movimiento auditable.
+- `reserve_chat_inventory` exige una clave idempotente, crea una sola reserva con expiración y registra el movimiento auditable.
 - Al confirmar la compra, el flujo debe convertir la reserva en venta, disminuir `available_qty` y liberar `reserved_qty` en una sola transacción.
 - Si el cliente abandona o vence la reserva, se libera automáticamente.
 - Excel o CSV se usa solamente como formato de carga; Supabase es la fuente real durante la conversación.
@@ -72,6 +72,8 @@ Mantener varios flujos pequeños facilita pruebas y evita que un fallo afecte to
 6. `EL REY · Inventario · Vencimientos`: ejecución programada que libera reservas expiradas.
 7. `EL REY · WhatsApp · Errores`: registra errores y alerta solo cuando requieren acción.
 
+Los flujos de recuperación usan `claim_pending_whatsapp_events` y `claim_automation_events`. Al terminar llaman `complete_whatsapp_event` o `complete_automation_event` con el mismo `lease_id`. Un lease vencido se puede reclamar; después de diez fallos el evento pasa a revisión manual en vez de repetirse indefinidamente.
+
 ## Modelo de IA
 
 Usar `gpt-5.4-nano` para intención, extracción de campos y elección de la siguiente acción. Usar `gpt-5.4-mini` solo cuando se necesite una respuesta conversacional más compleja. En ambos casos:
@@ -81,6 +83,7 @@ Usar `gpt-5.4-nano` para intención, extracción de campos y elección de la sig
 - Temperatura conservadora cuando esté disponible.
 - Enviar únicamente el resumen y los últimos mensajes necesarios, no el historial completo.
 - Nunca incluir llaves, tokens ni comprobantes en el prompt.
+- Registrar cada ejecución con `run_key` único en `ai_runs` para no pagar ni responder dos veces ante un reintento.
 
 Salida mínima esperada del clasificador:
 
@@ -114,20 +117,18 @@ El endpoint `/api/whatsapp/health` solo devuelve si cada grupo está configurado
 
 ## Contrato de salida hacia WhatsApp
 
-n8n hace `POST /api/whatsapp/send` con `x-elrey-gateway-secret`.
-
-Mensaje de texto dentro de la ventana de atención:
+n8n no envía teléfonos ni texto libre directamente al Worker. Primero llama `queue_outbound_whatsapp_message` con una clave idempotente y el contenido; Supabase devuelve el `message_id`. Después hace `POST /api/whatsapp/send` con `x-elrey-gateway-secret`:
 
 ```json
-{ "to": "573001234567", "type": "text", "text": "Mensaje confirmado" }
+{ "message_id": "UUID_DEVUELTO_POR_SUPABASE" }
 ```
 
-Plantilla aprobada para iniciar o retomar fuera de la ventana:
+El Worker reclama ese mensaje, obtiene el destinatario desde la conversación, lo envía a Meta y guarda el `meta_message_id` antes de responder. Si el resultado de red es incierto, bloquea el reenvío automático para evitar mensajes duplicados y lo deja para revisión humana.
+
+Para texto, `queue_outbound_whatsapp_message.p_body` contiene el mensaje y `p_payload` puede ser `{}`. Para una plantilla aprobada, `p_message_type` es `template` y el payload tiene esta forma:
 
 ```json
 {
-  "to": "573001234567",
-  "type": "template",
   "template": {
     "name": "pedido_actualizacion",
     "language": { "code": "es_CO" },
@@ -140,9 +141,19 @@ Plantilla aprobada para iniciar o retomar fuera de la ventana:
 
 1. Revisar el aviso y publicar la política de datos con un profesional competente.
 2. Regenerar cualquier token que haya sido compartido por chat o captura.
-3. Aplicar `202609050003_whatsapp_commerce.sql` en Supabase.
+3. Aplicar, en orden, `202609050003_whatsapp_commerce.sql` y `202609050004_whatsapp_hardening.sql` en Supabase.
 4. Crear un token permanente de usuario del sistema en Meta.
 5. Configurar secretos de Cloudflare y credenciales de Supabase/OpenAI en n8n.
 6. Crear y aprobar plantillas de utilidad: consentimiento, pendiente recibido, pago validado, pedido confirmado y domiciliario en camino.
 7. Probar duplicados, rechazo de consentimiento, falta de sede, producto inexistente, inventario agotado, pago rechazado y caída de OpenAI.
 8. Publicar los flujos solo después de completar las pruebas con el número de prueba.
+
+## Reglas de operación obligatorias en n8n
+
+- Si `ingest_whatsapp_message` devuelve `created=false`, finalizar ese evento sin volver a responder.
+- Cada estado de Meta usa una `p_status_event_key` única: `event_key + índice del estado`.
+- Cada pendiente, reserva, ejecución de IA y mensaje saliente usa su propia clave idempotente estable.
+- Los productos creados desde WhatsApp deben quedar en `orders.items` con `product_id`, `qty`, `name` y `unit_price`; de lo contrario no se permite confirmar el descuento de inventario.
+- El comprobante se descarga desde Meta y se guarda en el bucket privado `whatsapp-media`; en OpenAI solo se envían metadatos mínimos, nunca el archivo.
+- La información de landing debe llegar firmada y con vencimiento. La sede recibida por un parámetro libre nunca se considera confiable sin validar la firma.
+- Definir con asesoría jurídica los plazos de retención y eliminación. Como configuración técnica inicial, separar el payload crudo del historial operativo para poder depurarlo sin borrar consentimientos, movimientos ni eventos auditables.

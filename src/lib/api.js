@@ -92,16 +92,21 @@ export async function saveCourier(values){
 }
 export async function listChatbotData(){
   if(isDemoMode) return demoStore.listChatbotData();
-  const [contacts,conversations,messages,tasks,knowledge,inventory]=await Promise.all([
+  const [contacts,conversations,messages,attachments,tasks,knowledge,inventory]=await Promise.all([
     supabase.from("whatsapp_contacts").select("*").order("last_seen_at",{ascending:false}),
-    supabase.from("whatsapp_conversations").select("*, contact:whatsapp_contacts(*), branch:branches(id,name), linked_order:orders(id,order_number,status)").order("last_message_at",{ascending:false}),
+    supabase.from("whatsapp_conversations").select("*, contact:whatsapp_contacts(*), branch:branches(id,name)").order("last_message_at",{ascending:false}),
     supabase.from("whatsapp_messages").select("*").order("created_at",{ascending:false}).limit(2000),
+    supabase.from("whatsapp_attachments").select("*").order("created_at",{ascending:false}).limit(500),
     supabase.from("human_tasks").select("*, branch:branches(id,name), conversation:whatsapp_conversations(id,contact:whatsapp_contacts(phone_e164,display_name,preferred_name))").order("created_at",{ascending:false}),
     supabase.from("branch_knowledge").select("*, branch:branches(id,name)").order("active",{ascending:false}).order("updated_at",{ascending:false}),
     supabase.from("branch_inventory").select("*, branch:branches(id,name), product:products(*)").order("updated_at",{ascending:false})
   ]);
-  for(const result of [contacts,conversations,messages,tasks,knowledge,inventory])if(result.error)throw result.error;
-  return {contacts:contacts.data,conversations:conversations.data,messages:messages.data,tasks:tasks.data,knowledge:knowledge.data,inventory:inventory.data};
+  for(const result of [contacts,conversations,messages,attachments,tasks,knowledge,inventory])if(result.error)throw result.error;
+  return {contacts:contacts.data,conversations:conversations.data,messages:messages.data,attachments:attachments.data,tasks:tasks.data,knowledge:knowledge.data,inventory:inventory.data};
+}
+export async function getChatAttachmentUrl(path){
+  if(isDemoMode) return demoStore.getChatAttachmentUrl(path);
+  const {data,error}=await supabase.storage.from("whatsapp-media").createSignedUrl(path,300);if(error)throw error;return data.signedUrl;
 }
 export async function saveKnowledge(values){
   if(isDemoMode) return demoStore.saveKnowledge(values);
@@ -111,15 +116,13 @@ export async function saveKnowledge(values){
 }
 export async function saveCatalogItem(values){
   if(isDemoMode) return demoStore.saveCatalogItem(values);
-  const productPayload={sku:values.sku?.trim()||null,name:values.name.trim(),description:values.description?.trim()||null,seasonal:Boolean(values.seasonal),active:Boolean(values.active)};
-  let product;
-  if(productPayload.sku){
-    const {data,error}=await supabase.from("products").upsert(productPayload,{onConflict:"sku"}).select().single();if(error)throw error;product=data;
-  }else{
-    const {data,error}=await supabase.from("products").insert(productPayload).select().single();if(error)throw error;product=data;
-  }
-  const stock={branch_id:values.branch_id,product_id:product.id,price:Number(values.price||0),available_qty:Number(values.available_qty||0),low_stock_threshold:Number(values.low_stock_threshold||0),active:Boolean(values.active)};
-  const {data,error}=await supabase.from("branch_inventory").upsert(stock,{onConflict:"branch_id,product_id"}).select("*, branch:branches(id,name), product:products(*)").single();if(error)throw error;return data;
+  const {data,error}=await supabase.rpc("adjust_branch_inventory",{
+    p_branch_id:values.branch_id,p_product_id:values.product_id||null,p_sku:values.sku?.trim()||null,
+    p_name:values.name.trim(),p_description:values.description?.trim()||null,p_price:Number(values.price||0),
+    p_available_qty:Number(values.available_qty||0),p_low_stock_threshold:Number(values.low_stock_threshold||0),
+    p_seasonal:Boolean(values.seasonal),p_active:Boolean(values.active),p_reason:"Ajuste desde el panel administrador"
+  });
+  if(error)throw error;return data;
 }
 export async function resolveHumanTask(taskId,status,resolution){
   if(isDemoMode) return demoStore.resolveHumanTask(taskId,status,resolution);
