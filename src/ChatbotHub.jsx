@@ -1,0 +1,68 @@
+import { useEffect, useMemo, useState } from "react";
+import { BRANCHES, formatDateTime, formatMoney } from "./lib/constants.js";
+import { listChatbotData, resolveHumanTask, saveCatalogItem, saveKnowledge } from "./lib/api.js";
+
+const TASK_LABELS={product_lookup:"Consultar producto",delivery_quote:"Cotizar domicilio",payment_verification:"Verificar pago",credit_application:"Gestionar crédito",general:"Revisión manual"};
+const STATUS_LABELS={open:"Activa",waiting_customer:"Esperando cliente",waiting_human:"Esperando respuesta",converted:"Compra creada",closed:"Cerrada"};
+const CATEGORY_LABELS={general:"General",schedule:"Horarios",location:"Ubicación",promotion:"Promociones",policy:"Políticas",payment:"Pagos",delivery:"Domicilios",faq:"Preguntas frecuentes"};
+
+function branchName(id){return BRANCHES.find(branch=>branch.id===id)?.name||"Sin sede";}
+
+function Metric({ label, value, note, tone="" }){
+  return <article className={`chat-metric ${tone}`}><small>{label}</small><strong>{value}</strong><span>{note}</span></article>;
+}
+
+function ConversationDrawer({ conversation, messages, onClose }){
+  if(!conversation)return null;
+  const transcript=messages.filter(message=>message.conversation_id===conversation.id).sort((a,b)=>new Date(a.created_at)-new Date(b.created_at));
+  return <div className="overlay"><button className="backdrop" aria-label="Cerrar" onClick={onClose}/><aside className="drawer chat-drawer"><button className="close" onClick={onClose}>×</button>
+    <p className="eyebrow">CONVERSACIÓN DE WHATSAPP</p><h2>{conversation.contact?.preferred_name||conversation.contact?.display_name||conversation.contact?.phone_e164}</h2>
+    <div className="chat-contact-meta"><span>{conversation.contact?.phone_e164}</span><span>{branchName(conversation.branch_id)}</span><span>{STATUS_LABELS[conversation.status]||conversation.status}</span></div>
+    <section className={`consent-card ${conversation.consent_status}`}><div><small>TRATAMIENTO DE DATOS</small><b>{conversation.consent_status==="granted"?"Autorización expresa registrada":conversation.consent_status==="denied"?"Autorización rechazada":"Autorización pendiente"}</b></div><span>{conversation.consented_at?formatDateTime(conversation.consented_at):"No se puede vender hasta obtener respuesta"}</span></section>
+    <section className="chat-transcript">{transcript.length===0?<div className="empty compact"><h3>Sin mensajes procesados</h3></div>:transcript.map(message=><article key={message.id} className={`chat-message ${message.direction}`}><div><small>{message.sender_type==="customer"?"Cliente":message.sender_type==="human"?"Equipo":"Asistente"}</small><p>{message.body||`[${message.message_type}]`}</p><span>{formatDateTime(message.created_at)} · {message.delivery_status}</span></div></article>)}</section>
+    {conversation.summary&&<section className="chat-summary"><small>RESUMEN OPERATIVO</small><p>{conversation.summary}</p></section>}
+  </aside></div>;
+}
+
+function Conversations({ data }){
+  const [query,setQuery]=useState("");
+  const [selected,setSelected]=useState(null);
+  const rows=useMemo(()=>data.conversations.filter(item=>{const term=query.trim().toLowerCase();return !term||`${item.contact?.display_name||""} ${item.contact?.preferred_name||""} ${item.contact?.phone_e164||""} ${item.current_intent||""}`.toLowerCase().includes(term);}),[data.conversations,query]);
+  return <><div className="chat-toolbar"><label className="search"><span>⌕</span><input value={query} onChange={event=>setQuery(event.target.value)} placeholder="Buscar cliente, teléfono o intención"/></label></div><div className="panel conversation-list"><div className="conversation-head"><span>Cliente</span><span>Sede / origen</span><span>Estado</span><span>Último contacto</span><span/></div>{rows.length===0?<div className="empty"><h3>Aún no hay conversaciones</h3><p>Las conversaciones aparecerán cuando el webhook procese mensajes reales.</p></div>:rows.map(item=><button key={item.id} className="conversation-row" onClick={()=>setSelected(item)}><div><b>{item.contact?.preferred_name||item.contact?.display_name||"Cliente sin nombre"}</b><span>{item.contact?.phone_e164}</span></div><div><b>{branchName(item.branch_id)}</b><span>{item.campaign||item.source}</span></div><div><span className={`conversation-status ${item.status}`}>{STATUS_LABELS[item.status]||item.status}</span><small>{item.current_intent||"Intención por identificar"}</small></div><div><b>{formatDateTime(item.last_message_at)}</b><span>{item.consent_status==="granted"?"Datos autorizados":"Consentimiento pendiente"}</span></div><i>→</i></button>)}</div>{selected&&<ConversationDrawer conversation={selected} messages={data.messages} onClose={()=>setSelected(null)}/>}</>;
+}
+
+function Tasks({ tasks, onResolved }){
+  const [answer,setAnswer]=useState({});
+  const [busy,setBusy]=useState(null);
+  async function submit(task,status){const value=answer[task.id]?.trim();if(!value)return;setBusy(task.id);try{await resolveHumanTask(task.id,status,{answer:value});setAnswer(current=>({...current,[task.id]:""}));await onResolved();}finally{setBusy(null);}}
+  const pending=tasks.filter(task=>["pending","in_progress"].includes(task.status));
+  return <div className="task-board">{pending.length===0?<div className="panel empty"><span>✓</span><h3>No hay consultas pendientes</h3><p>Los casos que la IA no puede decidir aparecerán aquí.</p></div>:pending.map(task=><article className={`human-task ${task.priority}`} key={task.id}><header><div><span>{TASK_LABELS[task.task_type]||task.task_type}</span><b>{task.title}</b></div><time>{formatDateTime(task.created_at)}</time></header><p>{task.question}</p><div className="task-context"><span>{branchName(task.branch_id)}</span>{task.due_at&&<span>Responder antes de {formatDateTime(task.due_at)}</span>}</div><textarea value={answer[task.id]||""} onChange={event=>setAnswer(current=>({...current,[task.id]:event.target.value}))} placeholder={task.task_type==="delivery_quote"?"Ej. El domicilio cuesta $12.000":"Escribe la respuesta confirmada para que el flujo continúe"}/><footer><button disabled={busy===task.id||!answer[task.id]?.trim()} onClick={()=>submit(task,"rejected")}>No disponible</button><button className="primary" disabled={busy===task.id||!answer[task.id]?.trim()} onClick={()=>submit(task,"resolved")}>{busy===task.id?"Guardando…":"Confirmar respuesta"}</button></footer></article>)}</div>;
+}
+
+function Knowledge({ records, onSaved }){
+  const initial={branch_id:"",category:"general",title:"",content:"",active:true};
+  const [form,setForm]=useState(initial);const [busy,setBusy]=useState(false);
+  async function submit(event){event.preventDefault();setBusy(true);try{await saveKnowledge({...form,branch_id:form.branch_id||null});setForm(initial);await onSaved();}finally{setBusy(false);}}
+  return <div className="chat-manager"><form className="panel knowledge-form" onSubmit={submit}><p className="eyebrow">FUENTE CONTROLADA</p><h3>Agregar información</h3><label>Alcance<select value={form.branch_id} onChange={event=>setForm({...form,branch_id:event.target.value})}><option value="">Todas las sedes</option>{BRANCHES.map(branch=><option key={branch.id} value={branch.id}>{branch.name}</option>)}</select></label><label>Categoría<select value={form.category} onChange={event=>setForm({...form,category:event.target.value})}>{Object.entries(CATEGORY_LABELS).map(([value,label])=><option key={value} value={value}>{label}</option>)}</select></label><label>Título<input value={form.title} onChange={event=>setForm({...form,title:event.target.value})} required/></label><label>Información confirmada<textarea value={form.content} onChange={event=>setForm({...form,content:event.target.value})} required placeholder="Escribe datos concretos. La IA solo responderá con información activa y vigente."/></label><button className="primary" disabled={busy}>{busy?"Guardando…":"Guardar conocimiento"}</button></form><div className="panel knowledge-list">{records.length===0?<div className="empty compact"><h3>Sin información cargada</h3><p>Agrega horarios, ubicaciones, políticas y promociones.</p></div>:records.map(record=><article key={record.id}><div><span>{CATEGORY_LABELS[record.category]}</span><b>{record.title}</b><small>{record.branch_id?branchName(record.branch_id):"Todas las sedes"}</small></div><p>{record.content}</p><em>{record.active?"ACTIVA":"INACTIVA"}</em></article>)}</div></div>;
+}
+
+function Inventory({ inventory, onSaved }){
+  const initial={branch_id:"b1",sku:"",name:"",description:"",price:0,available_qty:0,low_stock_threshold:2,seasonal:false,active:true};
+  const [form,setForm]=useState(initial);const [busy,setBusy]=useState(false);
+  async function submit(event){event.preventDefault();setBusy(true);try{await saveCatalogItem(form);setForm(initial);await onSaved();}finally{setBusy(false);}}
+  return <div className="chat-manager"><form className="panel knowledge-form" onSubmit={submit}><p className="eyebrow">CATÁLOGO VERIFICADO</p><h3>Agregar producto por sede</h3><label>Sede<select value={form.branch_id} onChange={event=>setForm({...form,branch_id:event.target.value})}>{BRANCHES.map(branch=><option key={branch.id} value={branch.id}>{branch.name}</option>)}</select></label><div className="mini-grid"><label>SKU<input value={form.sku} onChange={event=>setForm({...form,sku:event.target.value})}/></label><label>Unidades<input type="number" min="0" value={form.available_qty} onChange={event=>setForm({...form,available_qty:Number(event.target.value)})}/></label></div><label>Producto<input value={form.name} onChange={event=>setForm({...form,name:event.target.value})} required/></label><label>Descripción<input value={form.description} onChange={event=>setForm({...form,description:event.target.value})}/></label><div className="mini-grid"><label>Precio<input type="number" min="0" step="100" value={form.price} onChange={event=>setForm({...form,price:Number(event.target.value)})}/></label><label>Alerta en<input type="number" min="0" value={form.low_stock_threshold} onChange={event=>setForm({...form,low_stock_threshold:Number(event.target.value)})}/></label></div><label className="check"><input type="checkbox" checked={form.seasonal} onChange={event=>setForm({...form,seasonal:event.target.checked})}/> Producto de temporada o pauta</label><button className="primary" disabled={busy}>{busy?"Guardando…":"Guardar en catálogo"}</button></form><div className="panel inventory-list">{inventory.length===0?<div className="empty compact"><h3>Catálogo vacío</h3><p>Agrega únicamente productos cuyo precio y existencia podamos confirmar.</p></div>:inventory.map(item=>{const available=item.available_qty-item.reserved_qty;return <article key={`${item.branch_id}-${item.product_id}`}><div><b>{item.product?.name}</b><span>{item.product?.sku||"Sin SKU"} · {branchName(item.branch_id)}</span></div><strong>{formatMoney(item.promotional_price??item.price)}</strong><div className={available<=item.low_stock_threshold?"stock-low":""}><b>{available}</b><span>disponibles</span><small>{item.reserved_qty} reservadas</small></div></article>;})}</div></div>;
+}
+
+export default function ChatbotHub(){
+  const [tab,setTab]=useState("conversations");const [data,setData]=useState({contacts:[],conversations:[],messages:[],tasks:[],knowledge:[],inventory:[]});const [loading,setLoading]=useState(true);const [error,setError]=useState("");
+  async function refresh(){setLoading(true);try{setData(await listChatbotData());setError("");}catch(loadError){setError(loadError.message);}finally{setLoading(false);}}
+  useEffect(()=>{refresh();},[]);
+  const pending=data.tasks.filter(task=>["pending","in_progress"].includes(task.status));
+  const lowStock=data.inventory.filter(item=>item.available_qty-item.reserved_qty<=item.low_stock_threshold);
+  return <section className="chatbot-page"><div className="section-title"><div><p className="eyebrow">COMERCIO CONVERSACIONAL</p><h2>WhatsApp e IA</h2></div><span>Control humano en decisiones sensibles</span></div>
+    <div className="chat-metrics"><Metric label="CONVERSACIONES ABIERTAS" value={data.conversations.filter(item=>item.status!=="closed").length} note="Clientes en atención"/><Metric label="PENDIENTES HUMANOS" value={pending.length} note="Requieren una respuesta" tone={pending.length?"warning":""}/><Metric label="ALERTAS DE INVENTARIO" value={lowStock.length} note="Productos en nivel bajo" tone={lowStock.length?"warning":""}/><Metric label="CONSENTIMIENTOS" value={data.conversations.filter(item=>item.consent_status==="granted").length} note="Autorizaciones registradas"/></div>
+    <nav className="chat-tabs">{[["conversations","Conversaciones"],["tasks",`Pendientes${pending.length?` · ${pending.length}`:""}`],["knowledge","Conocimiento"],["inventory","Inventario"]].map(([id,label])=><button key={id} className={tab===id?"active":""} onClick={()=>setTab(id)}>{label}</button>)}</nav>
+    {error&&<div className="inline-warning">No fue posible cargar el módulo: {error}. Si acabas de actualizar el proyecto, ejecuta primero la nueva migración SQL.</div>}
+    {loading?<div className="panel empty"><p>Cargando operación conversacional…</p></div>:<>{tab==="conversations"&&<Conversations data={data}/>} {tab==="tasks"&&<Tasks tasks={data.tasks} onResolved={refresh}/>} {tab==="knowledge"&&<Knowledge records={data.knowledge} onSaved={refresh}/>} {tab==="inventory"&&<Inventory inventory={data.inventory} onSaved={refresh}/>}</>}
+  </section>;
+}

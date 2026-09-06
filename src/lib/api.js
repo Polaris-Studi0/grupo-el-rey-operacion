@@ -90,6 +90,41 @@ export async function saveCourier(values){
   const query = values.id ? supabase.from("couriers").update(payload).eq("id",values.id) : supabase.from("couriers").insert(payload);
   const { data, error } = await query.select().single(); if(error) throw error; return data;
 }
+export async function listChatbotData(){
+  if(isDemoMode) return demoStore.listChatbotData();
+  const [contacts,conversations,messages,tasks,knowledge,inventory]=await Promise.all([
+    supabase.from("whatsapp_contacts").select("*").order("last_seen_at",{ascending:false}),
+    supabase.from("whatsapp_conversations").select("*, contact:whatsapp_contacts(*), branch:branches(id,name), linked_order:orders(id,order_number,status)").order("last_message_at",{ascending:false}),
+    supabase.from("whatsapp_messages").select("*").order("created_at",{ascending:false}).limit(2000),
+    supabase.from("human_tasks").select("*, branch:branches(id,name), conversation:whatsapp_conversations(id,contact:whatsapp_contacts(phone_e164,display_name,preferred_name))").order("created_at",{ascending:false}),
+    supabase.from("branch_knowledge").select("*, branch:branches(id,name)").order("active",{ascending:false}).order("updated_at",{ascending:false}),
+    supabase.from("branch_inventory").select("*, branch:branches(id,name), product:products(*)").order("updated_at",{ascending:false})
+  ]);
+  for(const result of [contacts,conversations,messages,tasks,knowledge,inventory])if(result.error)throw result.error;
+  return {contacts:contacts.data,conversations:conversations.data,messages:messages.data,tasks:tasks.data,knowledge:knowledge.data,inventory:inventory.data};
+}
+export async function saveKnowledge(values){
+  if(isDemoMode) return demoStore.saveKnowledge(values);
+  const payload={...values};delete payload.id;delete payload.branch;delete payload.created_at;delete payload.updated_at;delete payload.created_by;delete payload.updated_by;
+  const query=values.id?supabase.from("branch_knowledge").update(payload).eq("id",values.id):supabase.from("branch_knowledge").insert(payload);
+  const {data,error}=await query.select("*, branch:branches(id,name)").single();if(error)throw error;return data;
+}
+export async function saveCatalogItem(values){
+  if(isDemoMode) return demoStore.saveCatalogItem(values);
+  const productPayload={sku:values.sku?.trim()||null,name:values.name.trim(),description:values.description?.trim()||null,seasonal:Boolean(values.seasonal),active:Boolean(values.active)};
+  let product;
+  if(productPayload.sku){
+    const {data,error}=await supabase.from("products").upsert(productPayload,{onConflict:"sku"}).select().single();if(error)throw error;product=data;
+  }else{
+    const {data,error}=await supabase.from("products").insert(productPayload).select().single();if(error)throw error;product=data;
+  }
+  const stock={branch_id:values.branch_id,product_id:product.id,price:Number(values.price||0),available_qty:Number(values.available_qty||0),low_stock_threshold:Number(values.low_stock_threshold||0),active:Boolean(values.active)};
+  const {data,error}=await supabase.from("branch_inventory").upsert(stock,{onConflict:"branch_id,product_id"}).select("*, branch:branches(id,name), product:products(*)").single();if(error)throw error;return data;
+}
+export async function resolveHumanTask(taskId,status,resolution){
+  if(isDemoMode) return demoStore.resolveHumanTask(taskId,status,resolution);
+  const {data,error}=await supabase.rpc("resolve_human_task",{p_task_id:taskId,p_status:status,p_resolution:resolution});if(error)throw error;return data;
+}
 export function subscribeToOrders(onChange){
   if(isDemoMode) return () => {};
   const channel = supabase.channel("orders-live").on("postgres_changes",{event:"*",schema:"public",table:"orders"},onChange).subscribe();

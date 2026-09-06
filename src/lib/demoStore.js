@@ -4,6 +4,9 @@ const ORDERS_KEY = "el-rey-platform-orders-v1";
 const EVENTS_KEY = "el-rey-platform-events-v1";
 const COURIERS_KEY = "el-rey-platform-couriers-v1";
 const STAFF_KEY = "el-rey-platform-staff-v1";
+const KNOWLEDGE_KEY = "el-rey-chatbot-knowledge-v1";
+const INVENTORY_KEY = "el-rey-chatbot-inventory-v1";
+const TASKS_KEY = "el-rey-chatbot-tasks-v1";
 const receiptUrls = new Map();
 
 const now = Date.now();
@@ -21,6 +24,18 @@ const initialStaff = [
   { id:"s3", branch_id:"b2", full_name:"Carolina Restrepo", active:true },
   { id:"s4", branch_id:"b6", full_name:"María Elena Ruiz", active:true }
 ];
+
+const demoContact={id:"wc1",phone_e164:"+573001234567",display_name:"Valentina Ríos",preferred_name:"Valentina"};
+const initialConversations=[{id:"conv1",contact_id:"wc1",contact:demoContact,branch_id:"b1",status:"waiting_human",consent_status:"granted",consent_version:"2026-09",consented_at:minutesAgo(22),source:"landing",campaign:"temporada-hogar",current_intent:"Comprar freidora de aire",summary:"Cliente interesada en una freidora de aire para entrega en Robledo. Falta confirmar el costo del domicilio.",last_message_at:minutesAgo(3)}];
+const initialMessages=[
+  {id:"wm1",conversation_id:"conv1",direction:"inbound",sender_type:"customer",body:"Acepto el tratamiento de mis datos.",delivery_status:"read",created_at:minutesAgo(21)},
+  {id:"wm2",conversation_id:"conv1",direction:"outbound",sender_type:"assistant",body:"Gracias, Valentina. ¿Qué producto estás buscando?",delivery_status:"read",created_at:minutesAgo(20)},
+  {id:"wm3",conversation_id:"conv1",direction:"inbound",sender_type:"customer",body:"Quiero la freidora de aire de la promoción y vivo en Robledo.",delivery_status:"read",created_at:minutesAgo(5)},
+  {id:"wm4",conversation_id:"conv1",direction:"outbound",sender_type:"assistant",body:"Tengo la información del producto. Voy a confirmar el costo exacto del domicilio antes de darte el total.",delivery_status:"delivered",created_at:minutesAgo(3)}
+];
+const initialKnowledge=[{id:"kb1",branch_id:null,category:"payment",title:"Medios de pago",content:"Se reciben transferencias verificadas, Addi, Sistecrédito y efectivo confirmado. Ningún pago se aprueba automáticamente.",active:true,updated_at:minutesAgo(60)}];
+const initialInventory=[{branch_id:"b1",product_id:"prod1",price:279900,promotional_price:249900,available_qty:6,reserved_qty:1,low_stock_threshold:2,active:true,updated_at:minutesAgo(12),product:{id:"prod1",sku:"FREIDORA-45",name:"Freidora de aire 4,5 litros",description:"Producto de temporada",seasonal:true,active:true}}];
+const initialTasks=[{id:"task1",conversation_id:"conv1",branch_id:"b1",task_type:"delivery_quote",status:"pending",priority:"high",title:"Cotizar domicilio a Robledo",question:"¿Cuánto cuesta llevar una freidora de aire a Calle 82 # 85-20, Robledo?",context:{customer_phone:demoContact.phone_e164},created_at:minutesAgo(3),due_at:minutesAgo(-7)}];
 
 const initialOrders = [
   { id:"o1", order_number:"REY-1048", branch_id:"b1", fulfillment_type:"delivery", status:"preparing", customer_name:"Laura Martínez", customer_phone:"300 000 4821", delivery_address:"Calle 82 # 85-20, portería", delivery_zone:"Robledo", items:[{qty:1,name:"Juego de ollas Royal 7 piezas",unit_price:189900},{qty:1,name:"Set de cucharones x6",unit_price:24900}], total:214800, payment_method:"transfer", source:"WhatsApp", customer_notes:"Entregar en portería. Confirmar por WhatsApp al llegar.", internal_notes:"Pago verificado.", courier_id:null, eta_minutes:null, promised_at:null, created_at:minutesAgo(32), updated_at:minutesAgo(32), ready_at:null, dispatched_at:null, delivered_at:null },
@@ -128,6 +143,25 @@ export const demoStore = {
     const saved=index<0?{...values,id:crypto.randomUUID()}: {...staff[index],...values};
     if(index<0)staff.unshift(saved);else staff[index]=saved;
     write(STAFF_KEY,staff);return saved;
+  },
+  async listChatbotData(){
+    return {contacts:[demoContact],conversations:structuredClone(initialConversations),messages:structuredClone(initialMessages),tasks:read(TASKS_KEY,initialTasks),knowledge:read(KNOWLEDGE_KEY,initialKnowledge),inventory:read(INVENTORY_KEY,initialInventory)};
+  },
+  async saveKnowledge(values){
+    const records=read(KNOWLEDGE_KEY,initialKnowledge);
+    const saved={...values,id:values.id||crypto.randomUUID(),updated_at:new Date().toISOString()};
+    const index=records.findIndex(record=>record.id===saved.id);if(index<0)records.unshift(saved);else records[index]=saved;
+    write(KNOWLEDGE_KEY,records);return saved;
+  },
+  async saveCatalogItem(values){
+    const records=read(INVENTORY_KEY,initialInventory);
+    const productId=crypto.randomUUID();
+    const saved={branch_id:values.branch_id,product_id:productId,price:Number(values.price),promotional_price:null,available_qty:Number(values.available_qty),reserved_qty:0,low_stock_threshold:Number(values.low_stock_threshold),active:true,updated_at:new Date().toISOString(),product:{id:productId,sku:values.sku||null,name:values.name,description:values.description,seasonal:values.seasonal,active:true}};
+    records.unshift(saved);write(INVENTORY_KEY,records);return saved;
+  },
+  async resolveHumanTask(taskId,status,resolution){
+    const tasks=read(TASKS_KEY,initialTasks);const index=tasks.findIndex(task=>task.id===taskId);if(index<0)throw new Error("Pendiente no encontrado");
+    tasks[index]={...tasks[index],status,resolution,resolved_at:new Date().toISOString()};write(TASKS_KEY,tasks);return tasks[index];
   },
   async attachReceipt(order,file,profile){
     const path=`demo/${order.id}/${crypto.randomUUID()}`;

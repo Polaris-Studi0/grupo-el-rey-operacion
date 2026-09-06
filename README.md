@@ -25,6 +25,8 @@ Aplicación web de pedidos con dos perfiles:
 - Diseño responsive para computador, tableta y celular.
 - Logo oficial suministrado por Grupo Almacenes El Rey.
 - Modo demostración local cuando Supabase todavía no está conectado.
+- Centro de WhatsApp con conversaciones, consentimiento verificable y pendientes humanos.
+- Conocimiento, catálogo, inventario, reservas y movimientos separados por sede.
 
 ## Desarrollo local
 
@@ -57,15 +59,18 @@ El esquema inicial y sus ampliaciones están en:
 ```text
 supabase/migrations/202609030001_initial.sql
 supabase/migrations/202609040002_operational_traceability.sql
+supabase/migrations/202609050003_whatsapp_commerce.sql
 ```
 
-Ejecuta los archivos en ese orden. La segunda migración agrega el personal de caja, domiciliarios ocasionales, costo del domicilio y comprobantes privados sin borrar los pedidos existentes.
+Ejecuta los archivos en ese orden. La tercera migración prepara el comercio conversacional de WhatsApp, el control humano y el inventario auditable sin borrar los pedidos existentes.
 
 Los datos opcionales para pruebas están en `supabase/demo_seed.sql`. No deben ejecutarse en producción.
 
 ## Publicación
 
 Las instrucciones completas para Supabase Free, Cloudflare Pages, GoDaddy y los usuarios por sede están en [docs/DESPLIEGUE.md](docs/DESPLIEGUE.md).
+
+La arquitectura y puesta en marcha del chatbot con n8n están en [docs/CHATBOT_N8N.md](docs/CHATBOT_N8N.md).
 
 ## Verificación
 
