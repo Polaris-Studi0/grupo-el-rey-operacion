@@ -1,6 +1,8 @@
 const WEBHOOK_PATH = "/api/whatsapp/webhook";
 const SEND_PATH = "/api/whatsapp/send";
 const HEALTH_PATH = "/api/whatsapp/health";
+const PRIVACY_PATH = "/privacidad";
+const DATA_DELETION_PATH = "/eliminacion-de-datos";
 
 function response(body, status = 200, headers = {}){
   return new Response(body, { status, headers: { "content-type":"text/plain; charset=utf-8", "cache-control":"no-store", ...headers } });
@@ -8,6 +10,61 @@ function response(body, status = 200, headers = {}){
 
 function json(body, status = 200){
   return new Response(JSON.stringify(body), { status, headers: { "content-type":"application/json; charset=utf-8", "cache-control":"no-store" } });
+}
+
+function legalPage(title,description,content){
+  return new Response(`<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="description" content="${description}">
+  <title>${title} | Grupo Almacenes El Rey</title>
+  <style>
+    :root{color-scheme:light;--ink:#171715;--muted:#66645f;--gold:#b48600;--paper:#f7f6f1;--card:#fff;--line:#dedbd1}
+    *{box-sizing:border-box}body{margin:0;background:var(--paper);color:var(--ink);font:16px/1.65 system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
+    main{width:min(820px,calc(100% - 32px));margin:48px auto;padding:clamp(28px,6vw,64px);background:var(--card);border:1px solid var(--line);border-radius:24px;box-shadow:0 18px 60px rgba(23,23,21,.08)}
+    .eyebrow{margin:0 0 8px;color:var(--gold);font-size:.78rem;font-weight:800;letter-spacing:.18em;text-transform:uppercase}h1{margin:0;font-size:clamp(2rem,6vw,3.6rem);line-height:1.05;letter-spacing:-.04em}h2{margin:2.25rem 0 .5rem;font-size:1.25rem}p,li{color:var(--muted)}ul{padding-left:1.25rem}a{color:#705600;font-weight:700}.meta{margin:1rem 0 2rem;color:var(--muted)}.notice{padding:18px 20px;border-left:4px solid var(--gold);background:#fff9df;border-radius:10px}footer{margin-top:3rem;padding-top:1.25rem;border-top:1px solid var(--line);color:var(--muted);font-size:.9rem}
+  </style>
+</head>
+<body><main><p class="eyebrow">Grupo Almacenes El Rey</p><h1>${title}</h1>${content}<footer>Última actualización: 6 de septiembre de 2026 · Colombia</footer></main></body>
+</html>`,{status:200,headers:{"content-type":"text/html; charset=utf-8","cache-control":"public, max-age=3600","x-content-type-options":"nosniff","referrer-policy":"no-referrer"}});
+}
+
+function privacyPolicy(){
+  return legalPage("Política de privacidad","Política de tratamiento de datos del canal de WhatsApp de Grupo Almacenes El Rey",`
+    <p class="meta">Esta política explica cómo tratamos la información de las personas que se comunican con nuestro canal de WhatsApp.</p>
+    <p class="notice"><strong>Continuar la conversación después de recibir nuestro aviso de privacidad y responder “ACEPTO” constituye autorización para tratar los datos necesarios para atender la solicitud.</strong> También puedes responder “NO ACEPTO” y finalizar la atención automatizada.</p>
+    <h2>1. Responsable</h2>
+    <p>Grupo Almacenes El Rey, Colombia, es responsable del tratamiento realizado para atender este canal. Las solicitudes sobre datos personales pueden presentarse escribiendo al WhatsApp <a href="https://wa.me/573147899116">+57 314 789 9116</a>.</p>
+    <h2>2. Información que tratamos</h2>
+    <ul><li>Nombre, número de teléfono y datos de identificación del perfil de WhatsApp.</li><li>Mensajes, archivos y motivo de la consulta.</li><li>Sede de interés, productos consultados y datos necesarios para preparar una venta.</li><li>Dirección, barrio y datos de contacto cuando se solicita domicilio.</li><li>Medio de pago y comprobante de transferencia cuando el cliente decide aportarlo.</li><li>Historial técnico de entrega, lectura, atención y decisiones humanas necesarias para conservar la trazabilidad.</li></ul>
+    <h2>3. Finalidades</h2>
+    <p>Usamos los datos para responder consultas, informar horarios, sedes, promociones y disponibilidad; gestionar pedidos, pagos y domicilios; tramitar alternativas como Addi o Sistecrédito; solicitar validaciones a personal autorizado; prevenir fraude; prestar soporte y conservar la trazabilidad de la atención.</p>
+    <h2>4. Automatización e inteligencia artificial</h2>
+    <p>El canal usa automatización e inteligencia artificial para clasificar solicitudes y redactar respuestas con base en información comercial autorizada. La IA no confirma pagos, no aprueba créditos, no fija costos de domicilio y no garantiza existencias no verificadas: esos casos se remiten a una persona.</p>
+    <h2>5. Proveedores</h2>
+    <p>Para operar el servicio podemos encargar tratamiento a proveedores tecnológicos como Meta/WhatsApp, Cloudflare, n8n, Supabase y proveedores de modelos de inteligencia artificial. Solo se comparte la información necesaria para prestar y proteger el servicio. Algunos proveedores pueden procesar información fuera de Colombia bajo sus mecanismos contractuales y de seguridad.</p>
+    <h2>6. Conservación y seguridad</h2>
+    <p>Conservamos la información durante el tiempo razonablemente necesario para las finalidades descritas y para cumplir obligaciones legales, contables, de seguridad y atención de reclamaciones. Después se elimina o anonimiza. Aplicamos controles de acceso, trazabilidad y medidas técnicas razonables, aunque ningún sistema es completamente infalible.</p>
+    <h2>7. Derechos de los titulares</h2>
+    <p>Puedes conocer, actualizar y rectificar tus datos; solicitar prueba de la autorización; conocer el uso dado a la información; revocar la autorización o pedir la supresión cuando proceda; acceder gratuitamente a tus datos y presentar quejas ante la Superintendencia de Industria y Comercio una vez agotado el trámite directo.</p>
+    <h2>8. Consultas, reclamos y eliminación</h2>
+    <p>Escribe al WhatsApp indicado, identifica el número relacionado con la conversación y explica tu solicitud. Para pedir eliminación puedes enviar “ELIMINAR MIS DATOS” o consultar las <a href="${DATA_DELETION_PATH}">instrucciones de eliminación</a>. Podremos solicitar información razonable para verificar la identidad antes de actuar.</p>
+    <h2>9. Cambios</h2>
+    <p>Podemos actualizar esta política cuando cambien el servicio o las obligaciones aplicables. La versión vigente siempre estará publicada en esta dirección.</p>`);
+}
+
+function dataDeletionInstructions(){
+  return legalPage("Eliminación de datos","Instrucciones para solicitar la eliminación de datos personales",`
+    <p class="meta">Puedes solicitar acceso, corrección o eliminación de los datos asociados a tu conversación de WhatsApp.</p>
+    <h2>Cómo solicitarla</h2>
+    <ol><li>Desde el número utilizado en la conversación, escribe <strong>ELIMINAR MIS DATOS</strong> al WhatsApp <a href="https://wa.me/573147899116">+57 314 789 9116</a>.</li><li>Indica tu nombre y, si la conoces, la sede o el pedido relacionado.</li><li>Confirmaremos la recepción y podremos pedir una verificación razonable de identidad para evitar eliminar información de otra persona.</li></ol>
+    <h2>Qué ocurre después</h2>
+    <p>Revisaremos la solicitud y eliminaremos o anonimizaremos los datos que procedan dentro de los términos aplicables. Informaremos el resultado por el mismo canal. Podremos conservar la información estrictamente necesaria cuando exista una obligación legal, contable, contractual, de prevención de fraude o para la defensa de reclamaciones.</p>
+    <h2>Alcance</h2>
+    <p>La eliminación abarca la información controlada por Grupo Almacenes El Rey. Los datos que Meta/WhatsApp u otros proveedores traten como responsables independientes están sujetos a sus propias políticas y herramientas.</p>
+    <p><a href="${PRIVACY_PATH}">Volver a la política de privacidad</a></p>`);
 }
 
 function verifySubscription(request, env){
@@ -172,6 +229,8 @@ export default {
     if(url.pathname===WEBHOOK_PATH&&request.method==="POST")return receiveWebhook(request,env,context);
     if(url.pathname===SEND_PATH&&request.method==="POST")return sendWhatsApp(request,env);
     if(url.pathname===HEALTH_PATH&&request.method==="GET")return health(env);
+    if(url.pathname===PRIVACY_PATH&&request.method==="GET")return privacyPolicy();
+    if(url.pathname===DATA_DELETION_PATH&&request.method==="GET")return dataDeletionInstructions();
     if(url.pathname.startsWith("/api/"))return response("Not found",404);
     return env.ASSETS.fetch(request);
   }
