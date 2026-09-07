@@ -149,13 +149,54 @@ async function forwardToN8n(payload,eventKey,eventType,leaseId,env){
   if(!result.ok)throw new Error(`n8n respondió ${result.status}`);
 }
 
+function collectMessageStatuses(payload,eventKey){
+  const records=[];
+  const entries=Array.isArray(payload?.entry)?payload.entry:[];
+  entries.forEach((entry,entryIndex)=>{
+    const changes=Array.isArray(entry?.changes)?entry.changes:[];
+    changes.forEach((change,changeIndex)=>{
+      const value=change?.value||{};
+      const statuses=Array.isArray(value.statuses)?value.statuses:[];
+      statuses.forEach((status,statusIndex)=>{
+        if(!status?.id||!status?.status)return;
+        records.push({
+          p_meta_message_id:status.id,
+          p_status:status.status,
+          p_timestamp:status.timestamp?new Date(Number(status.timestamp)*1000).toISOString():null,
+          p_raw_payload:{...status,contacts:value.contacts||[],metadata:value.metadata||{}},
+          p_status_event_key:`${eventKey}:${entryIndex}:${changeIndex}:${statusIndex}:${status.id}:${status.status}`
+        });
+      });
+    });
+  });
+  return records;
+}
+
+async function persistMessageStatuses(payload,eventKey,env){
+  for(const record of collectMessageStatuses(payload,eventKey)){
+    let lastError;
+    for(let attempt=0;attempt<3;attempt+=1){
+      try{
+        await supabaseRpc("record_whatsapp_message_status",record,env);
+        lastError=null;
+        break;
+      }catch(error){
+        lastError=error;
+        if(attempt<2)await new Promise(resolve=>setTimeout(resolve,250*(attempt+1)));
+      }
+    }
+    if(lastError)throw lastError;
+  }
+}
+
 async function processWebhook(payload,eventKey,eventType,env){
-  if(!env.N8N_WEBHOOK_URL)return;
   const claimed=await supabaseRpc("claim_whatsapp_event",{p_event_key:eventKey},env);
   const inbox=claimed?.[0];
   if(!inbox)return;
   try{
-    await forwardToN8n(payload,eventKey,eventType,inbox.lease_id,env);
+    const statuses=collectMessageStatuses(payload,eventKey);
+    if(statuses.length)await persistMessageStatuses(payload,eventKey,env);
+    else if(env.N8N_WEBHOOK_URL)await forwardToN8n(payload,eventKey,eventType,inbox.lease_id,env);
     await supabaseRpc("complete_whatsapp_event",{p_event_key:eventKey,p_lease_id:inbox.lease_id,p_error:null},env);
   }catch(error){
     await supabaseRpc("complete_whatsapp_event",{p_event_key:eventKey,p_lease_id:inbox.lease_id,p_error:error.message},env);
@@ -195,8 +236,11 @@ async function sendWhatsApp(request,env){
     if(claim?.state==="sent")return json({ok:true,duplicate:true,message_id:claim.message_id,meta_message_id:claim.meta_message_id});
     return json({error:"Message is not available for automatic sending",state:claim?.state||"unknown",reason:claim?.reason||null},409);
   }
-  if(!/^\d{8,15}$/.test(claim.to||""))return json({error:"Stored recipient is invalid"},500);
-  const body={messaging_product:"whatsapp",recipient_type:"individual",to:claim.to,type:claim.type};
+  const recipient=String(claim.to||"").trim();
+  const isPhone=/^\d{8,15}$/.test(recipient);
+  const isBsuid=/^[A-Za-z0-9._:-]{8,256}$/.test(recipient);
+  if(!isPhone&&!isBsuid)return json({error:"Stored recipient is invalid"},500);
+  const body={messaging_product:"whatsapp",recipient_type:"individual",to:recipient,type:claim.type};
   if(claim.type==="text")body.text={preview_url:false,body:String(claim.text||"").slice(0,4096)};
   if(claim.type==="template")body.template=claim.template;
   const graphVersion=env.META_GRAPH_VERSION||"v26.0";
