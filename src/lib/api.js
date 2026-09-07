@@ -126,7 +126,17 @@ export async function saveCatalogItem(values){
 }
 export async function resolveHumanTask(taskId,status,resolution){
   if(isDemoMode) return demoStore.resolveHumanTask(taskId,status,resolution);
-  const {data,error}=await supabase.rpc("resolve_human_task",{p_task_id:taskId,p_status:status,p_resolution:resolution});if(error)throw error;return data;
+  const {data,error}=await supabase.rpc("resolve_human_task",{p_task_id:taskId,p_status:status,p_resolution:resolution});
+  if(error)throw error;
+  const {data:sessionData}=await supabase.auth.getSession();
+  const accessToken=sessionData.session?.access_token;
+  const wake=await fetch("/api/automation/wake",{
+    method:"POST",
+    headers:{"content-type":"application/json",...(accessToken?{authorization:`Bearer ${accessToken}`}:{})},
+    body:JSON.stringify({task_id:taskId})
+  });
+  if(!wake.ok)throw new Error("La respuesta quedó guardada, pero no fue posible reanudar el chat automáticamente.");
+  return data;
 }
 export function subscribeToOrders(onChange){
   if(isDemoMode) return () => {};

@@ -1,6 +1,7 @@
 const WEBHOOK_PATH = "/api/whatsapp/webhook";
 const SEND_PATH = "/api/whatsapp/send";
 const HEALTH_PATH = "/api/whatsapp/health";
+const AUTOMATION_WAKE_PATH = "/api/automation/wake";
 const PRIVACY_PATH = "/privacidad";
 const DATA_DELETION_PATH = "/eliminacion-de-datos";
 
@@ -149,6 +150,48 @@ async function forwardToN8n(payload,eventKey,eventType,leaseId,env){
   if(!result.ok)throw new Error(`n8n respondió ${result.status}`);
 }
 
+async function authenticatedOperator(request,env){
+  const authorization=request.headers.get("authorization")||"";
+  if(!authorization.startsWith("Bearer ")||!env.SUPABASE_URL||!supabaseKey(env))return null;
+  const userResponse=await fetch(`${env.SUPABASE_URL}/auth/v1/user`,{
+    headers:{apikey:supabaseKey(env),authorization}
+  });
+  if(!userResponse.ok)return null;
+  const user=await userResponse.json();
+  if(!user?.id)return null;
+  const profileResponse=await fetch(`${env.SUPABASE_URL}/rest/v1/profiles?id=eq.${encodeURIComponent(user.id)}&active=eq.true&select=id`,{
+    headers:supabaseHeaders(env)
+  });
+  if(!profileResponse.ok)return null;
+  const profiles=await profileResponse.json();
+  return profiles?.[0]?user:null;
+}
+
+async function wakeAutomation(request,env){
+  if(!env.N8N_AUTOMATION_URL||!env.N8N_WEBHOOK_SECRET)return json({error:"Automation webhook is not configured"},503);
+  const operator=await authenticatedOperator(request,env);
+  if(!operator)return json({error:"Unauthorized"},401);
+  let body;
+  try{body=await request.json();}catch{return json({error:"Invalid JSON"},400);}
+  if(!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(body.task_id||""))return json({error:"A task_id is required"},400);
+  let lastError;
+  for(let attempt=0;attempt<3;attempt+=1){
+    try{
+      const result=await fetch(env.N8N_AUTOMATION_URL,{
+        method:"POST",
+        headers:{"content-type":"application/json","x-elrey-webhook-secret":env.N8N_WEBHOOK_SECRET},
+        body:JSON.stringify({task_id:body.task_id,operator_id:operator.id,trigger:"human_task_resolved"})
+      });
+      if(!result.ok)throw new Error(`n8n respondió ${result.status}`);
+      return json({ok:true,task_id:body.task_id});
+    }catch(error){
+      lastError=error;
+      if(attempt<2)await new Promise(resolve=>setTimeout(resolve,250*(attempt+1)));
+    }
+  }
+  return json({error:lastError?.message||"No fue posible activar la automatización"},502);
+}
+
 function collectMessageStatuses(payload,eventKey){
   const records=[];
   const entries=Array.isArray(payload?.entry)?payload.entry:[];
@@ -238,9 +281,11 @@ async function sendWhatsApp(request,env){
   }
   const recipient=String(claim.to||"").trim();
   const isPhone=/^\d{8,15}$/.test(recipient);
-  const isBsuid=/^[A-Za-z0-9._:-]{8,256}$/.test(recipient);
+  const isBsuid=/^[A-Z]{2}\.[A-Za-z0-9._:-]{6,253}$/i.test(recipient);
   if(!isPhone&&!isBsuid)return json({error:"Stored recipient is invalid"},500);
-  const body={messaging_product:"whatsapp",recipient_type:"individual",to:recipient,type:claim.type};
+  const body={messaging_product:"whatsapp",recipient_type:"individual",type:claim.type};
+  if(isPhone)body.to=recipient;
+  else body.recipient=recipient;
   if(claim.type==="text")body.text={preview_url:false,body:String(claim.text||"").slice(0,4096)};
   if(claim.type==="template")body.template=claim.template;
   const graphVersion=env.META_GRAPH_VERSION||"v26.0";
@@ -263,7 +308,7 @@ async function sendWhatsApp(request,env){
 }
 
 function health(env){
-  return json({ok:true,webhookVerification:Boolean(env.WHATSAPP_VERIFY_TOKEN),signatureVerification:Boolean(env.WHATSAPP_APP_SECRET),inbox:Boolean(env.SUPABASE_URL&&supabaseKey(env)),automation:Boolean(env.N8N_WEBHOOK_URL&&env.N8N_WEBHOOK_SECRET),outboundMessaging:Boolean(env.WHATSAPP_ACCESS_TOKEN&&env.WHATSAPP_PHONE_NUMBER_ID&&env.N8N_GATEWAY_SECRET)});
+  return json({ok:true,webhookVerification:Boolean(env.WHATSAPP_VERIFY_TOKEN),signatureVerification:Boolean(env.WHATSAPP_APP_SECRET),inbox:Boolean(env.SUPABASE_URL&&supabaseKey(env)),automation:Boolean(env.N8N_WEBHOOK_URL&&env.N8N_WEBHOOK_SECRET),automationWake:Boolean(env.N8N_AUTOMATION_URL&&env.N8N_WEBHOOK_SECRET),outboundMessaging:Boolean(env.WHATSAPP_ACCESS_TOKEN&&env.WHATSAPP_PHONE_NUMBER_ID&&env.N8N_GATEWAY_SECRET)});
 }
 
 export default {
@@ -272,6 +317,7 @@ export default {
     if(url.pathname===WEBHOOK_PATH&&request.method==="GET")return verifySubscription(request,env);
     if(url.pathname===WEBHOOK_PATH&&request.method==="POST")return receiveWebhook(request,env,context);
     if(url.pathname===SEND_PATH&&request.method==="POST")return sendWhatsApp(request,env);
+    if(url.pathname===AUTOMATION_WAKE_PATH&&request.method==="POST")return wakeAutomation(request,env);
     if(url.pathname===HEALTH_PATH&&request.method==="GET")return health(env);
     if(url.pathname===PRIVACY_PATH&&request.method==="GET")return privacyPolicy();
     if(url.pathname===DATA_DELETION_PATH&&request.method==="GET")return dataDeletionInstructions();
