@@ -109,6 +109,15 @@ export async function getChatAttachmentUrl(path){
   if(isDemoMode) return demoStore.getChatAttachmentUrl(path);
   const {data,error}=await supabase.storage.from("whatsapp-media").createSignedUrl(path,300);if(error)throw error;return data.signedUrl;
 }
+export async function recoverChatAttachment(messageId){
+  if(isDemoMode)throw new Error("La recuperación de archivos requiere conexión con Supabase.");
+  const {data:sessionData}=await supabase.auth.getSession();
+  const accessToken=sessionData.session?.access_token;
+  const response=await fetch("/api/operator/media",{method:"POST",headers:{"content-type":"application/json",...(accessToken?{authorization:`Bearer ${accessToken}`}:{})},body:JSON.stringify({message_id:messageId})});
+  const result=await response.json().catch(()=>({}));
+  if(!response.ok)throw new Error(result.error||"No fue posible recuperar el archivo de WhatsApp.");
+  return result;
+}
 export async function saveKnowledge(values){
   if(isDemoMode) return demoStore.saveKnowledge(values);
   const payload={...values};delete payload.id;delete payload.branch;delete payload.created_at;delete payload.updated_at;delete payload.created_by;delete payload.updated_by;
@@ -176,4 +185,13 @@ export function subscribeToOrders(onChange){
   if(isDemoMode) return () => {};
   const channel = supabase.channel("orders-live").on("postgres_changes",{event:"*",schema:"public",table:"orders"},onChange).subscribe();
   return () => supabase.removeChannel(channel);
+}
+export function subscribeToChatbot(onChange){
+  if(isDemoMode) return () => {};
+  const channel=supabase.channel(`whatsapp-live-${crypto.randomUUID()}`);
+  for(const table of ["whatsapp_contacts","whatsapp_conversations","whatsapp_messages","whatsapp_attachments","human_tasks","branch_payment_qrs"]){
+    channel.on("postgres_changes",{event:"*",schema:"public",table},onChange);
+  }
+  channel.subscribe();
+  return ()=>supabase.removeChannel(channel);
 }

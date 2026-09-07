@@ -3,6 +3,7 @@ const SEND_PATH = "/api/whatsapp/send";
 const HEALTH_PATH = "/api/whatsapp/health";
 const AUTOMATION_WAKE_PATH = "/api/automation/wake";
 const OPERATOR_ACTION_PATH = "/api/operator/conversation";
+const OPERATOR_MEDIA_PATH = "/api/operator/media";
 const PRIVACY_PATH = "/privacidad";
 const DATA_DELETION_PATH = "/eliminacion-de-datos";
 
@@ -151,6 +152,71 @@ async function forwardToN8n(payload,eventKey,eventType,leaseId,env){
   if(!result.ok)throw new Error(`n8n respondió ${result.status}`);
 }
 
+function mediaExtension(mimeType,messageType){
+  const byMime={"image/jpeg":"jpg","image/png":"png","image/webp":"webp","application/pdf":"pdf","audio/ogg":"ogg","audio/mpeg":"mp3"};
+  return byMime[mimeType]||({image:"jpg",document:"bin",audio:"ogg",sticker:"webp"}[messageType]||"bin");
+}
+
+function collectInboundMedia(payload){
+  const records=[];
+  for(const entry of Array.isArray(payload?.entry)?payload.entry:[]){
+    for(const change of Array.isArray(entry?.changes)?entry.changes:[]){
+      for(const message of Array.isArray(change?.value?.messages)?change.value.messages:[]){
+        const media=message?.[message.type];
+        if(!message?.id||!media?.id)continue;
+        records.push({metaMessageId:message.id,mediaId:media.id,messageType:message.type,originalName:media.filename||null});
+      }
+    }
+  }
+  return records;
+}
+
+async function persistOneInboundMedia(record,env){
+  const messageResponse=await fetch(`${env.SUPABASE_URL}/rest/v1/whatsapp_messages?meta_message_id=eq.${encodeURIComponent(record.metaMessageId)}&select=id,conversation_id&limit=1`,{headers:supabaseHeaders(env)});
+  if(!messageResponse.ok)throw new Error(`No fue posible localizar el mensaje multimedia (${messageResponse.status})`);
+  const message=(await messageResponse.json())?.[0];
+  if(!message)return;
+
+  const existingResponse=await fetch(`${env.SUPABASE_URL}/rest/v1/whatsapp_attachments?message_id=eq.${encodeURIComponent(message.id)}&meta_media_id=eq.${encodeURIComponent(record.mediaId)}&select=id,storage_path&limit=1`,{headers:supabaseHeaders(env)});
+  if(existingResponse.ok){const existing=(await existingResponse.json())?.[0];if(existing)return existing.storage_path;}
+
+  const graphVersion=env.META_GRAPH_VERSION||"v26.0";
+  const metadataResponse=await fetch(`https://graph.facebook.com/${graphVersion}/${encodeURIComponent(record.mediaId)}`,{headers:{authorization:`Bearer ${env.WHATSAPP_ACCESS_TOKEN}`}});
+  const metadata=await metadataResponse.json().catch(()=>({}));
+  if(!metadataResponse.ok||!metadata.url)throw new Error(metadata?.error?.message||`Meta no entregó el archivo (${metadataResponse.status})`);
+  const fileResponse=await fetch(metadata.url,{headers:{authorization:`Bearer ${env.WHATSAPP_ACCESS_TOKEN}`}});
+  if(!fileResponse.ok)throw new Error(`No fue posible descargar el archivo de Meta (${fileResponse.status})`);
+  const mimeType=(fileResponse.headers.get("content-type")||metadata.mime_type||"application/octet-stream").split(";")[0].trim().toLowerCase();
+  const allowed=new Set(["image/jpeg","image/png","image/webp","application/pdf","audio/ogg","audio/mpeg"]);
+  if(!allowed.has(mimeType))throw new Error(`Tipo de archivo no permitido: ${mimeType}`);
+  const bytes=await fileResponse.arrayBuffer();
+  if(bytes.byteLength<1||bytes.byteLength>10*1024*1024)throw new Error("El archivo recibido supera el límite permitido");
+  const extension=mediaExtension(mimeType,record.messageType);
+  const storagePath=`${message.conversation_id}/${message.id}/${record.mediaId}.${extension}`;
+  const uploadResponse=await fetch(`${env.SUPABASE_URL}/storage/v1/object/whatsapp-media/${storagePath.split("/").map(encodeURIComponent).join("/")}`,{
+    method:"POST",headers:supabaseHeaders(env,{"content-type":mimeType,"x-upsert":"true"}),body:bytes
+  });
+  if(!uploadResponse.ok)throw new Error(`Supabase Storage rechazó el archivo (${uploadResponse.status})`);
+  const attachmentResponse=await fetch(`${env.SUPABASE_URL}/rest/v1/whatsapp_attachments?on_conflict=message_id,meta_media_id`,{
+    method:"POST",headers:supabaseHeaders(env,{prefer:"resolution=ignore-duplicates,return=minimal"}),
+    body:JSON.stringify({conversation_id:message.conversation_id,message_id:message.id,meta_media_id:record.mediaId,storage_path:storagePath,original_name:record.originalName||`archivo-whatsapp.${extension}`,mime_type:mimeType,size_bytes:bytes.byteLength,sha256:await sha256(bytes)})
+  });
+  if(!attachmentResponse.ok)throw new Error(`No fue posible registrar el archivo (${attachmentResponse.status})`);
+  return storagePath;
+}
+
+async function persistInboundMedia(payload,env){
+  if(!env.WHATSAPP_ACCESS_TOKEN)return;
+  for(const record of collectInboundMedia(payload)){
+    let lastError;
+    for(let attempt=0;attempt<3;attempt+=1){
+      try{await persistOneInboundMedia(record,env);lastError=null;break;}
+      catch(error){lastError=error;if(attempt<2)await new Promise(resolve=>setTimeout(resolve,350*(attempt+1)));}
+    }
+    if(lastError)console.error("WhatsApp media persistence failed",record.metaMessageId,lastError.message);
+  }
+}
+
 async function authenticatedOperator(request,env){
   const authorization=request.headers.get("authorization")||"";
   if(!authorization.startsWith("Bearer ")||!env.SUPABASE_URL||!supabaseKey(env))return null;
@@ -240,7 +306,12 @@ async function processWebhook(payload,eventKey,eventType,env){
   try{
     const statuses=collectMessageStatuses(payload,eventKey);
     if(statuses.length)await persistMessageStatuses(payload,eventKey,env);
-    else if(env.N8N_WEBHOOK_URL)await forwardToN8n(payload,eventKey,eventType,inbox.lease_id,env);
+    else if(env.N8N_WEBHOOK_URL){
+      let automationError;
+      try{await forwardToN8n(payload,eventKey,eventType,inbox.lease_id,env);}catch(error){automationError=error;}
+      await persistInboundMedia(payload,env);
+      if(automationError)throw automationError;
+    }
     await supabaseRpc("complete_whatsapp_event",{p_event_key:eventKey,p_lease_id:inbox.lease_id,p_error:null},env);
   }catch(error){
     await supabaseRpc("complete_whatsapp_event",{p_event_key:eventKey,p_lease_id:inbox.lease_id,p_error:error.message},env);
@@ -281,14 +352,30 @@ async function deliverQueuedWhatsAppMessage(messageId,env){
   const isPhone=/^\d{8,15}$/.test(recipient);
   const isBsuid=/^[A-Z]{2}\.[A-Za-z0-9._:-]{6,253}$/i.test(recipient);
   if(!isPhone&&!isBsuid)return json({error:"Stored recipient is invalid"},500);
-  const body={messaging_product:"whatsapp",recipient_type:"individual",type:claim.type};
-  if(isPhone)body.to=recipient;
-  else body.recipient=recipient;
-  if(claim.type==="text")body.text={preview_url:false,body:String(claim.text||"").slice(0,4096)};
-  if(claim.type==="template")body.template=claim.template;
   const graphVersion=env.META_GRAPH_VERSION||"v26.0";
   let result;
   try{
+    const body={messaging_product:"whatsapp",recipient_type:"individual",type:claim.type};
+    if(isPhone)body.to=recipient;
+    else body.recipient=recipient;
+    if(claim.type==="text")body.text={preview_url:false,body:String(claim.text||"").slice(0,4096)};
+    if(claim.type==="template")body.template=claim.template;
+    if(claim.type==="image"){
+      const bucket=String(claim.storage_bucket||"");
+      const storagePath=String(claim.storage_path||"");
+      if(bucket!=="payment-qrs"||!storagePath)throw new Error("El QR en cola no tiene un archivo válido");
+      const objectResponse=await fetch(`${env.SUPABASE_URL}/storage/v1/object/${bucket}/${storagePath.split("/").map(encodeURIComponent).join("/")}`,{headers:supabaseHeaders(env)});
+      if(!objectResponse.ok)throw new Error(`No fue posible leer el QR (${objectResponse.status})`);
+      const mimeType=String(claim.mime_type||objectResponse.headers.get("content-type")||"image/png").split(";")[0];
+      const form=new FormData();
+      form.append("messaging_product","whatsapp");
+      form.append("type",mimeType);
+      form.append("file",new Blob([await objectResponse.arrayBuffer()],{type:mimeType}),`qr.${mediaExtension(mimeType,"image")}`);
+      const uploadResponse=await fetch(`https://graph.facebook.com/${graphVersion}/${env.WHATSAPP_PHONE_NUMBER_ID}/media`,{method:"POST",headers:{authorization:`Bearer ${env.WHATSAPP_ACCESS_TOKEN}`},body:form});
+      const uploaded=await uploadResponse.json().catch(()=>({}));
+      if(!uploadResponse.ok||!uploaded.id)throw new Error(uploaded?.error?.message||`Meta rechazó el QR (${uploadResponse.status})`);
+      body.image={id:uploaded.id,caption:String(claim.caption||claim.text||"").slice(0,1024)};
+    }
     result=await fetch(`https://graph.facebook.com/${graphVersion}/${env.WHATSAPP_PHONE_NUMBER_ID}/messages`,{method:"POST",headers:{authorization:`Bearer ${env.WHATSAPP_ACCESS_TOKEN}`,"content-type":"application/json"},body:JSON.stringify(body)});
   }catch(error){
     await supabaseRpc("complete_outbound_whatsapp_message",{p_message_id:claim.message_id,p_lease_id:leaseId,p_meta_message_id:null,p_response:{},p_error:error.message,p_uncertain:true},env);
@@ -353,6 +440,24 @@ async function operatorConversationAction(request,env){
   return json({error:"Unsupported action"},400);
 }
 
+async function operatorMediaAction(request,env){
+  const operator=await authenticatedOperator(request,env);
+  if(!operator)return json({error:"Unauthorized"},401);
+  let body;
+  try{body=await request.json();}catch{return json({error:"Invalid JSON"},400);}
+  const messageId=String(body.message_id||"");
+  if(!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(messageId))return json({error:"A message_id is required"},400);
+  const messageResponse=await fetch(`${env.SUPABASE_URL}/rest/v1/whatsapp_messages?id=eq.${encodeURIComponent(messageId)}&direction=eq.inbound&select=id,meta_message_id,message_type,media_id,raw_payload&limit=1`,{headers:supabaseHeaders(env)});
+  if(!messageResponse.ok)return json({error:"No fue posible consultar el mensaje"},502);
+  const message=(await messageResponse.json())?.[0];
+  if(!message?.meta_message_id||!message?.media_id)return json({error:"El mensaje no contiene un archivo recuperable"},404);
+  const media=message.raw_payload?.message?.[message.message_type]||{};
+  try{
+    const storagePath=await persistOneInboundMedia({metaMessageId:message.meta_message_id,mediaId:message.media_id,messageType:message.message_type,originalName:media.filename||null},env);
+    return json({ok:true,storage_path:storagePath});
+  }catch(error){return json({error:error.message||"No fue posible recuperar el archivo"},502);}
+}
+
 function health(env){
   return json({ok:true,webhookVerification:Boolean(env.WHATSAPP_VERIFY_TOKEN),signatureVerification:Boolean(env.WHATSAPP_APP_SECRET),inbox:Boolean(env.SUPABASE_URL&&supabaseKey(env)),automation:Boolean(env.N8N_WEBHOOK_URL&&env.N8N_WEBHOOK_SECRET),automationWake:Boolean(env.N8N_AUTOMATION_URL&&env.N8N_WEBHOOK_SECRET),outboundMessaging:Boolean(env.WHATSAPP_ACCESS_TOKEN&&env.WHATSAPP_PHONE_NUMBER_ID&&env.N8N_GATEWAY_SECRET)});
 }
@@ -365,6 +470,7 @@ export default {
     if(url.pathname===SEND_PATH&&request.method==="POST")return sendWhatsApp(request,env);
     if(url.pathname===AUTOMATION_WAKE_PATH&&request.method==="POST")return wakeAutomation(request,env);
     if(url.pathname===OPERATOR_ACTION_PATH&&request.method==="POST")return operatorConversationAction(request,env);
+    if(url.pathname===OPERATOR_MEDIA_PATH&&request.method==="POST")return operatorMediaAction(request,env);
     if(url.pathname===HEALTH_PATH&&request.method==="GET")return health(env);
     if(url.pathname===PRIVACY_PATH&&request.method==="GET")return privacyPolicy();
     if(url.pathname===DATA_DELETION_PATH&&request.method==="GET")return dataDeletionInstructions();
