@@ -92,17 +92,18 @@ export async function saveCourier(values){
 }
 export async function listChatbotData(){
   if(isDemoMode) return demoStore.listChatbotData();
-  const [contacts,conversations,messages,attachments,tasks,knowledge,inventory]=await Promise.all([
+  const [contacts,conversations,messages,attachments,tasks,knowledge,inventory,paymentQrs]=await Promise.all([
     supabase.from("whatsapp_contacts").select("*").order("last_seen_at",{ascending:false}),
     supabase.from("whatsapp_conversations").select("*, contact:whatsapp_contacts(*), branch:branches(id,name)").order("last_message_at",{ascending:false}),
     supabase.from("whatsapp_messages").select("*").order("created_at",{ascending:false}).limit(2000),
     supabase.from("whatsapp_attachments").select("*").order("created_at",{ascending:false}).limit(500),
     supabase.from("human_tasks").select("*, branch:branches(id,name), conversation:whatsapp_conversations(id,contact:whatsapp_contacts(phone_e164,display_name,preferred_name))").order("created_at",{ascending:false}),
     supabase.from("branch_knowledge").select("*, branch:branches(id,name)").order("active",{ascending:false}).order("updated_at",{ascending:false}),
-    supabase.from("branch_inventory").select("*, branch:branches(id,name), product:products(*)").order("updated_at",{ascending:false})
+    supabase.from("branch_inventory").select("*, branch:branches(id,name), product:products(*)").order("updated_at",{ascending:false}),
+    supabase.from("branch_payment_qrs").select("*, branch:branches(id,name)").order("branch_id")
   ]);
-  for(const result of [contacts,conversations,messages,attachments,tasks,knowledge,inventory])if(result.error)throw result.error;
-  return {contacts:contacts.data,conversations:conversations.data,messages:messages.data,attachments:attachments.data,tasks:tasks.data,knowledge:knowledge.data,inventory:inventory.data};
+  for(const result of [contacts,conversations,messages,attachments,tasks,knowledge,inventory,paymentQrs])if(result.error)throw result.error;
+  return {contacts:contacts.data,conversations:conversations.data,messages:messages.data,attachments:attachments.data,tasks:tasks.data,knowledge:knowledge.data,inventory:inventory.data,paymentQrs:paymentQrs.data};
 }
 export async function getChatAttachmentUrl(path){
   if(isDemoMode) return demoStore.getChatAttachmentUrl(path);
@@ -124,6 +125,26 @@ export async function saveCatalogItem(values){
   });
   if(error)throw error;return data;
 }
+export async function uploadBranchPaymentQr(branchId,file){
+  if(isDemoMode)throw new Error("La carga de QR requiere conexión con Supabase.");
+  if(!branchId||!file)throw new Error("Selecciona una sede y una imagen.");
+  if(file.size>5*1024*1024)throw new Error("La imagen debe pesar máximo 5 MB.");
+  if(!["image/jpeg","image/png","image/webp"].includes(file.type))throw new Error("Usa una imagen JPG, PNG o WEBP.");
+  const {data:previous}=await supabase.from("branch_payment_qrs").select("storage_path").eq("branch_id",branchId).maybeSingle();
+  const extension=(file.name.split(".").pop()||"png").replace(/[^a-z0-9]/gi,"").toLowerCase();
+  const path=`${branchId}/${crypto.randomUUID()}.${extension}`;
+  const {error:uploadError}=await supabase.storage.from("payment-qrs").upload(path,file,{contentType:file.type,upsert:false});
+  if(uploadError)throw uploadError;
+  const {data,error}=await supabase.from("branch_payment_qrs").upsert({branch_id:branchId,storage_path:path,original_name:file.name,mime_type:file.type,size_bytes:file.size,active:true},{onConflict:"branch_id"}).select("*, branch:branches(id,name)").single();
+  if(error){await supabase.storage.from("payment-qrs").remove([path]);throw error;}
+  if(previous?.storage_path&&previous.storage_path!==path)await supabase.storage.from("payment-qrs").remove([previous.storage_path]);
+  return data;
+}
+export async function getBranchPaymentQrUrl(path){
+  if(isDemoMode)return "";
+  const {data,error}=await supabase.storage.from("payment-qrs").createSignedUrl(path,300);
+  if(error)throw error;return data.signedUrl;
+}
 export async function resolveHumanTask(taskId,status,resolution){
   if(isDemoMode) return demoStore.resolveHumanTask(taskId,status,resolution);
   const {data,error}=await supabase.rpc("resolve_human_task",{p_task_id:taskId,p_status:status,p_resolution:resolution});
@@ -137,6 +158,19 @@ export async function resolveHumanTask(taskId,status,resolution){
   });
   if(!wake.ok)throw new Error("La respuesta quedó guardada, pero no fue posible reanudar el chat automáticamente.");
   return data;
+}
+export async function operateWhatsappConversation(conversationId,action,values={}){
+  if(isDemoMode) throw new Error("El control del chat requiere conexión con Supabase.");
+  const {data:sessionData}=await supabase.auth.getSession();
+  const accessToken=sessionData.session?.access_token;
+  const response=await fetch("/api/operator/conversation",{
+    method:"POST",
+    headers:{"content-type":"application/json",...(accessToken?{authorization:`Bearer ${accessToken}`}:{})},
+    body:JSON.stringify({conversation_id:conversationId,action,request_id:crypto.randomUUID(),...values})
+  });
+  const result=await response.json().catch(()=>({}));
+  if(!response.ok)throw new Error(result.error||"No fue posible ejecutar la acción en WhatsApp.");
+  return result;
 }
 export function subscribeToOrders(onChange){
   if(isDemoMode) return () => {};

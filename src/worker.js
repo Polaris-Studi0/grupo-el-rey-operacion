@@ -2,6 +2,7 @@ const WEBHOOK_PATH = "/api/whatsapp/webhook";
 const SEND_PATH = "/api/whatsapp/send";
 const HEALTH_PATH = "/api/whatsapp/health";
 const AUTOMATION_WAKE_PATH = "/api/automation/wake";
+const OPERATOR_ACTION_PATH = "/api/operator/conversation";
 const PRIVACY_PATH = "/privacidad";
 const DATA_DELETION_PATH = "/eliminacion-de-datos";
 
@@ -267,14 +268,11 @@ function authorizedInternalRequest(request,env){
   return Boolean(expected&&received&&constantTimeEqual(expected,received));
 }
 
-async function sendWhatsApp(request,env){
-  if(!authorizedInternalRequest(request,env))return json({error:"Unauthorized"},401);
+async function deliverQueuedWhatsAppMessage(messageId,env){
   if(!env.WHATSAPP_ACCESS_TOKEN||!env.WHATSAPP_PHONE_NUMBER_ID)return json({error:"WhatsApp production credentials are not configured"},503);
-  let requestBody;
-  try{requestBody=await request.json();}catch{return json({error:"Invalid JSON"},400);}
-  if(!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(requestBody.message_id||""))return json({error:"A queued message_id is required"},400);
+  if(!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(messageId||""))return json({error:"A queued message_id is required"},400);
   const leaseId=crypto.randomUUID();
-  const claim=await supabaseRpc("claim_outbound_whatsapp_message",{p_message_id:requestBody.message_id,p_lease_id:leaseId},env);
+  const claim=await supabaseRpc("claim_outbound_whatsapp_message",{p_message_id:messageId,p_lease_id:leaseId},env);
   if(!claim?.send){
     if(claim?.state==="sent")return json({ok:true,duplicate:true,message_id:claim.message_id,meta_message_id:claim.meta_message_id});
     return json({error:"Message is not available for automatic sending",state:claim?.state||"unknown",reason:claim?.reason||null},409);
@@ -307,6 +305,54 @@ async function sendWhatsApp(request,env){
   return json(metaResponse,result.ok&&metaMessageId?result.status:result.ok?502:result.status);
 }
 
+async function sendWhatsApp(request,env){
+  if(!authorizedInternalRequest(request,env))return json({error:"Unauthorized"},401);
+  let requestBody;
+  try{requestBody=await request.json();}catch{return json({error:"Invalid JSON"},400);}
+  return deliverQueuedWhatsAppMessage(requestBody.message_id,env);
+}
+
+async function operatorConversationAction(request,env){
+  const operator=await authenticatedOperator(request,env);
+  if(!operator)return json({error:"Unauthorized"},401);
+  let body;
+  try{body=await request.json();}catch{return json({error:"Invalid JSON"},400);}
+  const conversationId=String(body.conversation_id||"");
+  if(!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(conversationId))return json({error:"A conversation_id is required"},400);
+
+  if(body.action==="takeover"){
+    const result=await supabaseRpc("set_whatsapp_automation_paused",{
+      p_conversation_id:conversationId,p_paused:Boolean(body.paused),p_operator_id:operator.id
+    },env);
+    return json(result||{ok:true});
+  }
+
+  const textBody=String(body.text||"").trim();
+  const requestKey=String(body.request_id||"").trim();
+  if(!textBody||requestKey.length<8)return json({error:"Text and request_id are required"},400);
+
+  if(body.action==="message"){
+    const queued=await supabaseRpc("queue_operator_whatsapp_message",{
+      p_conversation_id:conversationId,p_body:textBody,p_request_key:requestKey,p_operator_id:operator.id
+    },env);
+    const messageId=queued?.message_id;
+    return deliverQueuedWhatsAppMessage(messageId,env);
+  }
+
+  if(body.action==="instruction"){
+    if(!env.N8N_AUTOMATION_URL||!env.N8N_WEBHOOK_SECRET)return json({error:"Automation webhook is not configured"},503);
+    const result=await fetch(env.N8N_AUTOMATION_URL,{
+      method:"POST",
+      headers:{"content-type":"application/json","x-elrey-webhook-secret":env.N8N_WEBHOOK_SECRET},
+      body:JSON.stringify({trigger:"operator_instruction",conversation_id:conversationId,instruction:textBody,request_id:requestKey,operator_id:operator.id})
+    });
+    if(!result.ok)return json({error:`n8n respondió ${result.status}`},502);
+    return json({ok:true,conversation_id:conversationId});
+  }
+
+  return json({error:"Unsupported action"},400);
+}
+
 function health(env){
   return json({ok:true,webhookVerification:Boolean(env.WHATSAPP_VERIFY_TOKEN),signatureVerification:Boolean(env.WHATSAPP_APP_SECRET),inbox:Boolean(env.SUPABASE_URL&&supabaseKey(env)),automation:Boolean(env.N8N_WEBHOOK_URL&&env.N8N_WEBHOOK_SECRET),automationWake:Boolean(env.N8N_AUTOMATION_URL&&env.N8N_WEBHOOK_SECRET),outboundMessaging:Boolean(env.WHATSAPP_ACCESS_TOKEN&&env.WHATSAPP_PHONE_NUMBER_ID&&env.N8N_GATEWAY_SECRET)});
 }
@@ -318,6 +364,7 @@ export default {
     if(url.pathname===WEBHOOK_PATH&&request.method==="POST")return receiveWebhook(request,env,context);
     if(url.pathname===SEND_PATH&&request.method==="POST")return sendWhatsApp(request,env);
     if(url.pathname===AUTOMATION_WAKE_PATH&&request.method==="POST")return wakeAutomation(request,env);
+    if(url.pathname===OPERATOR_ACTION_PATH&&request.method==="POST")return operatorConversationAction(request,env);
     if(url.pathname===HEALTH_PATH&&request.method==="GET")return health(env);
     if(url.pathname===PRIVACY_PATH&&request.method==="GET")return privacyPolicy();
     if(url.pathname===DATA_DELETION_PATH&&request.method==="GET")return dataDeletionInstructions();
