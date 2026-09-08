@@ -1,0 +1,389 @@
+# Traspaso de contexto — Grupo Almacenes El Rey
+
+Actualizado: 8 de septiembre de 2026 (America/Bogota)
+
+Este documento permite continuar el trabajo en un chat nuevo sin reconstruir el contexto. No contiene contraseñas, tokens ni llaves privadas: esos valores ya están guardados en Cloudflare, n8n, Supabase y Meta.
+
+## Mensaje para iniciar el chat nuevo
+
+Copia y pega este bloque como primer mensaje del chat nuevo:
+
+```text
+Continúa el proyecto de WhatsApp, n8n e intranet de Grupo Almacenes El Rey.
+
+El repositorio local está en:
+/Users/samuel/Desktop/Cowork for Grupo El Rey/Plataforma
+
+Lee primero el archivo:
+/Users/samuel/Desktop/Cowork for Grupo El Rey/Plataforma/HANDOFF_N8N_WHATSAPP.md
+
+Usa la conexión de n8n ya autorizada para inspeccionar y modificar los flujos existentes. Antes de cambiar algo, verifica el estado real en el repositorio y en n8n. No recrees los flujos desde cero ni dupliques workflows. Conserva la idempotencia y evita ejecuciones de prueba innecesarias porque el plan de n8n tiene un límite bajo.
+
+Estado importante: el historial de conversaciones y pedidos de prueba se limpió y el consecutivo volvió a 1001. La restricción de horario del asistente está desactivada temporalmente para hacer pruebas; debe restaurarse antes de producción. El siguiente paso es probar una conversación completa desde cero, incluyendo QR, comprobante, intervención humana y creación del pedido.
+
+El usuario prefiere hacer manualmente commit y push con GitHub Desktop cuando se lo pidan. Si comparte una credencial durante el trabajo, no le pidas rotarla únicamente por haberla compartido con el asistente. Nunca publiques secretos en GitHub ni los copies a archivos de traspaso.
+```
+
+## Objetivo del sistema
+
+Operar un asistente comercial de WhatsApp conectado con la intranet de Almacenes El Rey. El bot debe:
+
+- pedir consentimiento una sola vez por contacto;
+- saludar y confirmar el nombre real del cliente;
+- identificar la sede;
+- conservar el contexto completo de la compra;
+- consultar o escalar existencia, precio, domicilio, pago y crédito;
+- continuar la venta de forma natural, sin repetir “¿seguimos con el pedido?”;
+- enviar el QR específico de la sede;
+- recibir comprobantes y mostrarlos en la intranet;
+- permitir intervención humana, instrucciones al bot y toma manual de la conversación;
+- crear el pedido operativo al completar la venta;
+- conservar trazabilidad e idempotencia sin duplicar mensajes, pedidos ni consumos.
+
+## Repositorio y publicación
+
+- Repositorio local: `/Users/samuel/Desktop/Cowork for Grupo El Rey/Plataforma`
+- GitHub: `https://github.com/Polaris-Studi0/grupo-el-rey-operacion.git`
+- Rama de producción: `main`
+- Worker de Cloudflare: `grupo-el-rey-operacion`
+- URL de Worker: `https://grupo-el-rey-operacion.throbbing-salad-55e3.workers.dev`
+- Archivo principal del Worker: `src/worker.js`
+- Configuración de despliegue: `wrangler.jsonc`
+- Comandos de verificación: `npm run check` y `npm run build`
+- Publicación directa del Worker, cuando sea necesaria: `npx wrangler deploy`
+- El usuario normalmente hace `commit` y `push` manualmente con GitHub Desktop.
+
+Últimos commits relevantes:
+
+- `ad65b03` — corrección de idempotencia del payload saliente.
+- `22a5449` — actualización de `wrangler.jsonc`.
+- `add4efc` — envío de QR y comprobantes visibles en vivo.
+- `28e7477` — control manual de WhatsApp y QR por sede.
+- `6814b7f` — correcciones del flujo comercial y pendientes.
+- `6e92fb3` — identidad de contactos de WhatsApp.
+- `44cd7bc` — continuidad del chatbot.
+
+## Dominios y DNS
+
+- Landing: `https://almaceneselrey.co`
+- Landing alternativa: `https://www.almaceneselrey.co`
+- Intranet: `https://intranet.almaceneselrey.co`
+- Registrador: GoDaddy.
+- DNS autoritativo: Cloudflare; los nameservers ya fueron cambiados y el dominio quedó activo/protegido.
+- Cloudflare Zone ID: `82113267d59fc567af548408f90e8419`
+- Cloudflare Account ID: `f5f40fe15b916c77d5eb9d5f08d413ff`
+
+La landing y la intranet son rutas del mismo Worker. No volver a crear hosting en GoDaddy ni apuntar el dominio a las antiguas IP de aparcamiento.
+
+## Accesos e identificadores de servicios
+
+### n8n
+
+- Instancia: `https://almaceneselrey.app.n8n.cloud`
+- Proyecto: `My project`
+- Project ID: `3NR51Xmtie3lqXUU`
+- Carpeta de flujos EL REY: `GepTwb36yydYZ922`
+- Webhook llamado por el Worker: `https://almaceneselrey.app.n8n.cloud/webhook/el-rey-whatsapp-automation`
+- Credenciales visibles en el proyecto, sin incluir sus valores:
+  - `SX6d04isGVo4Szxs` — `EL REY · n8n → Cloudflare` (`httpHeaderAuth`).
+  - `iDdHW9zawz0wNIas` — `Header Auth account` (`httpHeaderAuth`).
+  - `wnBGAjYX8OzatHnU` — `n8n free OpenAI API credits` (`openAiApi`, administrada por n8n).
+  - `yJrsmndjECTPrvyp` — `Postgres account` (`postgres`).
+- Las credenciales de OpenAI, PostgreSQL y las cabeceras internas se administran desde n8n; no copiar sus valores a código.
+
+### Supabase
+
+- Project ref: `xmfltwhgvoaleejatxtg`
+- Project URL: `https://xmfltwhgvoaleejatxtg.supabase.co`
+- Se usa como PostgreSQL, Auth, Storage y Realtime.
+- La llave pública del frontend se configura como `VITE_SUPABASE_ANON_KEY`.
+- La llave privada moderna se guarda como `SUPABASE_SECRET_KEY` exclusivamente en Cloudflare/n8n.
+- No exponer `service_role` en el frontend ni en GitHub.
+
+### Meta / WhatsApp
+
+- Negocio y app: `Almacenes El Rey`
+- WhatsApp Business Account ID: `1108612821745260`
+- Número conectado: `+57 314 7899116`
+- Phone Number ID: `1339067702616155`
+- El número figuraba como Registered/Connected y con calidad High.
+- El webhook de Meta apunta al Worker en `/api/whatsapp/webhook`.
+
+## Secretos existentes
+
+Los valores no están en este documento. Comprobarlos o administrarlos en los paneles correspondientes.
+
+Secretos/variables privadas del Worker:
+
+- `WHATSAPP_VERIFY_TOKEN`
+- `WHATSAPP_APP_SECRET`
+- `WHATSAPP_ACCESS_TOKEN`
+- `WHATSAPP_PHONE_NUMBER_ID`
+- `SUPABASE_URL`
+- `SUPABASE_SECRET_KEY`
+- `SUPABASE_SERVICE_ROLE_KEY` solo como compatibilidad heredada
+- `N8N_WEBHOOK_URL`
+- `N8N_WEBHOOK_SECRET`
+- `N8N_GATEWAY_SECRET`
+- `META_GRAPH_VERSION` opcional
+
+Variables públicas de compilación:
+
+- `VITE_SUPABASE_URL`
+- `VITE_SUPABASE_ANON_KEY`
+
+Variable no secreta en `wrangler.jsonc`:
+
+- `N8N_AUTOMATION_URL=https://almaceneselrey.app.n8n.cloud/webhook/el-rey-whatsapp-automation`
+
+## Arquitectura activa
+
+```text
+Cliente en WhatsApp
+  -> webhook de Meta
+  -> Cloudflare Worker
+  -> persistencia y deduplicación en Supabase
+  -> n8n 01 Entrada
+      -> n8n 02 Consentimiento, si hace falta
+      -> n8n 03 Asistente comercial
+      -> n8n 04 Pendientes humanos, cuando se requiere confirmación
+  -> cola saliente idempotente en Supabase
+  -> Cloudflare Worker
+  -> Meta / WhatsApp
+
+n8n 05 ejecuta la reapertura de conversaciones a las 9:00 a. m.
+La intranet lee y modifica el mismo estado en Supabase y recibe cambios en tiempo real.
+```
+
+El Worker persiste el evento antes de responder a Meta. Los eventos y mensajes usan claves idempotentes y leases para impedir duplicados. n8n debe responder `2xx` solo cuando el procesamiento termine correctamente.
+
+## Workflows de n8n
+
+Todos los flujos operativos estaban activos al cerrar este traspaso.
+
+| ID | Nombre | Función |
+|---|---|---|
+| `dgAsTSuWoX6mfYOn` | `EL REY · 01 · WhatsApp · Entrada y trazabilidad` | Recibe eventos, guarda mensajes/estados, elimina duplicados y enruta. |
+| `SmmZnTB6tvSmtntt` | `EL REY · 02 · WhatsApp · Consentimiento` | Solicita y registra autorización una sola vez por contacto. |
+| `xP8kOe3z2GSnRqkJ` | `EL REY · 03 · WhatsApp · Asistente comercial` | Mantiene el contexto comercial, decide el siguiente paso y genera respuestas. |
+| `gi0Vdd1W3weL6i4W` | `EL REY · 04 · WhatsApp · Pendientes humanos` | Notifica responsables y reanuda automáticamente al resolverse un pendiente. |
+| `dUaIlsHiPpEooFs7` | `EL REY · 05 · WhatsApp · Reapertura 9 AM` | Recontacta a clientes que escribieron fuera de horario. |
+
+Workflows temporales de migración/limpieza ya archivados:
+
+- `yPugJ339dDRZ9Zr8` — migración de corrección de idempotencia.
+- `nU7rA5bX3ToLysZ6` — limpieza de historial de pruebas.
+
+## Estado temporal de pruebas
+
+La restricción horaria está desactivada temporalmente en el workflow 03 para poder probar el bot en cualquier momento.
+
+- Workflow: `xP8kOe3z2GSnRqkJ`
+- Nodo: `Cargar contexto comercial`
+- Versión activa al aplicar el cambio: `ee424d0e-7e00-440f-90c6-c1bc60ef3900`
+- Actualmente la consulta devuelve:
+
+```sql
+true as service_open,
+true as delivery_open
+```
+
+Antes de producción debe restaurarse:
+
+```sql
+(timezone('America/Bogota', now())::time >= time '09:00'
+  and timezone('America/Bogota', now())::time < time '20:00') as service_open,
+(timezone('America/Bogota', now())::time >= time '09:00'
+  and timezone('America/Bogota', now())::time < time '19:00') as delivery_open
+```
+
+Después hay que publicar nuevamente el workflow 03.
+
+## Estado de los datos de prueba
+
+El 8 de septiembre de 2026 se eliminó, a solicitud del usuario, todo el historial de prueba de conversaciones y pedidos. Se verificó que quedaron en cero:
+
+- contactos de WhatsApp;
+- conversaciones;
+- mensajes y adjuntos;
+- pendientes humanos;
+- ejecuciones de IA registradas en la base;
+- pedidos, eventos y reservas;
+- inbox de webhooks y outbox de automatización.
+
+El consecutivo de pedidos volvió a `1001`.
+
+Se conservaron:
+
+- sedes;
+- productos;
+- inventario por sede;
+- usuarios y configuración;
+- conocimiento por sede;
+- códigos QR de pago.
+
+El historial técnico de ejecuciones dentro de n8n es independiente y no fue borrado.
+
+## Corrección crítica ya aplicada
+
+Los workflows 01 y 03 se caían con el error `La clave ya pertenece a otro mensaje.`. La causa era que `queue_outbound_whatsapp_message` comparaba el `raw_payload` completo para idempotencia, aunque Meta agrega después campos mutables como `send_response` y `send_error`.
+
+La migración `supabase/migrations/202609070011_whatsapp_idempotency_payload_fix.sql` hace que esos campos se ignoren durante la comparación. La migración fue aplicada en la base de producción y se verificó que `prepare_branch_payment_qr()` devuelve el mensaje existente con `created=false` en vez de fallar.
+
+No volver a deshacer esta corrección ni comparar como inmutable el payload enriquecido después del envío.
+
+## Migraciones de Supabase
+
+Aplicadas en orden:
+
+1. `202609030001_initial.sql`
+2. `202609040002_operational_traceability.sql`
+3. `202609050003_whatsapp_commerce.sql`
+4. `202609050004_whatsapp_hardening.sql`
+5. `202609070001_fix_whatsapp_ai_persistence.sql`
+6. `202609070002_whatsapp_human_task_automation.sql`
+7. `202609070003_whatsapp_conversation_continuity.sql`
+8. `202609070004_whatsapp_contact_identity_fix.sql`
+9. `202609070005_whatsapp_admin_channel_fix.sql`
+10. `202609070006_whatsapp_sales_state_and_orders.sql`
+11. `202609070007_whatsapp_consent_continuity.sql`
+12. `202609070008_whatsapp_operator_and_opening_followup.sql`
+13. `202609070009_branch_payment_qr.sql`
+14. `202609070010_whatsapp_media_realtime.sql`
+15. `202609070011_whatsapp_idempotency_payload_fix.sql`
+
+## Datos, tablas y almacenamiento
+
+Tablas principales:
+
+- `whatsapp_contacts`
+- `whatsapp_conversations`
+- `whatsapp_messages`
+- `privacy_consents`
+- `whatsapp_attachments`
+- `conversation_events`
+- `ai_runs`
+- `whatsapp_message_status_events`
+- `human_tasks`
+- `whatsapp_webhook_inbox`
+- `automation_outbox`
+- `orders`
+- `order_events`
+- `products`
+- `branch_inventory`
+- `inventory_reservations`
+- `inventory_movements`
+- `branch_knowledge`
+- `branch_payment_qrs`
+- `branches`, `profiles` y tablas operativas de domiciliarios/personal.
+
+Buckets:
+
+- `whatsapp-media`: imágenes, documentos y audio recibidos por WhatsApp.
+- `payment-qrs`: códigos QR de pago por sede.
+- `payment-receipts`: comprobantes operativos de pedidos.
+
+El QR de Robledo Aures ya fue cargado y marcado como activo. La intranet debe conservar la opción de subir o reemplazar el QR de cada sede cuando estén disponibles los demás archivos.
+
+## Reglas comerciales acordadas
+
+### Inicio y consentimiento
+
+- Saludar al cliente.
+- Solicitar consentimiento solamente si el contacto aún no lo ha otorgado.
+- Preguntar el nombre; `display_name` de WhatsApp ayuda, pero no garantiza la identidad.
+- Preguntar o confirmar la sede después del nombre.
+
+### Conversación de venta
+
+- Mantener producto, cantidad, precio, sede, domicilio, dirección, destinatario, forma de pago y confirmaciones humanas dentro del contexto.
+- Una respuesta humana debe incorporarse al pedido y producir inmediatamente el siguiente paso lógico.
+- Evitar bucles del tipo “¿deseas seguir?” cuando el cliente ya confirmó.
+- Pedir confirmación explícita solo para decisiones finales, cargos nuevos o cambios materiales.
+- Acumular direcciones enviadas en varios mensajes; no reemplazar una parte con la siguiente.
+- Si falta información real, pedir únicamente el dato faltante.
+- Al terminar la venta, crear el pedido operativo y registrar la trazabilidad.
+
+### Horario normal de producción
+
+- Atención: 9:00 a. m. a 8:00 p. m., hora de Colombia.
+- Domicilios: disponibles hasta las 7:00 p. m.
+- Después de las 8:00 p. m. no hay servicio; se reanuda a las 9:00 a. m.
+- Si alguien escribe en las tres horas anteriores a la apertura o después del cierre, el workflow 05 debe escribirle a las 9:00 a. m. para continuar.
+
+### Pagos
+
+- Transferencia por QR o número de cuenta.
+- Addi.
+- Sistecrédito.
+- Pago en el local solamente cuando el cliente retira en tienda.
+- No existe pago contraentrega.
+- Para Addi y Sistecrédito, recopilar primero cédula y teléfono y luego crear la revisión humana.
+- No afirmar que un crédito o pago está aprobado sin confirmación humana registrada.
+- Al elegir QR, enviar realmente la imagen activa de la sede; no prometer “en el siguiente mensaje” si no se creó el mensaje multimedia.
+- Una imagen de comprobante se guarda y se muestra al operador, pero la IA no la aprueba por sí sola.
+
+## Funciones ya implementadas en la intranet
+
+- Centro de conversaciones de WhatsApp.
+- Actualización de mensajes en tiempo real sin recargar la página.
+- Visualización/descarga de adjuntos recibidos, incluidos comprobantes.
+- Respuesta humana a pendientes.
+- Envío de instrucciones internas al bot aunque no exista un pendiente.
+- Toma de control manual de una conversación y envío directo al cliente.
+- Resumen operativo de conversación/pedido.
+- Administración de QR por sede.
+- Creación y trazabilidad de pedidos.
+
+## Sedes e identificadores
+
+| ID | Sede |
+|---|---|
+| `b1` | Robledo Aures |
+| `b2` | Robledo Diamante - Calle 80 |
+| `b3` | Santa Cruz |
+| `b4` | San Gabriel, Itagüí |
+| `b5` | Robledo Diamante - Diagonal 85 |
+| `b6` | Floresta |
+| `b7` | La 80 |
+| `b8` | La Estrella |
+| `b9` | Campo Valdez |
+| `b10` | San Antonio de Prado |
+
+## Próxima prueba recomendada
+
+Hacer una sola conversación completa desde un número limpio para no gastar ejecuciones innecesarias:
+
+1. Enviar “Hola”.
+2. Aceptar el tratamiento de datos.
+3. Dar nombre y sede.
+4. Consultar un producto que requiera confirmación humana.
+5. Responder desde la intranet y comprobar que el bot continúa sin que el cliente tenga que insistir.
+6. Completar cantidad y domicilio enviando la dirección en dos mensajes.
+7. Elegir transferencia por QR en Robledo Aures.
+8. Verificar que WhatsApp recibe la imagen QR.
+9. Enviar una imagen como comprobante.
+10. Confirmar que el archivo aparece en vivo en la intranet.
+11. Aprobar el pago desde la intranet.
+12. Confirmar que el cliente recibe la continuación y que se crea el pedido `1001`.
+13. Repetir solamente el caso mínimo desde un segundo teléfono para comprobar aislamiento entre contactos.
+
+Si aparece un error, abrir primero la ejecución más reciente del workflow 01 o 03 y revisar el nodo exacto que falló. No hacer múltiples reintentos a ciegas.
+
+## Criterios antes de producción
+
+- Restaurar las restricciones de horario.
+- Cargar y probar el QR de cada sede.
+- Confirmar que Meta entrega texto e imágenes desde al menos dos números reales.
+- Probar una conversación completa sin intervención manual adicional.
+- Confirmar que un pedido se crea una sola vez y descuenta/reserva inventario correctamente.
+- Ejecutar `npm run check` y `npm run build`.
+- Revisar que no existan secretos en Git ni en archivos del frontend.
+- Mantener los workflows temporales archivados y evitar schedulers que consuman ejecuciones cada minuto sin necesidad.
+
+## Documentación adicional del repositorio
+
+- `README.md`
+- `docs/CHATBOT_N8N.md`
+- `docs/DESPLIEGUE.md`
+- `knowledge/README.md`
