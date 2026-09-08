@@ -3,6 +3,7 @@
   "name": "grupo-el-rey-operacion",
   "compatibility_date": "2026-09-03",
   "main": "./src/worker.js",
+  "workers_dev": true,
   "keep_vars": true,
   "vars": {
     "N8N_AUTOMATION_URL": "https://almaceneselrey.app.n8n.cloud/webhook/el-rey-whatsapp-automation"
