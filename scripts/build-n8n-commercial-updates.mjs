@@ -31,6 +31,7 @@ const patches=[
    {type:'setNodeSettings',nodeName:'Asistente comercial controlado',settings:{retryOnFail:false,onError:'continueRegularOutput'}},
    set('GPT-5.4 Mini · bajo costo','options.maxTokens',1800),
    set('GPT-5.4 Mini · bajo costo','options.maxRetries',1),
+   {type:'setNodeCredential',nodeName:'GPT-5.4 Mini · bajo costo',credentialKey:'openAiApi',credentialId:'wnBGAjYX8OzatHnU',credentialName:'n8n free OpenAI API credits'},
    set('GPT-5.4 Mini · bajo costo','options.promptCacheKey','el-rey-whatsapp-commercial-v3'),
    set('GPT-5.4 Mini · bajo costo','options.extraBody',{store:false}),
    set('Contrato de respuesta','inputSchema',schema),
