@@ -33,7 +33,7 @@ const patches=[
    set('GPT-5.4 Mini · bajo costo','options.maxRetries',1),
    {type:'setNodeCredential',nodeName:'GPT-5.4 Mini · bajo costo',credentialKey:'openAiApi',credentialId:'wnBGAjYX8OzatHnU',credentialName:'n8n free OpenAI API credits'},
    set('GPT-5.4 Mini · bajo costo','options.promptCacheKey','el-rey-whatsapp-commercial-v3'),
-   set('GPT-5.4 Mini · bajo costo','options.extraBody',{store:false}),
+   set('GPT-5.4 Mini · bajo costo','options.extraBody',JSON.stringify({store:false})),
    set('Contrato de respuesta','inputSchema',schema),
    set('Contrato de respuesta','autoFix',false),
    set('Normalizar decisión','jsCode',normalize.replace('export function','function')+"\nreturn {json:normalizeDecision($('Cargar contexto comercial').item.json,$json)};\n"),
