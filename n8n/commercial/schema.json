@@ -1,0 +1,193 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "intent",
+    "action",
+    "branch_id",
+    "reply",
+    "customer_name",
+    "summary",
+    "task_title",
+    "task_question",
+    "confidence",
+    "sales_state",
+    "cart_operation",
+    "address_operation",
+    "request_qr",
+    "checkout_confirmed",
+    "branch_change_confirmed",
+    "name_confirmed"
+  ],
+  "properties": {
+    "intent": {
+      "type": "string"
+    },
+    "action": {
+      "type": "string",
+      "enum": [
+        "reply",
+        "ask_branch",
+        "human_product_lookup",
+        "human_delivery_quote",
+        "human_payment_verification",
+        "human_credit_application",
+        "finalize_order",
+        "stop",
+        "human_general"
+      ]
+    },
+    "branch_id": {
+      "type": "string"
+    },
+    "reply": {
+      "type": "string"
+    },
+    "customer_name": {
+      "type": "string"
+    },
+    "summary": {
+      "type": "string"
+    },
+    "task_title": {
+      "type": "string"
+    },
+    "task_question": {
+      "type": "string"
+    },
+    "confidence": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1
+    },
+    "sales_state": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "stage",
+        "items",
+        "fulfillment_type",
+        "delivery_address",
+        "delivery_zone",
+        "recipient_name",
+        "delivery_fee",
+        "payment_method",
+        "payment_status",
+        "payment_reference",
+        "customer_notes",
+        "credit_document",
+        "credit_phone",
+        "credit_installments",
+        "credit_code"
+      ],
+      "properties": {
+        "stage": {
+          "type": "string"
+        },
+        "items": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "product_id",
+              "name",
+              "qty",
+              "unit_price"
+            ],
+            "properties": {
+              "product_id": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              },
+              "qty": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "unit_price": {
+                "type": [
+                  "integer",
+                  "null"
+                ],
+                "minimum": 0
+              }
+            }
+          }
+        },
+        "fulfillment_type": {
+          "type": "string"
+        },
+        "delivery_address": {
+          "type": "string"
+        },
+        "delivery_zone": {
+          "type": "string"
+        },
+        "recipient_name": {
+          "type": "string"
+        },
+        "delivery_fee": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "payment_method": {
+          "type": "string"
+        },
+        "payment_status": {
+          "type": "string"
+        },
+        "payment_reference": {
+          "type": "string"
+        },
+        "customer_notes": {
+          "type": "string"
+        },
+        "credit_document": {
+          "type": "string"
+        },
+        "credit_phone": {
+          "type": "string"
+        },
+        "credit_installments": {
+          "type": "string"
+        },
+        "credit_code": {
+          "type": "string"
+        }
+      }
+    },
+    "cart_operation": {
+      "type": "string",
+      "enum": [
+        "keep",
+        "replace",
+        "clear"
+      ]
+    },
+    "address_operation": {
+      "type": "string",
+      "enum": [
+        "keep",
+        "append",
+        "replace"
+      ]
+    },
+    "request_qr": {
+      "type": "boolean"
+    },
+    "checkout_confirmed": {
+      "type": "boolean"
+    },
+    "branch_change_confirmed": {
+      "type": "boolean"
+    },
+    "name_confirmed": {
+      "type": "boolean"
+    }
+  }
+}

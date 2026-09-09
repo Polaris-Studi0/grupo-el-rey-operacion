@@ -2,6 +2,10 @@
 
 Actualizado: 8 de septiembre de 2026 (America/Bogota)
 
+## Última revisión del bot
+
+Se aplicó la revisión comercial v3: flujos 01, 03, 04 y 05 publicados y nueva función de persistencia aplicada en Supabase. Leer primero [el informe de revisión](n8n/REVISION_20260908.md) para conocer cambios, versiones, pruebas y límites. Las ofertas aún no están definidas. Queda pendiente una conversación real de extremo a extremo y el envío de listas interactivas de sedes. Hay cambios locales sin commit ni push. Se mantiene el horario temporal de pruebas.
+
 Este documento permite continuar el trabajo en un chat nuevo sin reconstruir el contexto. No contiene contraseñas, tokens ni llaves privadas: esos valores ya están guardados en Cloudflare, n8n, Supabase y Meta.
 
 ## Mensaje para iniciar el chat nuevo

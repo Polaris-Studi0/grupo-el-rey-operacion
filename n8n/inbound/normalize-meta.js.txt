@@ -1,0 +1,66 @@
+const inbound = $input.first().json;
+const headers = inbound.headers || {};
+const payload = inbound.body || inbound;
+const baseKey = headers['x-elrey-event-key'] || headers['X-Elrey-Event-Key'] || '';
+const normalizedMessages = [];
+const normalizedStatuses = [];
+const entries = Array.isArray(payload.entry) ? payload.entry : [];
+
+for (let entryIndex = 0; entryIndex < entries.length; entryIndex += 1) {
+  const changes = Array.isArray(entries[entryIndex].changes) ? entries[entryIndex].changes : [];
+  for (let changeIndex = 0; changeIndex < changes.length; changeIndex += 1) {
+    const value = changes[changeIndex].value || {};
+    const contacts = Array.isArray(value.contacts) ? value.contacts : [];
+    const messages = Array.isArray(value.messages) ? value.messages : [];
+    const statuses = Array.isArray(value.statuses) ? value.statuses : [];
+
+    for (let messageIndex = 0; messageIndex < messages.length; messageIndex += 1) {
+      const message = messages[messageIndex];
+      const contact = contacts.find(c => (message.from && c.wa_id === message.from) || (message.from_user_id && c.user_id === message.from_user_id)) || (contacts.length === 1 ? contacts[0] : {});
+      const phoneCandidate = String(message.from || contact.wa_id || '').trim();
+      const phoneDigits = /^\+?\d{8,15}$/.test(phoneCandidate) ? phoneCandidate.replace(/\D/g, '') : '';
+      const userId = String(message.from_user_id || contact.user_id || phoneCandidate).trim();
+      if (!userId || !message.id) continue;
+
+      const interactive = message.interactive || {};
+      const body = message.text?.body || message.button?.text || interactive.button_reply?.title || interactive.list_reply?.title || message.image?.caption || message.video?.caption || message.document?.caption || '';
+      const mediaId = message.image?.id || message.video?.id || message.audio?.id || message.document?.id || message.sticker?.id || null;
+      normalizedMessages.push({
+        event_key: baseKey + ':message:' + entryIndex + ':' + changeIndex + ':' + messageIndex,
+        phone_e164: phoneDigits ? '+' + phoneDigits : null,
+        whatsapp_id: userId,
+        display_name: contact.profile?.name || contact.profile?.username || '',
+        meta_message_id: message.id,
+        message_type: message.type || 'text',
+        body,
+        media_id: mediaId,
+        source: message.referral ? 'whatsapp_ad' : 'whatsapp',
+        branch_id: null,
+        raw_payload: {
+          message,
+          contact,
+          metadata: value.metadata || {},
+          referral: message.referral || null
+        }
+      });
+    }
+
+    for (let statusIndex = 0; statusIndex < statuses.length; statusIndex += 1) {
+      const status = statuses[statusIndex];
+      if (!status.id || !status.status) continue;
+      normalizedStatuses.push({
+        status_event_key: baseKey + ':status:' + entryIndex + ':' + changeIndex + ':' + statusIndex + ':' + status.id + ':' + status.status,
+        meta_message_id: status.id,
+        status: status.status,
+        timestamp: status.timestamp || null,
+        raw_payload: {
+          status,
+          contacts,
+          metadata: value.metadata || {}
+        }
+      });
+    }
+  }
+}
+
+return [{ json: { source_event_key: baseKey, messages: normalizedMessages, statuses: normalizedStatuses, received_at: new Date().toISOString() } }];

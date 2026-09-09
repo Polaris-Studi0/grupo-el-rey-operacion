@@ -306,9 +306,13 @@ async function processWebhook(payload,eventKey,eventType,env){
   try{
     const statuses=collectMessageStatuses(payload,eventKey);
     if(statuses.length)await persistMessageStatuses(payload,eventKey,env);
-    else if(env.N8N_WEBHOOK_URL){
+    const hasMessages=(payload.entry||[]).some(entry=>(entry.changes||[]).some(change=>Array.isArray(change.value?.messages)&&change.value.messages.length>0));
+    if(hasMessages&&env.N8N_WEBHOOK_URL){
+      // Meta may batch delivery statuses and customer messages in one event.
+      // Statuses are already persisted here; only messages need an n8n run.
+      const messagePayload={...payload,entry:payload.entry.map(entry=>({...entry,changes:(entry.changes||[]).map(change=>({...change,value:{...change.value,statuses:[]}}))}))};
       let automationError;
-      try{await forwardToN8n(payload,eventKey,eventType,inbox.lease_id,env);}catch(error){automationError=error;}
+      try{await forwardToN8n(messagePayload,eventKey,eventType,inbox.lease_id,env);}catch(error){automationError=error;}
       await persistInboundMedia(payload,env);
       if(automationError)throw automationError;
     }

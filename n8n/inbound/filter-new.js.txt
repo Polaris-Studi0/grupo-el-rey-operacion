@@ -1,0 +1,4 @@
+const input = $json;
+const result = typeof input.result === 'string' ? JSON.parse(input.result) : (input.result || {});
+if (input.kind !== 'message' || (result.created !== true && result.retry_ready !== true) || !result.message_id) return null;
+return { json: { ...result, kind: input.kind, inbound_message_id: result.message_id, ready_for_next_step: result.consent_status === 'granted' } };

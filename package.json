@@ -3,7 +3,9 @@
   "private": true,
   "version": "1.0.0",
   "type": "module",
-  "engines": { "node": ">=22 <26" },
+  "engines": {
+    "node": ">=22 <26"
+  },
   "scripts": {
     "dev": "vite",
     "build": "vite build",
@@ -11,7 +13,8 @@
     "check": "eslint .",
     "setup:users": "node scripts/create-users.mjs",
     "reset:admin": "node scripts/reset-admin-password.mjs",
-    "fix:auth": "node scripts/fix-auth-config.mjs"
+    "fix:auth": "node scripts/fix-auth-config.mjs",
+    "test:whatsapp": "node --test tests/whatsapp-commercial.test.mjs tests/whatsapp-ingress.test.mjs && node tests/whatsapp-database.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.57.4",
@@ -19,6 +22,7 @@
     "react-dom": "^19.1.1"
   },
   "devDependencies": {
+    "@electric-sql/pglite": "^0.5.8",
     "@eslint/js": "^9.35.0",
     "@vitejs/plugin-react": "^5.0.2",
     "eslint": "^9.35.0",
