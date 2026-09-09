@@ -14,7 +14,7 @@
     "setup:users": "node scripts/create-users.mjs",
     "reset:admin": "node scripts/reset-admin-password.mjs",
     "fix:auth": "node scripts/fix-auth-config.mjs",
-    "test:whatsapp": "node --test tests/whatsapp-commercial.test.mjs tests/whatsapp-ingress.test.mjs && node tests/whatsapp-database.mjs"
+    "test:whatsapp": "node --test tests/whatsapp-commercial.test.mjs tests/whatsapp-ingress.test.mjs tests/whatsapp-transcript.test.mjs && node tests/whatsapp-database.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.57.4",

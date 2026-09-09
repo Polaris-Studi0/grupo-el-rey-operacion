@@ -2,22 +2,8 @@
   "type": "object",
   "additionalProperties": false,
   "required": [
-    "intent",
     "action",
-    "branch_id",
-    "reply",
-    "customer_name",
-    "summary",
-    "task_title",
-    "task_question",
-    "confidence",
-    "sales_state",
-    "cart_operation",
-    "address_operation",
-    "request_qr",
-    "checkout_confirmed",
-    "branch_change_confirmed",
-    "name_confirmed"
+    "reply"
   ],
   "properties": {
     "intent": {
@@ -62,24 +48,7 @@
     },
     "sales_state": {
       "type": "object",
-      "additionalProperties": false,
-      "required": [
-        "stage",
-        "items",
-        "fulfillment_type",
-        "delivery_address",
-        "delivery_zone",
-        "recipient_name",
-        "delivery_fee",
-        "payment_method",
-        "payment_status",
-        "payment_reference",
-        "customer_notes",
-        "credit_document",
-        "credit_phone",
-        "credit_installments",
-        "credit_code"
-      ],
+      "additionalProperties": true,
       "properties": {
         "stage": {
           "type": "string"
@@ -90,10 +59,8 @@
             "type": "object",
             "additionalProperties": false,
             "required": [
-              "product_id",
               "name",
-              "qty",
-              "unit_price"
+              "qty"
             ],
             "properties": {
               "product_id": {
@@ -158,6 +125,9 @@
         },
         "credit_code": {
           "type": "string"
+        },
+        "product_interest": {
+          "type": "string"
         }
       }
     },
@@ -188,6 +158,16 @@
     },
     "name_confirmed": {
       "type": "boolean"
+    },
+    "turn_kind": {
+      "type": "string",
+      "enum": [
+        "greeting",
+        "cancel_purchase",
+        "product_query",
+        "followup",
+        "other"
+      ]
     }
   }
 }

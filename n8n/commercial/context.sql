@@ -2,7 +2,7 @@ with incoming as (
   select m.*, trim(regexp_replace(translate(lower(coalesce(m.body,'')), 'áéíóúüñ', 'aeiouun'), '[^a-z0-9 ]', '', 'g')) as branch_answer
   from public.whatsapp_messages m where m.id=$1::uuid
 ), base as (
-  select m.id as inbound_message_id, m.meta_message_id, m.message_type, m.sender_type as current_sender_type,
+  select m.id as inbound_message_id, m.created_at as current_message_created_at, m.meta_message_id, m.message_type, m.sender_type as current_sender_type,
     m.body as customer_message, m.media_id, m.raw_payload as current_message_payload,
     coalesce((m.raw_payload->>'operator_confirmation')::boolean,false) as operator_confirmation,
     c.id as conversation_id, c.branch_id as stored_branch_id, coalesce(selected.id,c.branch_id) as branch_id, c.status as conversation_status, c.automation_paused, c.current_intent, c.summary as conversation_summary,
