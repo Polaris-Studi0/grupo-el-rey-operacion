@@ -107,7 +107,7 @@ const manualState={items:[{product_id:'',name:'Ventilador de torre Kalley',qty:1
   fulfillment_type:'delivery',delivery_address:'Calle 20 #30-40',delivery_zone:'Barrio Ejemplo',recipient_name:'Cliente de prueba',delivery_fee:10000,
   delivery_quote_verified:true,payment_method:'transfer',payment_status:'pending'};
 await db.query('update whatsapp_conversations set sales_state=$2::jsonb where id=$1',[manualSale.c,JSON.stringify(manualState)]);
-await db.query("insert into human_tasks(conversation_id,branch_id,task_type,status,title,question,context,resolution,resolved_at) values($1,'b1','payment_verification','resolved','Pago','Verificar recepción de COP 260000',$2::jsonb,'{\"answer\":\"Validado\"}',now())",[manualSale.c,JSON.stringify({sales_state:manualState,inbound_message_id:manualSale.m})]);
+await db.query("insert into human_tasks(conversation_id,branch_id,task_type,status,title,question,context,resolution,resolved_at) values($1,'b1','payment_verification','resolved','Pago','Verificar recepción de COP 260000',$2::jsonb,'{\"answer\":\"Confirmo\"}',now())",[manualSale.c,JSON.stringify({sales_state:manualState,inbound_message_id:manualSale.m})]);
 const proofPath=`${manualSale.c}/${manualSale.m}/proof.jpg`;
 await db.query("insert into whatsapp_attachments(conversation_id,message_id,meta_media_id,storage_path,original_name,mime_type,size_bytes) values($1,$2,'proof-1',$3,'comprobante.jpg','image/jpeg',63162)",[manualSale.c,manualSale.m,proofPath]);
 const manualContext=(await db.query(context,[manualSale.m])).rows[0];
@@ -127,7 +127,7 @@ assert.equal(receipt.raw_payload.order_id,manualDone.order_id);
 assert.equal((await db.query('select total from orders where id=$1',[manualDone.order_id])).rows[0].total,250000);
 assert.match(receipt.body,/260000/);
 assert.equal((await persist(manualSale,accepted)).outbound_message_id,manualDone.outbound_message_id);
-console.log('PASS Validado then Todo correcto creates manual delivery order and queues one numbered confirmation');
+console.log('PASS Confirmo then Todo correcto creates manual delivery order and queues one numbered confirmation');
 const adminPhone='+570000009999';
 const notice=(await db.query('select public.prepare_whatsapp_order_notification($1,$2) as result',[manualDone.outbound_message_id,adminPhone])).rows[0].result;
 assert.ok(notice.message_id);

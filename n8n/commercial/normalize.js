@@ -12,7 +12,7 @@ export function normalizeDecision(context, output) {
   const internal = context.current_sender_type === 'human';
   const instruction = internal && payload.operator_instruction === true;
   const customerText = internal ? '' : fold(context.customer_message);
-  const lastAssistant=(context.recent_messages||[]).filter(m=>m.sender_type==='assistant').at(-1)?.body || '';
+  const lastAssistant=(context.recent_messages||[]).filter(m=>m.sender_type==='assistant' && m.message_type!=='image' && !/^C[oó]digo QR para pagar/.test(m.body||'')).at(-1)?.body || '';
   const branches = context.branches || [];
   const storedBranch = context.stored_branch_id === undefined ? context.branch_id : context.stored_branch_id;
   const resolvedSelection = context.branch_id && context.branch_id !== storedBranch;
@@ -20,10 +20,22 @@ export function normalizeDecision(context, output) {
   const branchChange = Boolean(storedBranch && candidate && candidate !== storedBranch && (resolvedSelection || raw.branch_change_confirmed === true) && !context.latest_order);
   const branch = branchChange ? candidate : (storedBranch || context.branch_id || candidate);
   const contextBranchChanged = Boolean(branch && branch !== context.branch_id);
-  const name = text(raw.name_confirmed === true && raw.customer_name ? raw.customer_name : context.preferred_name).slice(0,120);
+  let name = text(raw.name_confirmed === true && raw.customer_name ? raw.customer_name : context.preferred_name).slice(0,120);
   // These turns have a deterministic meaning and must not resume an old checkout.
   // In particular, cancelling an unfinished selection does not revoke consent.
   const simpleTurn = value => fold(value).replace(/[^\p{L}\p{N}\s]/gu,' ').replace(/\s+/g,' ').trim();
+  const yesAnswer=/^(si|si confirmo|confirmo|de acuerdo|adelante|correcto|todo correcto|todo esta correcto|esta bien)$/;
+  const isBuyerQuestion=value=>/a nombre de quien (?:registramos|va|hacemos)|cual es tu nombre|como te llamas/.test(fold(value));
+  const buyerAnswer=(value,question)=>{
+    const candidate=text(value).replace(/^(?:me llamo|mi nombre es|a nombre de)\s+/i,'').replace(/[.!]+$/,'').trim();
+    return (isBuyerQuestion(question) || /^(me llamo|mi nombre es|a nombre de)\s/i.test(text(value)))
+      && /^[\p{L}]+(?:[ '-][\p{L}]+){0,4}$/u.test(candidate)
+      && !/\b(si|no|hola|gracias|correcto|confirmo|quiero|domicilio|pedido|nombre|qr|transferencia|addi|sistecredito)\b/.test(fold(candidate)) ? candidate.slice(0,120) : '';
+  };
+  const nameAnswer=!internal && buyerAnswer(context.customer_message,lastAssistant);
+  if (nameAnswer) name=nameAnswer;
+  const confirmedRecipientAsBuyer=!internal && !name && previous.recipient_name && /el pedido va tambien a nombre de/.test(fold(lastAssistant)) && yesAnswer.test(simpleTurn(customerText));
+  if (confirmedRecipientAsBuyer) name=text(previous.recipient_name);
   const pureGreeting = /^(hola|buenas|buenos dias|buenas tardes|buenas noches|hey|holi)$/.test(simpleTurn(customerText));
   const optOut = value => /\b(?:no me (?:escriban|contacten|envien)|dejen de (?:escribirme|contactarme)|no (?:quiero|deseo) (?:recibir |mas )?mensajes|no mas mensajes)\b/.test(simpleTurn(value));
   const cancelSelection = value => /^(?:(?:ya |mejor )?no (?:quiero|deseo) (?:eso|ese producto|esa compra|ese pedido|el producto|el pedido|la compra)(?: ya)?|(?:cancela|cancelar|cancelen|cancelo) (?:eso|el pedido|mi pedido|la compra|mi compra|el carrito)|dejemos eso)(?: porfa| por favor)?$/.test(simpleTurn(value));
@@ -64,6 +76,14 @@ export function normalizeDecision(context, output) {
   if (resetIndex>=0) purchaseMessages=purchaseMessages.slice(resetIndex+1);
   if (previous.purchase_reset_at) purchaseMessages=purchaseMessages.filter(m=>m.created_at && new Date(m.created_at)>new Date(previous.purchase_reset_at));
   else if (previous.purchase_reset_message_id && resetIndex<0) purchaseMessages=[];
+  // Recover explicit answers discarded by older workflow versions, within this purchase only.
+  let recoveredBuyerName='';
+  if (!name) for (let i=purchaseMessages.length-1;i>0;i--) {
+    if (purchaseMessages[i].sender_type!=='customer') continue;
+    const question=purchaseMessages.slice(0,i).filter(m=>m.sender_type==='assistant').at(-1)?.body||'';
+    recoveredBuyerName=buyerAnswer(purchaseMessages[i].body,question);
+    if (recoveredBuyerName) {name=recoveredBuyerName;break;}
+  }
   const interestFromMessage = value => {
     const original=text(value), normalized=fold(original);
     if (!original || optOut(original) || cancelSelection(original) || /\b(pag(?:ar|o|ue|ado)|domicilio|direccion|recoger|sede|confirmar|cancelar|cedula|credito)\b/.test(normalized)) return '';
@@ -80,16 +100,16 @@ export function normalizeDecision(context, output) {
   const shortFollowup=!internal && /^(porfa|por favor|si|si porfa|si por favor|claro|cuales tienes|cuales tienen|que opciones hay|que tienes|muestrame|muestrame las opciones|ver opciones)$/.test(simpleTurn(customerText));
   const historicalInterest=shortFollowup ? purchaseMessages.filter(m=>m.sender_type==='customer').map(m=>interestFromMessage(m.body)).filter(Boolean).at(-1)||'' : '';
   const interest=productQuery ? text(proposed.product_interest)||directInterest : text(previous.product_interest)||historicalInterest;
-  const interestTurn=Boolean(interest) && (productQuery || shortFollowup || resolvedSelection || (!storedBranch && branch));
+  const interestTurn=Boolean(interest) && (productQuery || (shortFollowup && !previous.items?.length) || resolvedSelection || (!storedBranch && branch));
   const state = {...previous};
   state.product_interest=interest.slice(0,240);
   for (const field of ['stage','fulfillment_type','delivery_zone','recipient_name','payment_reference','customer_notes','credit_document','credit_phone','credit_installments','credit_code']) {
     state[field] = text(proposed[field]) || text(previous[field]);
   }
   // Recover a direct answer to the recipient question even if the model omitted it.
-  if (!internal && /nombre.*(destinatario|recibe)|a nombre de qui[eé]n/i.test(lastAssistant)) {
+  if (!internal && /¿[^¿?]*(?:nombre[^¿?]*(?:destinatario|recibe)|a nombre de qui[eé]n)[^¿?]*\?/i.test(lastAssistant)) {
     const answer=text(context.customer_message).split(/,|\bconfirmo\b|\bte hab[ií]a dicho\b/i)[0].trim().replace(/^(?:me llamo|a nombre de|recibe|mi nombre es)\s+/i,'');
-    if (/^[\p{L}]+(?:[ '-][\p{L}]+){0,4}$/u.test(answer) && !/\b(si|no|hola|gracias|domicilio|direccion|barrio|seguro|quiero|nombre|quien)\b/.test(fold(answer))) state.recipient_name=answer;
+    if (/^[\p{L}]+(?:[ '-][\p{L}]+){0,4}$/u.test(answer) && !/\b(si|no|hola|gracias|domicilio|direccion|barrio|seguro|quiero|nombre|quien|qr|transferencia|addi|sistecredito)\b/.test(fold(answer))) state.recipient_name=answer;
   }
   const number = value => value !== null && value !== '' && value !== undefined && Number.isSafeInteger(Number(value)) && Number(value) >= 0 ? Number(value) : null;
   const normalizeItems = values => (Array.isArray(values) ? values : []).filter(x => x && text(x.name)).map(x => ({product_id:text(x.product_id),name:text(x.name).slice(0,180),qty:Number.isSafeInteger(Number(x.qty)) && Number(x.qty)>0 ? Number(x.qty) : 1,unit_price:number(x.unit_price)}));
@@ -114,7 +134,7 @@ export function normalizeDecision(context, output) {
   state.fulfillment_type = fulfillmentAliases[fold(state.fulfillment_type)] || '';
   const tasks = (context.human_tasks || []).filter(t => !t.branch_id || t.branch_id === branch).slice().reverse();
   const negative = answer => /\b(no|rechazad\w*|pendiente\w*|falta\w*|invalido|insuficiente|sin confirmar|sin verificar)\b/.test(fold(answer));
-  const resolutionPositive = task => task?.status === 'resolved' && !negative(task.resolution?.answer) && (task.resolution?.approved === true || /\b(aprobado|aprobada|verificado|verificada|validado|validada|valido|valida|pago recibido|recibido correctamente)\b/.test(fold(task.resolution?.answer)));
+  const resolutionPositive = task => task?.status === 'resolved' && !negative(task.resolution?.answer) && (task.resolution?.approved === true || /^(confirmo|confirmado|confirmada)$/.test(simpleTurn(task.resolution?.answer)) || /\b(aprobado|aprobada|verificado|verificada|validado|validada|valido|valida|pago recibido|recibido correctamente)\b/.test(fold(task.resolution?.answer)));
   const fingerprint = items => JSON.stringify(normalizeItems(items).map(x => [x.product_id,x.name,x.qty,x.unit_price]));
   const sameItems = task => fingerprint(task.context?.sales_state?.items) === fingerprint(state.items);
   const sameDelivery = task => ['delivery_address','delivery_zone'].every(k => fold(task.context?.sales_state?.[k]) === fold(state[k]));
@@ -127,7 +147,7 @@ export function normalizeDecision(context, output) {
     const requested=(task.context?.sales_state?.items||[]).find(x=>JSON.stringify(productTokens(x.name))===JSON.stringify(productTokens(item.name)));
     // A short affirmative can confirm a precise quote visible to the operator.
     // A price hidden only in task context is not enough to establish a price.
-    const affirmative=/^(si(?: correcto| claro| confirmado| ya te habia confirmado)?|correcto|confirmado|asi es|de acuerdo)$/.test(simpleTurn(answer));
+    const affirmative=/^(si(?: correcto| claro| confirmado| ya te habia confirmado| tenemos disponibilidad| hay disponibles| hay| tenemos| hay disponibilidad)?|tenemos disponibilidad|hay disponibles|correcto|confirmado|asi es|de acuerdo)$/.test(simpleTurn(answer));
     if (affirmative && requested && Number(requested.qty)>=item.qty && requested.unit_price===item.unit_price
       && amounts(task.question).includes(item.unit_price) && productTokens(item.name).every(w=>productTokens(task.question).includes(w))) return true;
     if (!amounts(answer).includes(item.unit_price)) return false;
@@ -196,15 +216,23 @@ export function normalizeDecision(context, output) {
   }
   if (state.payment_method==='cash_prepaid' && state.fulfillment_type==='pickup') state.payment_status='pay_at_store';
   const checkoutSnapshot=JSON.stringify([branch,state.items,state.fulfillment_type,state.delivery_address,state.delivery_zone,state.recipient_name,state.delivery_fee,state.payment_method]);
+  const offerSnapshot=JSON.stringify([branch,state.items,state.fulfillment_type,state.delivery_address,state.delivery_zone,state.recipient_name,state.delivery_fee,name]);
   const total=state.items.reduce((sum,x)=>sum+x.qty*(x.unit_price||0),0)+(state.fulfillment_type==='delivery'?(state.delivery_fee||0):0);
   // Accept the customer's answer to our actual checkout question, even when the
   // model forgets its action or places the flag inside sales_state.
   const legacyCheckoutQuestion=/todo esta correcto|confirmas (?:este|el) pedido|resumen/i.test(fold(lastAssistant))
     && amounts(lastAssistant).includes(total) && (state.fulfillment_type==='pickup' || simpleTurn(lastAssistant).includes(simpleTurn(state.delivery_address)));
+  const offerAccepted=previous.checkout_offer_snapshot===offerSnapshot && !internal && (yesAnswer.test(simpleTurn(customerText)) || qrChoice || /^(transferencia|addi|sistecredito)$/.test(simpleTurn(customerText)));
   const confirmationQuestion=previous.checkout_snapshot===checkoutSnapshot || legacyCheckoutQuestion;
   const explicitCheckout=/\bconfirmo (el pedido|la compra)\b/.test(customerText) || (/^(si|si confirmo|confirmo|de acuerdo|adelante|correcto|todo correcto|todo esta correcto|esta bien)[.! ]*$/.test(customerText) && confirmationQuestion);
-  state.checkout_confirmed = !internal && explicitCheckout ? true : !materialChange && previous.checkout_confirmed===true;
+  const historicalCheckout=!materialChange && state.payment_status==='verified' && purchaseMessages.some((m,index)=>{
+    if(m.sender_type!=='customer' || !yesAnswer.test(simpleTurn(m.body))) return false;
+    const question=purchaseMessages.slice(0,index).filter(x=>x.sender_type==='assistant').at(-1)?.body||'';
+    return /crear el pedido|confirmas (?:este|el) pedido/.test(fold(question)) && amounts(question).includes(total);
+  });
+  state.checkout_confirmed = (!internal && explicitCheckout) || historicalCheckout ? true : !materialChange && previous.checkout_confirmed===true;
   if (materialChange) state.checkout_confirmed=false;
+  if (offerAccepted && !itemsChanged && !deliveryChanged && !branchChange) state.checkout_confirmed=true;
   const allowed = new Set(['reply','ask_branch','human_product_lookup','human_delivery_quote','human_payment_verification','human_credit_application','human_general','finalize_order','stop']);
   let action=allowed.has(raw.action) ? raw.action:'reply';
   let reply=text(raw.reply);
@@ -227,8 +255,8 @@ export function normalizeDecision(context, output) {
     else respond('Listo, continuamos con '+branches.find(b=>b.id===branch).name+'. ¿Qué producto u oferta te gustaría consultar?');
   }
   const addressReady=state.fulfillment_type==='delivery' && state.delivery_address && state.delivery_zone && state.recipient_name;
-  const paymentAttachment=!internal && ['image','document'].includes(payload.message?.type) && state.payment_method==='transfer'
-    && (/transferencia|comprobante|pago/.test(customerText) || /env[ií]ame el comprobante/.test(lastAssistant));
+  const paymentAttachment=!internal && ['image','document'].includes(context.message_type||payload.message?.type) && state.payment_method==='transfer'
+    && (/transferencia|comprobante|pago/.test(customerText) || ((!customerText || /^\[image\]$/.test(customerText)) && (previous.awaiting_payment_proof===true || context.payment_qr?.already_sent===true)) || /env[ií]ame el comprobante/.test(lastAssistant));
   const claimsPayment=(paymentAttachment || /\b(?:ya\s+)?pague\b|\bya pago\b|\bya (?:esta )?pagado\b/.test(customerText)) && !/\bno (?:he )?pag(?:ue|ado)\b/.test(customerText);
   const storePurchase=claimsPayment && /efectivo|local|tienda|sede/.test(customerText);
   const priorCustomerClaims=purchaseMessages.filter(m=>m.sender_type==='customer' && /\bpague\b|\bya pago\b/.test(fold(m.body)) && !/\bno (?:he )?pag(?:ue|ado)\b/.test(fold(m.body)));
@@ -286,7 +314,7 @@ export function normalizeDecision(context, output) {
     } else if (!paymentReady) {action=['addi','sistecredito'].includes(state.payment_method)?'human_credit_application':'human_payment_verification';reply='El equipo debe confirmar el pago o crédito antes de registrar tu pedido.';}
   }
   if (state.payment_reported && !['verified','approved'].includes(state.payment_status) && (claimsPayment || scheduling || statusQuestion || action==='finalize_order' || /paid|pagado|verified|approved/.test(fold(proposed.payment_status)))) {
-    state.payment_status='pending';state.stage='awaiting_payment_verification';state.checkout_confirmed=false;
+    state.payment_status='pending';state.stage='awaiting_payment_verification';
     request('human_payment_verification','Gracias por avisar. Voy a pedir a la sede que verifique el pago'+(state.store_purchase_reported?' de tu compra en el local':'')+'. La entrega todavía no está confirmada.',
       state.store_purchase_reported?'Verificar compra pagada en sede y solicitud de domicilio':'Verificar pago reportado por el cliente',
       'El cliente afirma haber pagado; aún NO está verificado. '+(state.store_purchase_reported?'Revisar compra previa en sede, comprobante o registro de caja y coordinar el domicilio desde Operación si corresponde. No cobrar nuevamente ni duplicar la venta. ':'Revisar comprobante y registro de pago. ')+
@@ -322,6 +350,52 @@ export function normalizeDecision(context, output) {
       'Consultar opciones, precio y disponibilidad',
       'El cliente busca: '+interest+'. Confirmar opciones disponibles, variantes, precio y existencias. No hay catálogo confirmado para mostrarle; no solicitar datos de entrega antes de confirmar productos.');
   }
+  // Checkout has an explicit order. The model can phrase discovery naturally,
+  // but it cannot skip prerequisites or collect them again after taking payment.
+  const checkoutFlow=state.items.length>0 && !context.latest_order && !state.store_purchase_reported && action!=='stop'
+    && (nameAnswer || confirmedRecipientAsBuyer || recoveredBuyerName || offerAccepted || qrChoice || paymentAttachment || explicitCheckout || itemsChanged || deliveryChanged
+      || (internal && ['product_lookup','delivery_quote','payment_verification','credit_application'].includes(payload.task_type))
+      || ['human_delivery_quote','human_payment_verification','human_credit_application','finalize_order'].includes(action)
+      || /purchase_flow|confirm_create_order|confirm_quantity|product_selected/.test(text(raw.intent)+' '+text(raw.sales_state?.stage)));
+  const checkoutSummary=()=> 'Resumen: '+state.items.map(x=>x.qty+' × '+x.name+' a $'+x.unit_price.toLocaleString('es-CO')+' c/u').join(', ')
+    +'. '+(branches.find(b=>b.id===branch)?.name||context.branch_name||'')+'. A nombre de '+name+'. '
+    +(state.fulfillment_type==='delivery'?'Domicilio: '+state.delivery_address+', '+state.delivery_zone+'; recibe '+state.recipient_name+'. Envío: $'+state.delivery_fee.toLocaleString('es-CO')+'. ':'Recogida en sede. ')
+    +'Total: $'+total.toLocaleString('es-CO')+'.';
+  if (qrChoice) state.qr_requested=true;
+  if (checkoutFlow) {
+    if (paymentAttachment && !paymentReady) {
+      request('human_payment_verification','Recibí el comprobante. La sede verificará el pago y te confirmaré el pedido cuando lo apruebe.','Verificar transferencia del pedido',
+        'Verificar recepción de COP '+total+' para '+state.items.map(x=>x.qty+' × '+x.name).join(', ')+'. Revisar el comprobante del mensaje '+context.inbound_message_id+'. Responder Validado si el pago está recibido; si no, indicar qué falta.');
+    } else if (!state.items_verified && branch) {
+      request('human_product_lookup','Voy a confirmar que la sede tenga la cantidad que necesitas antes de continuar.','Confirmar cantidad y precio',
+        'Confirmar disponibilidad de: '+state.items.map(x=>x.qty+' × '+x.name+(x.unit_price>0?' a COP '+x.unit_price+' por unidad (confirmar este precio)':' (indicar precio unitario)')).join(', ')+'. Si estos datos son correctos, responder sí; si cambian, indicar la corrección.');
+    } else if (state.items_verified && !name) {
+      respond(state.recipient_name?'¿El pedido va también a nombre de '+state.recipient_name+'?':'¿A nombre de quién registramos el pedido?');
+      state.stage='collecting_customer_name';
+    } else if (name && state.items_verified && !state.fulfillment_type) {
+      respond('¿Prefieres recoger en la sede o recibir a domicilio?');state.stage='choosing_delivery';
+    } else if (name && state.items_verified && state.fulfillment_type==='delivery' && !addressReady) {
+      const missing=[!state.delivery_address&&'la dirección completa',!state.delivery_zone&&'el barrio y municipio',!state.recipient_name&&'el nombre de quien recibe'].filter(Boolean);
+      respond('Para el domicilio me falta '+missing.join(', ')+'. ¿Me lo compartes?');state.stage='collecting_delivery';
+    } else if (name && state.items_verified && state.fulfillment_type==='delivery' && !state.delivery_quote_verified) {
+      request('human_delivery_quote','Voy a consultar el valor del domicilio con la sede.','Cotizar domicilio',
+        'Confirmar valor del domicilio a '+state.delivery_address+', '+state.delivery_zone+', recibe '+state.recipient_name+'. Productos: '+state.items.map(x=>x.qty+' × '+x.name).join(', ')+'.');
+    } else if (ready && state.checkout_confirmed && paymentReady) {
+      action='finalize_order';reply='Voy a registrar tu pedido con los datos confirmados.';state.stage='confirming_order';
+    } else if (ready && !state.checkout_confirmed && !state.payment_reported) {
+      state.checkout_offer_snapshot=offerSnapshot;state.checkout_snapshot=checkoutSnapshot;state.stage='awaiting_checkout_confirmation';
+      respond(checkoutSummary()+' '+(state.payment_method?'¿Confirmas estos datos para continuar con el pago?':'Para confirmar y pagar, elige QR, Addi o Sistecrédito. También puedes corregir algún dato.'));
+    } else if (ready && state.checkout_confirmed && !paymentReady && !state.payment_reported) {
+      state.stage='awaiting_payment';
+      if (!state.payment_method) respond('¿Cómo prefieres pagar: QR, Addi o Sistecrédito?');
+      else if (state.payment_method==='transfer') respond('Cuando realices la transferencia, envíame el comprobante para que la sede lo verifique.');
+      else if (['addi','sistecredito'].includes(state.payment_method)) {
+        if (!state.credit_document) respond('¿Cuál es tu número de cédula para solicitar el crédito?');
+        else if (!state.credit_phone) respond('¿Qué celular usaremos para la solicitud de crédito?');
+        else action='human_credit_application';
+      }
+    }
+  }
   // Gate every new human request without forcing a menu on ordinary questions.
   if (action.startsWith('human_') && !branch) respond(interestTurn ? 'Puedo consultar disponibilidad y precios de '+interest+'. ¿En cuál sede o zona deseas que lo revise?' : '¿En cuál sede o zona deseas hacer la consulta? Así la reviso con el equipo indicado.');
   const typeByAction={human_product_lookup:'product_lookup',human_delivery_quote:'delivery_quote',human_payment_verification:'payment_verification',human_credit_application:'credit_application',human_general:'general'};
@@ -330,8 +404,11 @@ export function normalizeDecision(context, output) {
   }
   if (!interestTurn && state.payment_method==='cash_prepaid' && state.fulfillment_type==='delivery' && !state.store_purchase_reported) {state.payment_method='';state.payment_status='pending';respond('El pago en la sede aplica para recogida. Para domicilio puedes usar transferencia, Addi o Sistecrédito. ¿Cuál prefieres?');}
   if (context.delivery_open===false && (action==='human_delivery_quote' || (action==='finalize_order' && state.fulfillment_type==='delivery'))) respond('Los domicilios se gestionan hasta las 7:00 p. m. Podemos continuar al abrir a las 9:00 a. m. o revisar recogida en sede.');
-  let sendQr = !interestTurn && (raw.request_qr===true || qrChoice) && Boolean(context.payment_qr?.available) && !contextBranchChanged && state.payment_method==='transfer' && !['verified','approved'].includes(state.payment_status) && action!=='stop';
-  if (sendQr && !/(\bqr\b|transferencia|codigo)/.test(customerText) && !instruction) sendQr=false;
+  const authorizedPendingQr=previous.qr_requested===true && state.checkout_confirmed && !previous.awaiting_payment_proof;
+  let sendQr = (!interestTurn || checkoutFlow) && (raw.request_qr===true || qrChoice || authorizedPendingQr) && Boolean(context.payment_qr?.available) && !contextBranchChanged && state.payment_method==='transfer' && !['verified','approved'].includes(state.payment_status) && action!=='stop';
+  if (sendQr && !/(\bqr\b|transferencia|codigo)/.test(customerText) && !instruction && !authorizedPendingQr) sendQr=false;
+  if (state.items.length && (!ready || !state.checkout_confirmed)) sendQr=false;
+  if (sendQr) {state.awaiting_payment_proof=true;state.qr_requested=false;}
   if (sendQr) {reply='Te comparto el QR de '+context.branch_name+'. Cuando hagas la transferencia, envíame el comprobante para que el equipo lo verifique.';}
   if (context.service_open===false && !instruction && !(internal && context.operator_confirmation)) {respond('En este momento no hay atención. Volvemos a las 9:00 a. m.; conservamos tu consulta para continuar.');sendQr=false;}
   if (raw.action==='stop' && !interestTurn) {action='stop';reply='Entendido. Gracias por escribirnos; quedamos a tu disposición cuando lo necesites.';sendQr=false;}

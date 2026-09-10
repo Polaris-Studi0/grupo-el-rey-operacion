@@ -36,10 +36,54 @@ const quoteReadyState = {...state,delivery_fee:10000,delivery_quote_verified:tru
 
 const validatedPayment={id:'00000000-0000-4000-8000-000000000099',branch_id:'b1',type:'payment_verification',status:'resolved',
   context:{sales_state:quoteReadyState},resolution:{answer:'Validado'}};
-test('checkout: QR elegido se envía aunque el modelo use transferencia (QR)',()=>{
+test('checkout: QR elegido conserva alias pero espera aceptación del resumen antes de cobrar',()=>{
   const result=run({customer_message:'Con qr estaría bien',payment_qr:{available:true},sales_state:{...quoteReadyState,payment_method:''}},
     {request_qr:true,sales_state:{payment_method:'transferencia (QR)'}});
-  assert.equal(result.sales_state.payment_method,'transfer');assert.equal(result.send_qr,true);
+  assert.equal(result.sales_state.payment_method,'transfer');assert.equal(result.send_qr,false);
+  assert.equal(result.sales_state.qr_requested,true);
+  const accepted=run({customer_message:'Sí',payment_qr:{available:true},sales_state:result.sales_state,recent_messages:[{sender_type:'assistant',body:result.reply}]});
+  assert.equal(accepted.send_qr,true);assert.equal(accepted.sales_state.checkout_confirmed,true);
+});
+
+for (const answer of ['Si tenemos disponibilidad','Si hay disponibles','Si hay']) test('Labubu: disponibilidad natural confirma las ocho unidades: '+answer,()=>{
+  const toy={product_id:'',name:'Labubu edición Coca-Cola',qty:8,unit_price:300000};
+  const task={...productTask,context:{sales_state:{items:[toy]}},question:'Confirmar disponibilidad de 8 × Labubu edición Coca-Cola a COP 300000 por unidad (confirmar este precio).',resolution:{answer}};
+  const result=run({sales_state:{...state,items:[toy],items_verified:false},human_tasks:[task]}, {action:'human_product_lookup'});
+  assert.equal(result.sales_state.items_verified,true);assert.notEqual(result.action,'human_product_lookup');
+});
+
+test('flujo completo: cantidad, nombre, entrega, resumen, QR, comprobante y cierre sin otra aceptación',()=>{
+  const toy={product_id:'',name:'Labubu edición Coca-Cola',qty:8,unit_price:300000};
+  let c={...structuredClone(context),preferred_name:null,payment_qr:{available:true},sales_state:{items:[toy],items_verified:false,fulfillment_type:'delivery'},human_tasks:[]};
+  function turn(message,output={},human=false,payload={}) {
+    c={...c,customer_message:message,current_sender_type:human?'human':'customer',current_message_payload:payload,inbound_message_id:'message-'+(c.recent_messages.length+1)};
+    const result=normalizeDecision(c,{...decision,...output}).ai;
+    c={...c,preferred_name:result.customer_name||null,sales_state:result.sales_state,recent_messages:[...c.recent_messages,{sender_type:human?'human':'customer',body:message},{sender_type:'assistant',body:result.reply}]};
+    return result;
+  }
+  let r=turn('Domicilio',{intent:'purchase_flow'});assert.equal(r.action,'human_product_lookup');assert.doesNotMatch(r.reply,/dirección/);
+  c.human_tasks.push({...productTask,question:r.task_question,context:{sales_state:r.sales_state},resolution:{answer:'Si tenemos disponibilidad'}});
+  r=turn('Si tenemos disponibilidad',{action:'human_delivery_quote'},true,{task_type:'product_lookup'});
+  assert.equal(r.sales_state.items_verified,true);assert.match(r.reply,/nombre/);
+  r=turn('Emmanuel',{customer_name:'Emmanuel'});assert.equal(r.customer_name,'Emmanuel');assert.match(r.reply,/dirección/);
+  r=turn('Calle 1 #2-3, Poblado, recibe Emmanuel',{address_operation:'replace',sales_state:{delivery_address:'Calle 1 #2-3',delivery_zone:'Poblado',recipient_name:'Emmanuel'}});
+  assert.equal(r.action,'human_delivery_quote');
+  c.human_tasks.push({...productTask,id:'quote',type:'delivery_quote',question:r.task_question,context:{sales_state:r.sales_state},resolution:{answer:'El domicilio cuesta 20.000'}});
+  r=turn('El domicilio cuesta 20.000',{sales_state:{delivery_fee:20000}},true,{task_type:'delivery_quote'});
+  assert.match(r.reply,/2\.420\.000/);assert.match(r.reply,/Emmanuel/);assert.equal(r.send_qr,false);
+  r=turn('QR',{sales_state:{payment_method:'transfer'},request_qr:true});
+  assert.equal(r.send_qr,true,JSON.stringify(r));assert.equal(r.sales_state.checkout_confirmed,true);
+  c.recent_messages.push({sender_type:'assistant',message_type:'image',body:'Código QR para pagar tu pedido.'});
+  r=turn(null,{reply:'¿Es un comprobante?'},false,{message:{type:'image',image:{id:'proof'}}});
+  assert.equal(r.action,'human_payment_verification');assert.doesNotMatch(r.reply,/¿/);
+  c.human_tasks.push({...validatedPayment,id:'payment',context:{sales_state:r.sales_state},resolution:{answer:'Confirmo'}});
+  r=turn('Confirmo',{reply:'¿Deseas crear el pedido?'},true,{task_type:'payment_verification'});
+  assert.equal(r.action,'finalize_order');assert.equal(r.sales_state.payment_status,'verified');assert.doesNotMatch(r.reply,/¿/);
+});
+
+test('nombre directo se conserva aunque el modelo olvide name_confirmed',()=>{
+  const result=run({preferred_name:null,customer_message:'Emmanuel',recent_messages:[{sender_type:'assistant',body:'¿A nombre de quién registramos el pedido?'}]}, {customer_name:'Emmanuel'});
+  assert.equal(result.customer_name,'Emmanuel');assert.doesNotMatch(result.reply,/¿A nombre de quién/);
 });
 test('checkout: imagen de transferencia inicia verificación sin pedir permiso adicional',()=>{
   const result=run({customer_message:'Mira la transferencia',current_message_payload:{message:{type:'image',image:{id:'test-media'}}},sales_state:quoteReadyState},
@@ -249,4 +293,14 @@ test('pago de compra previa verificado se conserva al derivar programación',()=
   assert.equal(r.sales_state.payment_status,'verified');
   assert.equal(r.sales_state.payment_method,'cash_prepaid');
   assert.equal(r.action,'human_general');
+});
+
+
+test('nombre del destinatario confirmado como comprador avanza al resumen',()=>{
+  const r=run({preferred_name:null,customer_message:'Sí',sales_state:quoteReadyState,recent_messages:[{sender_type:'assistant',body:'¿El pedido va también a nombre de Samuel?'}]});
+  assert.equal(r.customer_name,'Samuel');assert.match(r.reply,/Resumen:/);
+});
+test('recupera nombre explícito descartado por versión anterior sin preguntar otra vez',()=>{
+  const r=run({preferred_name:null,customer_message:'Listo',sales_state:quoteReadyState,recent_messages:[{sender_type:'assistant',body:'¿A nombre de quién registramos el pedido?'},{sender_type:'customer',body:'Emmanuel'},{sender_type:'assistant',body:'¿A nombre de quién registramos el pedido?'}]});
+  assert.equal(r.customer_name,'Emmanuel');assert.match(r.reply,/Resumen:/);
 });
