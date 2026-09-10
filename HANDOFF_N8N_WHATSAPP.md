@@ -413,3 +413,20 @@ Workflow 03 publicado y verificado: `e40f12af-6b74-4d0c-ad49-a74fd3cca2a9` (acti
 - `docs/CHATBOT_N8N.md`
 - `docs/DESPLIEGUE.md`
 - `knowledge/README.md`
+
+
+### Compra natural y datos antes de cobrar — 2026-09-10
+
+03 publicado: `12febf8a-bc3e-4004-a714-5a0f8c9c9a0b`, conserva 13 nodos. Orden de compra: verificar producto/cantidad → nombre → modalidad/datos de entrega → cotizar domicilio → resumen completo y aceptación → pago → validación humana → creación real. Elegir QR tras el resumen acepta la cotización; recibir comprobante conserva esa aceptación. La validación de pago ya no provoca otra pregunta para crear un pedido previamente confirmado. El comprobante sin texto después del QR inicia revisión directamente. Se conservan los controles de pago real, cantidades, cambios de compra e idempotencia.
+
+Reconoce «sí tenemos disponibilidad», «sí hay disponibles» y «sí hay» para la cantidad solicitada cuando la pregunta interna incluye el producto y precio concreto. El nombre explícito se guarda aunque el modelo omita `name_confirmed`; se recuperan respuestas de nombre descartadas por la versión anterior dentro de la compra actual. «Listo», QR y otras confirmaciones no se interpretan como nombres. Confirmar que comprador y destinatario son la misma persona avanza al siguiente paso.
+
+Migración `202609100004_whatsapp_confirmed_payment.sql` aplicada en ejecución manual 1311: «Confirmo/Confirmado/Confirmada» del responsable aprueba únicamente una tarea de pago resuelta y coincidente con la compra. Hash de persistencia verificado: `931051bac999834378af8f5f522910de`. Nodos temporales retirados antes de publicar. Pruebas: 94 unitarias y 20 escenarios PostgreSQL aislados; incluye secuencia completa de 8 Labubu por 2.420.000 COP, comprobante, aprobación, creación idempotente y asociación del archivo. Reproducción local de ejecución 1309 termina en `finalize_order` recuperando Emmanuel. No se reejecutaron mensajes reales ni se creó otro pedido durante estas pruebas. Falta validar una nueva conversación real tras esta publicación.
+
+### Comprobante del pedido y total del panel — 2026-09-10
+
+Migración `202609100003_whatsapp_order_receipt.sql` aplicada en ejecución 1263. El pedido enlaza el archivo del mensaje exacto revisado en la tarea de pago verificada; no toma una imagen arbitraria del historial. También enlaza archivos cuya descarga termina después de crear el pedido, sin sustituir comprobantes existentes. `payment_receipt_bucket` distingue `whatsapp-media` y `payment-receipts`; el panel abre el archivo privado con URL firmada y permisos por sede.
+
+REY-1001: comprobante `archivo-whatsapp.jpg`, 63162 bytes, asociado al campo correspondiente; panel recargado muestra 260.000 COP y botón «Ver comprobante». Frontend publicado en Worker versión `de66a44b-c28e-4c90-a3e7-8ac4f9df993a`. ESLint y build aprobados. El subtotal de productos es 250.000 y el domicilio 10.000; no se vuelve a sumar el envío al subtotal guardado.
+
+Preferencia de Samuel: preparar un título descriptivo en GitHub Desktop para que él confirme el commit con un clic; no hacer commit ni push automáticamente.
