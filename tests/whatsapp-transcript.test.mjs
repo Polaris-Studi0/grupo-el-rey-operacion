@@ -323,3 +323,32 @@ test('respuestas de la IA real mantienen consulta y seguimiento sin inventar sur
   assert.doesNotMatch(result.reply,/chocolates|flores|Hola|¿quieres que/i);
  }
 });
+
+test('secuencia real: consultar sedes dos veces, elegir Aures y conservar Amor y Amistad',async()=>{
+ const {readFile}=await import('node:fs/promises');
+ const {context:c,output}=JSON.parse(await readFile(new URL('./fixtures/whatsapp-real-model-branches.json',import.meta.url),'utf8'));
+ let r=normalizeDecision(c,output).ai;
+ for(const b of c.branches)assert.ok(r.reply.includes(b.name));
+ assert.equal(r.action,'reply');assert.equal(r.branch_id,'');assert.deepEqual(r.sales_state,c.sales_state);
+ r=normalizeDecision({...c,sales_state:r.sales_state},output).ai;
+ assert.match(r.reply,/Estas son nuestras sedes/);
+ r=normalizeDecision({...c,customer_message:'aures',stored_branch_id:null,branch_id:'b1',branch_name:'Robledo Aures',sales_state:r.sales_state},{action:'reply',turn_kind:'followup',cart_operation:'keep',sales_state:{}}).ai;
+ assert.equal(r.branch_id,'b1');assert.equal(r.action,'human_product_lookup');assert.match(r.task_question,/Amor y amistad/);
+});
+
+for(const message of ['que sedes hay?','cuáles son sus sucursales','muestrame las tiendas','donde tienen sedes?'])test('lista de sedes tiene prioridad: '+message,()=>{
+ const r=run({customer_message:message,sales_state:{...state,product_interest:'Amor y amistad'},pending_human_tasks:[{type:'product_lookup',branch_id:'b1'}]}, {turn_kind:'followup'});
+ assert.match(r.reply,/Sede Ejemplo/);assert.equal(r.action,'reply');assert.equal(r.branch_id,'b1');assert.equal(r.send_qr,false);
+});
+
+test('clasificación semántica de sedes funciona con redacción libre y metadatos anidados',()=>{
+ const r=run({customer_message:'ni idea de sus locales, me orientas para escoger?',sales_state:{...state,product_interest:'regalos'}},{sales_state:{response_topic:'branch_list',turn_kind:'followup'}});
+ assert.match(r.reply,/Estas son nuestras sedes/);assert.equal(r.sales_state.product_interest,'regalos');
+});
+
+test('horarios y medios de pago no son reemplazados por la cotización pendiente',()=>{
+ for(const reply of ['El horario confirmado es de 9 a 7.','Puedes pagar con transferencia, Addi o Sistecrédito.']){
+  const r=run({sales_state:{items:[],product_interest:'regalos'}},{response_topic:'store_information',turn_kind:'followup',reply});
+  assert.equal(r.reply,reply);assert.equal(r.action,'reply');assert.equal(r.sales_state.product_interest,'regalos');
+ }
+});

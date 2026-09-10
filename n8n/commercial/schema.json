@@ -168,6 +168,68 @@
         "followup",
         "other"
       ]
+    },
+    "response_topic": {
+      "type": "string",
+      "enum": [
+        "branch_list",
+        "store_information",
+        "product",
+        "checkout",
+        "other"
+      ]
+    },
+    "product_offers": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "task_id",
+          "name",
+          "unit_price",
+          "source_quote"
+        ],
+        "properties": {
+          "task_id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "unit_price": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "available_qty": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "minimum": 1
+          },
+          "source_quote": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "selection": {
+      "type": "object",
+      "properties": {
+        "offer_id": {
+          "type": "string"
+        },
+        "product_name": {
+          "type": "string"
+        },
+        "qty": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 1
+        }
+      }
     }
   }
 }

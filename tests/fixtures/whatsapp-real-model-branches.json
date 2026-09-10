@@ -1,0 +1,156 @@
+{
+  "context": {
+    "inbound_message_id": "00000000-0000-4000-8000-000000000011",
+    "current_message_created_at": "2026-09-10T23:29:44.614Z",
+    "meta_message_id": null,
+    "message_type": "text",
+    "current_sender_type": "customer",
+    "customer_message": "que sedes hay?",
+    "media_id": null,
+    "current_message_payload": {},
+    "operator_confirmation": false,
+    "conversation_id": "00000000-0000-4000-8000-000000000012",
+    "stored_branch_id": null,
+    "branch_id": null,
+    "conversation_status": "open",
+    "automation_paused": false,
+    "current_intent": "product_query",
+    "conversation_summary": "Interés actual: Amor y amistad. Carrito: . Productos verificados: false. Entrega: ; destinatario: ; dirección: , . Domicilio: sin confirmar. Pago: pending. Pedido registrado: no. Acción de este turno: reply.",
+    "sales_state": {
+      "items": [],
+      "stage": "product_discovery",
+      "credit_code": "",
+      "credit_phone": "",
+      "delivery_fee": null,
+      "delivery_zone": "",
+      "customer_notes": "",
+      "items_verified": false,
+      "payment_method": "",
+      "payment_status": "pending",
+      "recipient_name": "",
+      "credit_document": "",
+      "delivery_address": "",
+      "fulfillment_type": "",
+      "payment_reported": false,
+      "product_interest": "Amor y amistad",
+      "payment_reference": "",
+      "checkout_confirmed": false,
+      "credit_installments": "",
+      "store_purchase_reported": false
+    },
+    "source": "whatsapp",
+    "campaign": null,
+    "landing_context": {},
+    "contact_id": "00000000-0000-4000-8000-000000000010",
+    "phone_e164": null,
+    "whatsapp_id": null,
+    "display_name": "Cliente de prueba",
+    "preferred_name": "Cliente de prueba",
+    "branch_name": null,
+    "local_now": "2026-09-10T18:29:44.937Z",
+    "service_open": true,
+    "delivery_open": true,
+    "branches": [
+      {
+        "id": "b9",
+        "name": "Campo Valdez"
+      },
+      {
+        "id": "b6",
+        "name": "Floresta"
+      },
+      {
+        "id": "b7",
+        "name": "La 80"
+      },
+      {
+        "id": "b8",
+        "name": "La Estrella"
+      },
+      {
+        "id": "b1",
+        "name": "Robledo Aures"
+      },
+      {
+        "id": "b2",
+        "name": "Robledo Diamante - Calle 80"
+      },
+      {
+        "id": "b5",
+        "name": "Robledo Diamante - Diagonal 85"
+      },
+      {
+        "id": "b10",
+        "name": "San Antonio de Prado"
+      },
+      {
+        "id": "b4",
+        "name": "San Gabriel, Itagüí"
+      },
+      {
+        "id": "b3",
+        "name": "Santa Cruz"
+      }
+    ],
+    "knowledge": [
+      {
+        "id": "f1a35bfb-8694-4e7c-a75d-83412fa93cbe",
+        "title": "Métodos de pago de WhatsApp",
+        "content": "Métodos disponibles: transferencia mediante código QR o número de cuenta, Addi y Sistecrédito. El pago en el local solo está disponible cuando el cliente recoge el pedido en la sede. No existe pago contraentrega.",
+        "version": 1,
+        "category": "payment",
+        "valid_from": null,
+        "valid_until": null
+      },
+      {
+        "id": "69174d51-845a-45ec-b522-0000bae2d8ca",
+        "title": "Horario de atención y domicilios",
+        "content": "Horario de atención: 9:00 a. m. a 8:00 p. m. Los domicilios solo se gestionan hasta las 7:00 p. m.; después de esa hora se programan para el día siguiente desde las 9:00 a. m. Después de las 8:00 p. m. no hay servicio y se retoma a las 9:00 a. m.",
+        "version": 1,
+        "category": "schedule",
+        "valid_from": null,
+        "valid_until": null
+      }
+    ],
+    "inventory": [],
+    "recent_messages": [],
+    "human_tasks": [],
+    "pending_human_tasks": [],
+    "payment_qr": null,
+    "cached_response": null,
+    "latest_order": null
+  },
+  "output": {
+    "output": {
+      "action": "reply",
+      "reply": "Estas son las sedes disponibles:\n- Campo Valdez\n- Floresta\n- La 80\n- La Estrella\n- Robledo Aures\n- Robledo Diamante - Calle 80\n- Robledo Diamante - Diagonal 85\n- San Antonio de Prado\n- San Gabriel, Itagüí\n- Santa Cruz\n\n¿Cuál sede quieres que revise para productos de Amor y amistad?",
+      "summary": "Listé las 10 sedes disponibles. Siguiente paso: que el cliente indique la sede para consultar disponibilidad y precios de la categoría 'Amor y amistad'.",
+      "confidence": 0.9,
+      "sales_state": {
+        "stage": "product_discovery",
+        "items": [],
+        "fulfillment_type": "",
+        "delivery_address": "",
+        "delivery_zone": "",
+        "recipient_name": "",
+        "delivery_fee": null,
+        "payment_method": "",
+        "payment_status": "pending",
+        "payment_reference": "",
+        "customer_notes": "",
+        "credit_document": "",
+        "credit_phone": "",
+        "credit_installments": "",
+        "credit_code": "",
+        "product_interest": "Amor y amistad",
+        "items_verified": false,
+        "payment_reported": false,
+        "checkout_confirmed": false,
+        "store_purchase_reported": false
+      },
+      "cart_operation": "keep",
+      "address_operation": "keep",
+      "turn_kind": "product_query"
+    }
+  }
+}

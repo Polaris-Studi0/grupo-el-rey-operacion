@@ -10,7 +10,7 @@ export function normalizeDecision(context, output) {
   const proposed = object(raw.sales_state);
   // Tolerate control fields placed inside sales_state by the model. These are
   // parsing hints only; stock, checkout and payment proof still use their guards.
-  for (const field of ['turn_kind','cart_operation','address_operation','name_confirmed','customer_name','branch_id','branch_change_confirmed','request_qr']) {
+  for (const field of ['selection','product_offers','response_topic','turn_kind','cart_operation','address_operation','name_confirmed','customer_name','branch_id','branch_change_confirmed','request_qr']) {
     if (raw[field]===undefined && proposed[field]!==undefined) raw={...raw,[field]:proposed[field]};
   }
   const payload = object(context.current_message_payload);
@@ -82,6 +82,21 @@ export function normalizeDecision(context, output) {
     return earlyReply('Listo, dejamos esa compra pendiente de lado. ¿Qué te gustaría buscar ahora?',fresh,
       {intent:'cancel_purchase',reset_purchase:true,summary:'El cliente canceló la selección pendiente. Se vaciaron sus productos y datos de compra; puede consultar otra cosa.'});
   }
+  // Answer navigation before resuming a sale. A product interest is memory,
+  // not an instruction to replace every customer question with a quotation.
+  const branchListQuestion=!internal && (raw.response_topic==='branch_list'
+    || /\b(?:que|cuales|cuantas)\s+(?:(?:son|otras|las|sus)\s+)*(?:sedes|sucursales|tiendas|puntos de venta)\b/.test(customerText)
+    || /\b(?:lista|listado|muestra\w*|dime|conocer)\b.{0,35}\b(?:sedes|sucursales|tiendas|puntos de venta)\b/.test(customerText)
+    || /\bdonde\s+(?:estan|quedan|tienen)\b.{0,30}\b(?:sedes|sucursales|tiendas|ubicados)\b/.test(customerText));
+  if (branchListQuestion && !optOut(customerText)) {
+    const reply=branches.length
+      ? 'Estas son nuestras sedes:\n'+branches.map(b=>'• '+b.name).join('\n')+'\n\nEscribe el nombre de la sede que prefieres'+(previous.product_interest?' para consultar '+previous.product_interest:'')+'.'
+      : 'No tengo la lista de sedes disponible en este momento. ¿En qué barrio o municipio estás para orientar la consulta?';
+    const result=earlyReply(reply,{...previous},{intent:'branch_list',summary:'El cliente pidió las sedes. Se mostró la lista disponible y se conservó su interés y selección anterior.'});
+    result.ai.branch_id=storedBranch||context.branch_id||'';
+    return result;
+  }
+  const informationalTurn=!internal && raw.response_topic==='store_information';
   // Limit fallback interpretation to the current purchase, including histories
   // saved before product_interest was introduced. Never revive a cancelled cart.
   let purchaseMessages=(context.recent_messages||[]).slice();
@@ -113,7 +128,7 @@ export function normalizeDecision(context, output) {
   const shortFollowup=!internal && (raw.turn_kind==='followup' || /^(porfa|por favor|si|si porfa|si por favor|claro|cuales tienes|cuales tienen|que opciones hay|que tienes|muestrame|muestrame las opciones|ver opciones)$/.test(simpleTurn(customerText)));
   const historicalInterest=shortFollowup ? purchaseMessages.filter(m=>m.sender_type==='customer').map(m=>interestFromMessage(m.body)).filter(Boolean).at(-1)||'' : '';
   const interest=productQuery ? text(proposed.product_interest)||directInterest : text(previous.product_interest)||(raw.turn_kind==='followup'?text(proposed.product_interest):'')||historicalInterest;
-  const interestTurn=Boolean(interest) && (productQuery || (shortFollowup && !previous.items?.length) || resolvedSelection || (!storedBranch && branch));
+  const interestTurn=!informationalTurn && Boolean(interest) && (productQuery || (shortFollowup && !previous.items?.length) || resolvedSelection || (!storedBranch && branch));
   const state = {...previous};
   state.product_interest=interest.slice(0,240);
   for (const field of ['stage','fulfillment_type','delivery_zone','recipient_name','payment_reference','customer_notes','credit_document','credit_phone','credit_installments','credit_code']) {
@@ -154,6 +169,53 @@ export function normalizeDecision(context, output) {
   const productAnswers = tasks.filter(t => t.type === 'product_lookup' && t.status === 'resolved' && !negative(t.resolution?.answer));
   const amounts = value => (text(value).match(/\d{1,3}(?:[.,]\d{3})+|\d+/g)||[]).map(v=>Number(v.replace(/[.,]/g,'')));
   const productTokens = value => fold(value).replace(/(\d)\s+(ml|l|cm|mm|kg|g)\b/g,'$1$2').split(/[^a-z0-9]+/).filter(w=>w && !['vaso','vasos','termo','termos','marca','estilo','color','de','el','la','un','una'].includes(w));
+  // Resolve options once against the responsible branch's actual answer. The
+  // model interprets free language; amounts and quantities remain source-bound.
+  const verifiedOffers=[];
+  const offerKey=o=>JSON.stringify([productTokens(o.name),o.unit_price]);
+  const addOffer=(task,candidate)=>{
+    const quote=text(candidate.source_quote), answer=text(task.resolution?.answer);
+    const price=number(candidate.unit_price), label=text(candidate.name);
+    if(!quote || !fold(answer).includes(fold(quote)) || negative(quote) || !price || !label) return;
+    const quoteAmounts=amounts(quote);
+    if(!quoteAmounts.includes(price) || new Set(quoteAmounts.filter(n=>n>=1000)).size>1) return;
+    const words=productTokens(label);
+    if(!words.length || !words.every(w=>productTokens(quote).includes(w))) return;
+    const explicitQty=fold(quote).match(/\b(?:tenemos|hay|quedan|disponibles?|existencias?)\s+(\d+)\b/)
+      || fold(quote).match(/\b(\d+)\s+unidades?\b/);
+    const available=explicitQty?Number(explicitQty[1]):/\b(tenemos|hay|disponibles?|existencias)\b/.test(fold(answer))?1:0;
+    if(!available) return;
+    const offer={id:task.id+':'+fold(label)+':'+price,source_task_id:task.id,branch_id:branch,name:label,unit_price:price,available_qty:available,source_quote:quote};
+    if(!verifiedOffers.some(o=>offerKey(o)===offerKey(offer)))verifiedOffers.push(offer);
+  };
+  for(const task of productAnswers){
+    for(const candidate of Array.isArray(raw.product_offers)?raw.product_offers:[]){
+      if(candidate.task_id===task.id)addOffer(task,candidate);
+    }
+    // Backward-compatible recovery for options offered before structured memory.
+    for(const clause of text(task.resolution?.answer).split(/\n|;|\s+y\s+(?:tambi[eé]n\s+)?/i)){
+      const match=clause.trim().match(/^(.*?)\s+(?:a|por|cuesta|vale|precio(?: de)?|—|:)\s*(?:COP\s*|\$\s*)?(\d[\d.,]*)\s*(?:COP|pesos|c\/u)?[.!]?$/i);
+      if(!match)continue;
+      const label=match[1].replace(/^(?:s[ií][, ]+)?(?:tenemos|hay|disponibles?)\s+/i,'').replace(/^(?:un|una|unos|unas)\s+/i,'').trim();
+      addOffer(task,{name:label,unit_price:Number(match[2].replace(/[.,]/g,'')),source_quote:clause.trim()});
+    }
+  }
+  for(const offer of Array.isArray(previous.offered_products)?previous.offered_products:[]){
+    if(offer.branch_id===branch && !branchChange && !tasks.some(t=>t.id===offer.source_task_id)
+      && !verifiedOffers.some(o=>offerKey(o)===offerKey(offer)))verifiedOffers.push(offer);
+  }
+  state.offered_products=verifiedOffers;
+  const selection=object(raw.selection);
+  const choosing=!internal && (Object.keys(selection).length>0 || /select_product|product_selection/.test(text(raw.intent)+' '+text(proposed.stage))
+    || /\b(quiero|me llevo|agrega|ponme|dame)\b/.test(customerText));
+  const selectionSubject=text(selection.product_name)||directInterest||interest;
+  const matchingOffers=verifiedOffers.filter(o=>productTokens(selectionSubject).length>0 && productTokens(selectionSubject).every(w=>productTokens(o.name).includes(w)));
+  const selectedOffer=choosing ? verifiedOffers.find(o=>o.id===selection.offer_id) || (matchingOffers.length===1?matchingOffers[0]:null) : null;
+  const explicitSingle=/\b(un|una|uno)\b/.test(customerText);
+  const selectionQty=number(selection.qty) || (explicitSingle?1:null);
+  if(selectedOffer && selectionQty && beforeItems.length===0 && raw.cart_operation!=='replace'){
+    state.items=[{product_id:'',name:selectedOffer.name,qty:selectionQty,unit_price:selectedOffer.unit_price}];
+  }
   const productSupported = (task,item) => {
     const answer=fold(task.resolution?.answer);
     if (item.unit_price===null || item.unit_price<=0) return false;
@@ -188,7 +250,8 @@ export function normalizeDecision(context, output) {
       if (item.unit_price === null || item.qty > Number(stock.available_qty)) unverifiedItems = true;
     } else {
       const prior = beforeItems.find(x => x.name === item.name && x.product_id === item.product_id && x.unit_price === item.unit_price);
-      const supported = productAnswers.some(t => productSupported(t,item));
+      const offered=verifiedOffers.find(o=>JSON.stringify(productTokens(o.name))===JSON.stringify(productTokens(item.name)));
+      const supported = offered ? offered.unit_price===item.unit_price && offered.available_qty>=item.qty : productAnswers.some(t => productSupported(t,item));
       if (contextBranchChanged || (!supported && !(prior && previous.items_verified === true && prior.qty >= item.qty))) unverifiedItems = true;
       // Invented catalog UUIDs must not reach stock deduction.
       if (!stock && !prior) item.product_id = '';
@@ -355,7 +418,7 @@ export function normalizeDecision(context, output) {
   // Product discovery comes before checkout data. If no source can list options,
   // create a real lookup once a branch is known, retaining short follow-ups.
   const answeredInterest=productAnswers.some(t=>fold(t.context?.sales_state?.product_interest)===fold(interest) && interest);
-  if (interestTurn && inventory.length===0 && !answeredInterest) {
+  if (interestTurn && state.items.length===0 && !selectedOffer && inventory.length===0 && !answeredInterest) {
     state.stage='product_discovery';
     request('human_product_lookup',branch
       ? 'Voy a consultar con '+(branches.find(b=>b.id===branch)?.name||context.branch_name||'la sede')+' qué opciones y precios tienen para tu búsqueda. Te comparto la respuesta cuando la confirmen.'
@@ -363,9 +426,10 @@ export function normalizeDecision(context, output) {
       'Consultar opciones, precio y disponibilidad',
       'El cliente busca: '+interest+'. Confirmar opciones disponibles, variantes, precio y existencias. No hay catálogo confirmado para mostrarle; no solicitar datos de entrega antes de confirmar productos.');
   }
+  if(selectedOffer && !selectionQty && state.items.length===0) respond('¿Cuántas unidades de '+selectedOffer.name+' quieres?');
   // Checkout has an explicit order. The model can phrase discovery naturally,
   // but it cannot skip prerequisites or collect them again after taking payment.
-  const checkoutFlow=state.items.length>0 && !context.latest_order && !state.store_purchase_reported && action!=='stop'
+  const checkoutFlow=!informationalTurn && state.items.length>0 && !context.latest_order && !state.store_purchase_reported && action!=='stop'
     && (nameAnswer || confirmedRecipientAsBuyer || recoveredBuyerName || offerAccepted || qrChoice || paymentAttachment || explicitCheckout || itemsChanged || deliveryChanged
       || (internal && ['product_lookup','delivery_quote','payment_verification','credit_application'].includes(payload.task_type))
       || ['human_delivery_quote','human_payment_verification','human_credit_application','finalize_order'].includes(action)
