@@ -4,6 +4,8 @@ Actualizado: 8 de septiembre de 2026 (America/Bogota)
 
 ## Última revisión del bot
 
+9 de septiembre, después de la pausa por créditos: revisión de descubrimiento de productos y reinicio de compras publicada en 03, versión `b5b5af00-803e-43ae-b3fd-8ebee75c389f`. Migración `202609090001_whatsapp_purchase_reset.sql` aplicada y verificada. Historial de pruebas limpiado: cero contactos, conversaciones, mensajes y pedidos. Respaldo privado en Supabase `elrey_test_backups.whatsapp_20260909` (506 registros). Las siguientes pruebas comienzan desde el consentimiento. No borrar ni reejecutar ese respaldo. Ver detalles en `n8n/REVISION_20260908.md`.
+
 9 de septiembre: se corrigieron errores observados en una conversación real (destinatario, prueba de producto manual, tareas anunciadas sin crearse, tarifa interna y pagos declarados). Leer la sección «Corrección tras transcripción real» del informe enlazado abajo. La compra previa pagada en tienda requiere verificación y coordinación de Operación; no se aprueba ni se duplica automáticamente.
 
 Se aplicó la revisión comercial v3: flujos 01, 03, 04 y 05 publicados y nueva función de persistencia aplicada en Supabase. Leer primero [el informe de revisión](n8n/REVISION_20260908.md) para conocer cambios, versiones, pruebas y límites. Las ofertas aún no están definidas. Queda pendiente una conversación real de extremo a extremo y el envío de listas interactivas de sedes. Hay cambios locales sin commit ni push. Se mantiene el horario temporal de pruebas.
@@ -388,6 +390,16 @@ Si aparece un error, abrir primero la ejecución más reciente del workflow 01 o
 - Mantener los workflows temporales archivados y evitar schedulers que consuman ejecuciones cada minuto sin necesidad.
 
 ## Documentación adicional del repositorio
+
+### Cierre real después del pago — 2026-09-09
+
+Última versión de 03: `54b1bd96-931f-4031-ae13-5c1b2b227304`. Corrige las ejecuciones 1245/1249/1252/1254: alias `transferencia (QR)` y solicitud directa de QR; comprobante inicia revisión sin volver a preguntar; `Validado/Validada` del responsable se reconoce solo con tarea y compra coincidentes; aceptación del resumen (`Todo correcto`) activa `finalize_order` aunque el modelo devuelva `reply`. Las promesas de preparación se sustituyen por el paso real pendiente. La confirmación numerada la produce PostgreSQL después de insertar el pedido, de forma idempotente.
+
+Migración `202609090002_whatsapp_payment_checkout.sql` aplicada en Supabase; hash verificado de `persist_whatsapp_commercial_response`: `1f7a173191c12073da25e3a431878e58`, recibo numerado habilitado. 87 pruebas unitarias + 17 escenarios PostgreSQL aislados pasan; incluye un pedido manual de ventilador con domicilio por COP 260000 y un único mensaje numerado. No se ejecutaron envíos reales ni se creó retroactivamente el pedido de Samuel. Para continuar la prueba actual, el cliente puede escribir `Confirmo el pedido`; conserva la aprobación humana existente. Sin nodos adicionales y sin commit/push.
+
+### Corrección de confirmaciones de producto — 2026-09-09, tarde
+
+Workflow 03 publicado y verificado: `e40f12af-6b74-4d0c-ad49-a74fd3cca2a9` (activo, igual al borrador). Ejecuciones 1225, 1229 y 1235 reproducidas localmente: la respuesta real «Si hay, tenemos marca kalley a 250.000» ahora se vincula al interés original «ventilador de torre» y confirma una unidad, sin inferir existencias ilimitadas. La dirección no invalida esa prueba. Una afirmación corta confirma una cotización concreta solo si su precio está expuesto en la pregunta; también se conserva la evidencia original. Se evita repetir product_lookup cuando los productos ya están verificados y se avanza al domicilio. El barrio explícito de la dirección prevalece sobre la sede: Tricentenario, no Robledo Aures. No se borró historial ni se enviaron mensajes durante esta corrección. 79 pruebas unitarias y 16 escenarios PostgreSQL aislados pasan; ESLint pasa. Sin nodos ni ejecuciones adicionales. Falta comprobar el siguiente intercambio real por WhatsApp; no se reejecutaron mensajes anteriores.
 
 - `README.md`
 - `docs/CHATBOT_N8N.md`

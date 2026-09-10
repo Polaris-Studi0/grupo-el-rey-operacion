@@ -30,6 +30,8 @@ with incoming as (
   left join public.branches b on b.id = coalesce(selected.id,c.branch_id)
   where m.id = $1::uuid and c.consent_status = 'granted' and c.status <> 'closed'
     and (not c.automation_paused or (m.sender_type='human' and m.raw_payload->>'operator_instruction'='true'))
+    and (m.sender_type<>'human' or nullif(m.raw_payload->>'human_task_id','') is null
+      or exists(select 1 from public.human_tasks ht where ht.id::text=m.raw_payload->>'human_task_id' and ht.status='resolved'))
 ),
 enriched as (
   select base.*,
@@ -72,6 +74,7 @@ enriched as (
       ) as item
       from public.whatsapp_messages wm
       where wm.conversation_id=base.conversation_id
+        and (nullif(base.sales_state->>'purchase_reset_at','') is null or wm.created_at >= (base.sales_state->>'purchase_reset_at')::timestamptz)
         and coalesce((wm.raw_payload->>'internal_notification')::boolean,false)=false
       order by wm.created_at desc,wm.id desc limit 24
     ) h), '[]'::jsonb) as recent_messages,
@@ -82,6 +85,7 @@ enriched as (
       ) as item
       from public.human_tasks ht
       where ht.conversation_id=base.conversation_id
+        and (nullif(base.sales_state->>'purchase_reset_at','') is null or ht.created_at >= (base.sales_state->>'purchase_reset_at')::timestamptz)
       order by ht.created_at desc limit 10
     ) t), '[]'::jsonb) as human_tasks,
     coalesce((select jsonb_agg(jsonb_build_object(

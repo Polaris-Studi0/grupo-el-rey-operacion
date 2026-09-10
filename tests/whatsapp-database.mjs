@@ -102,6 +102,25 @@ assert.equal(normalized.ai.sales_state.payment_verified_task_id,approval.id);
 const transferDone=await persist(transfer,normalized.ai);
 assert.ok(transferDone.order_id);
 console.log('PASS human payment approval through actual context, normalizer and DB');
+const manualSale=await fixture();
+const manualState={items:[{product_id:'',name:'Ventilador de torre Kalley',qty:1,unit_price:250000}],items_verified:true,checkout_confirmed:false,
+  fulfillment_type:'delivery',delivery_address:'Calle 20 #30-40',delivery_zone:'Barrio Ejemplo',recipient_name:'Cliente de prueba',delivery_fee:10000,
+  delivery_quote_verified:true,payment_method:'transfer',payment_status:'pending'};
+await db.query('update whatsapp_conversations set sales_state=$2::jsonb where id=$1',[manualSale.c,JSON.stringify(manualState)]);
+await db.query("insert into human_tasks(conversation_id,branch_id,task_type,status,title,question,context,resolution,resolved_at) values($1,'b1','payment_verification','resolved','Pago','Verificar recepción de COP 260000',$2::jsonb,'{\"answer\":\"Validado\"}',now())",[manualSale.c,JSON.stringify({sales_state:manualState})]);
+const manualContext=(await db.query(context,[manualSale.m])).rows[0];
+const summary=normalizeDecision({...manualContext,current_sender_type:'human'},{action:'reply',reply:'Pedido en preparación.'}).ai;
+assert.equal(summary.sales_state.payment_status,'verified');assert.equal(summary.action,'reply');
+const accepted=normalizeDecision({...manualContext,customer_message:'Todo correcto',sales_state:summary.sales_state,recent_messages:[{sender_type:'assistant',body:summary.reply}]},
+  {action:'reply',reply:'Pedido en preparación',sales_state:{checkout_confirmed:true}}).ai;
+assert.equal(accepted.action,'finalize_order');
+const manualDone=await persist(manualSale,accepted);assert.ok(manualDone.order_id);
+const receipt=(await db.query('select body,raw_payload from whatsapp_messages where id=$1',[manualDone.outbound_message_id])).rows[0];
+assert.match(receipt.body,/quedó registrado correctamente/);assert.ok(receipt.body.includes(manualDone.order_number));
+assert.equal(receipt.raw_payload.order_id,manualDone.order_id);
+assert.equal((await db.query('select total from orders where id=$1',[manualDone.order_id])).rows[0].total,260000);
+assert.equal((await persist(manualSale,accepted)).outbound_message_id,manualDone.outbound_message_id);
+console.log('PASS Validado then Todo correcto creates manual delivery order and queues one numbered confirmation');
 const selectBranch=await fixture();
 await db.query("update whatsapp_messages set body='Prefiero Floresta' where id=$1",[selectBranch.m]);
 const selected=(await db.query(context,[selectBranch.m])).rows[0];
@@ -120,6 +139,28 @@ await db.query("update whatsapp_messages set delivery_status='sent',meta_message
 const completedIntake=(await db.query(ingestSql,[JSON.stringify(batch)])).rows[0].result;
 assert.equal(completedIntake.retry_ready,false);
 console.log('PASS ingress retries unfinished processing and drops completed delivery');
+const reset=await fixture();
+await persist(reset,{...baseAI,action:'human_payment_verification',sales_state:{items:[],payment_reported:true}});
+const resetMessage=(await db.query("insert into whatsapp_messages(conversation_id,direction,sender_type,message_type,body) values($1,'inbound','customer','text','Ya no quiero eso') returning id",[reset.c])).rows[0];
+const resetResult=await persist({...reset,m:resetMessage.id},{...baseAI,reset_purchase:true,sales_state:{items:[]}});
+assert.ok(resetResult.outbound_message_id);
+const resetState=(await db.query('select status,consent_status,sales_state from whatsapp_conversations where id=$1',[reset.c])).rows[0];
+assert.notEqual(resetState.status,'closed');assert.equal(resetState.consent_status,'granted');assert.equal(resetState.sales_state.payment_reported,false);
+assert.equal((await db.query('select status from human_tasks where conversation_id=$1',[reset.c])).rows[0].status,'cancelled');
+const resetContext=(await db.query(context,[resetMessage.id])).rows[0];assert.equal(resetContext.human_tasks.length,0);
+assert.equal((await persist({...reset,m:resetMessage.id},{...baseAI,reset_purchase:true})).reused,true);
+console.log('PASS cancelled selection clears checkout, cancels tasks, filters history and preserves consent');
+const cleanup=await readFile(root+'/scripts/reset-whatsapp-test-history.sql','utf8');
+await assert.rejects(db.exec(cleanup),/datos ajenos/);await db.exec('rollback');
+assert.ok((await db.query('select count(*)::int as n from orders')).rows[0].n>0);
+await db.exec(`truncate whatsapp_attachments,whatsapp_message_status_events,conversation_events,ai_runs,privacy_consents,
+ human_tasks,automation_outbox,whatsapp_webhook_inbox,inventory_movements,inventory_reservations,order_events,orders,
+ whatsapp_messages,whatsapp_conversations,whatsapp_contacts;`);
+await db.query("insert into whatsapp_contacts(phone_e164) values('+573127378289')");
+await db.exec(cleanup);
+assert.equal((await db.query('select count(*)::int as n from whatsapp_contacts')).rows[0].n,0);
+assert.equal((await db.query("select count(*)::int as n from elrey_test_backups.whatsapp_20260909 where table_name='whatsapp_contacts'")).rows[0].n,1);
+console.log('PASS test cleanup rejects other data and retains a private backup before clearing');
 console.log('DEPLOYMENT_FUNCTION_HASH', (await db.query("select md5(pg_get_functiondef('public.persist_whatsapp_commercial_response(uuid,uuid,jsonb,jsonb)'::regprocedure)) as hash")).rows[0].hash);
 await db.close();
 console.log('All database scenarios passed in isolated PostgreSQL; no network or live messages.');

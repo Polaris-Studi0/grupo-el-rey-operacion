@@ -34,6 +34,103 @@ const productTask = {
 };
 const quoteReadyState = {...state,delivery_fee:10000,delivery_quote_verified:true};
 
+const validatedPayment={id:'00000000-0000-4000-8000-000000000099',branch_id:'b1',type:'payment_verification',status:'resolved',
+  context:{sales_state:quoteReadyState},resolution:{answer:'Validado'}};
+test('checkout: QR elegido se envía aunque el modelo use transferencia (QR)',()=>{
+  const result=run({customer_message:'Con qr estaría bien',payment_qr:{available:true},sales_state:{...quoteReadyState,payment_method:''}},
+    {request_qr:true,sales_state:{payment_method:'transferencia (QR)'}});
+  assert.equal(result.sales_state.payment_method,'transfer');assert.equal(result.send_qr,true);
+});
+test('checkout: imagen de transferencia inicia verificación sin pedir permiso adicional',()=>{
+  const result=run({customer_message:'Mira la transferencia',current_message_payload:{message:{type:'image',image:{id:'test-media'}}},sales_state:quoteReadyState},
+    {action:'reply',reply:'¿Quieres que lo verifique?'});
+  assert.equal(result.action,'human_payment_verification');assert.equal(result.sales_state.payment_status,'pending');
+  assert.doesNotMatch(result.reply,/quieres que/i);
+});
+test('checkout: Validado del equipo confirma pago y pide resumen antes de crear',()=>{
+  const result=run({current_sender_type:'human',sales_state:quoteReadyState,human_tasks:[validatedPayment]},
+    {reply:'Pago confirmado y pedido en preparación.'});
+  assert.equal(result.sales_state.payment_status,'verified');assert.equal(result.action,'reply');
+  assert.match(result.reply,/¿Confirmas este pedido/);assert.doesNotMatch(result.reply,/en preparación/);
+  const confirmed=run({customer_message:'Todo correcto',sales_state:result.sales_state,human_tasks:[validatedPayment],recent_messages:[{sender_type:'assistant',body:result.reply}]},
+    {action:'reply',sales_state:{checkout_confirmed:true},reply:'Pedido en preparación'});
+  assert.equal(confirmed.action,'finalize_order');assert.equal(confirmed.sales_state.checkout_confirmed,true);
+});
+for(const answer of ['No validado','Falta validar','Pendiente de validación']) test('checkout: '+answer+' nunca crea pedido',()=>{
+  const result=run({customer_message:'Confirmo el pedido',sales_state:quoteReadyState,human_tasks:[{...validatedPayment,resolution:{answer}}]},
+    {action:'finalize_order',reply:'Pago confirmado y pedido en preparación.'});
+  assert.notEqual(result.action,'finalize_order');assert.notEqual(result.sales_state.payment_status,'verified');
+  assert.doesNotMatch(result.reply,/pago confirmado|en preparación/i);
+});
+test('checkout: Todo correcto a nombre o dirección no confirma todo el pedido',()=>{
+  const result=run({customer_message:'Todo correcto',sales_state:quoteReadyState,human_tasks:[validatedPayment],recent_messages:[{sender_type:'assistant',body:'¿Tu nombre y dirección están correctos?'}]},
+    {sales_state:{checkout_confirmed:true}});
+  assert.equal(result.sales_state.checkout_confirmed,false);assert.notEqual(result.action,'finalize_order');
+});
+test('checkout: una corrección material invalida la aceptación del resumen',()=>{
+  const prompt=run({current_sender_type:'human',sales_state:quoteReadyState,human_tasks:[validatedPayment]});
+  const result=run({customer_message:'Todo correcto',sales_state:prompt.sales_state,human_tasks:[validatedPayment]},
+    {address_operation:'replace',sales_state:{delivery_address:'Calle 999'}});
+  assert.equal(result.sales_state.checkout_confirmed,false);assert.notEqual(result.action,'finalize_order');
+});
+
+const fan={product_id:'',name:'Ventilador de torre Kalley',qty:1,unit_price:250000};
+const fanTask={...productTask,question:'El cliente busca: ventilador de torre. Confirmar opciones, precio y existencias.',
+  context:{sales_state:{items:[],product_interest:'ventilador de torre'}},resolution:{answer:'Si hay, tenemos marca kalley a 250.000'}};
+
+test('ventilador: respuesta abreviada de sede confirma producto y una unidad',()=>{
+  const result=run({sales_state:{...state,items:[],items_verified:false},human_tasks:[fanTask]},
+    {cart_operation:'replace',sales_state:{items:[fan]}});
+  assert.equal(result.sales_state.items_verified,true);
+});
+for(const [label,changes] of [
+  ['otra marca',{name:'Ventilador de torre Haceb'}],
+  ['otro tipo',{name:'Ventilador de pedestal Kalley'}],
+  ['otra variante',{name:'Ventilador de torre Kalley negro'}],
+  ['cantidad mayor',{qty:2}],
+  ['otro precio',{unit_price:25000}],
+]) test('ventilador: respuesta no confirma '+label,()=>{
+  const result=run({sales_state:{...state,items:[],items_verified:false},human_tasks:[fanTask]},
+    {cart_operation:'replace',sales_state:{items:[{...fan,...changes}]}});
+  assert.equal(result.sales_state.items_verified,false);
+});
+
+test('ventilador: dirección avanza a domicilio y toma el barrio de destino',()=>{
+  const result=run({customer_message:'Carrera 20 #30-40 barrio Tricentenario, recibe Samuel',
+    sales_state:{...state,items:[fan],items_verified:false,delivery_address:'',delivery_zone:'Sede Ejemplo'},human_tasks:[fanTask]},
+  {action:'human_delivery_quote',address_operation:'replace',sales_state:{delivery_address:'Carrera 20 #30-40 barrio Tricentenario',delivery_zone:'Sede Ejemplo',recipient_name:'Samuel'}});
+  assert.equal(result.sales_state.items_verified,true);
+  assert.equal(result.sales_state.delivery_zone,'Tricentenario');
+  assert.equal(result.action,'human_delivery_quote');
+  assert.doesNotMatch(result.task_question,/confirmar.*(?:stock|existencias|disponibilidad)/i);
+});
+
+for(const answer of ['Si, correcto','Si, ya te había confirmado']) test('ventilador: '+answer+' conserva confirmación original',()=>{
+  const repeated={...fanTask,id:'repeat',question:'Confirmar precio y unidades disponibles de 1 × Ventilador de torre Kalley.',
+    context:{sales_state:{items:[fan]}},resolution:{answer}};
+  const result=run({current_sender_type:'human',sales_state:{...state,items:[fan],items_verified:false},human_tasks:[fanTask,repeated]},
+    {action:'human_product_lookup'});
+  assert.equal(result.sales_state.items_verified,true);
+  assert.equal(result.action,'human_delivery_quote');
+});
+
+test('ventilador: afirmación sola confirma solo precio expuesto al responsable',()=>{
+  const repeated={...fanTask,context:{sales_state:{items:[fan]}},resolution:{answer:'Si, correcto'},
+    question:'Confirmar disponibilidad de 1 × Ventilador de torre Kalley a COP 250000 por unidad (confirmar este precio).'};
+  const input={sales_state:{...state,items:[fan],items_verified:false},human_tasks:[repeated]};
+  assert.equal(run(input).sales_state.items_verified,true);
+  assert.equal(run({...input,human_tasks:[{...repeated,question:'Confirmar disponibilidad de 1 × Ventilador de torre Kalley.'}]}).sales_state.items_verified,false);
+  assert.equal(run({...input,human_tasks:[{...repeated,branch_id:'b2'}]}).sales_state.items_verified,false);
+  assert.equal(run({...input,human_tasks:[{...repeated,resolution:{answer:'No, falta confirmar'}}]}).sales_state.items_verified,false);
+});
+
+test('ventilador: cambiar dirección conserva productos ya verificados sin historial de tareas',()=>{
+  const result=run({sales_state:{...state,items:[fan],items_verified:true}},
+    {action:'human_delivery_quote',address_operation:'replace',sales_state:{delivery_address:'Calle 99 barrio Centro'}});
+  assert.equal(result.sales_state.items_verified,true);
+  assert.equal(result.action,'human_delivery_quote');
+});
+
 test('transcripción: nombre y confirmación de dirección juntos no vuelven a pedir destinatario', () => {
   const result = run({
     customer_message:'Samuel, confirmo dirección',

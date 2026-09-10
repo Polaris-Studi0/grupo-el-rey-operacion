@@ -103,13 +103,18 @@ export function normalizeDecision(context, output) {
   else if (raw.address_operation === 'append' && address) {
     state.delivery_address = !previousAddress || fold(address).includes(fold(previousAddress)) ? address : fold(previousAddress).includes(fold(address)) ? previousAddress : previousAddress + ', ' + address;
   }
+  // A delivery neighbourhood belongs to the address, not to the chosen store.
+  const explicitZone=text(state.delivery_address).match(/\bbarrio\s+([^,;\n]+?)(?=\s+recibe\b|[,;\n]|$)/i);
+  if (explicitZone) state.delivery_zone=text(explicitZone[1]);
   const paymentAliases = {transfer:'transfer',transferencia:'transfer',qr:'transfer',transferencia_qr:'transfer',transfer_qr:'transfer',addi:'addi',sistecredito:'sistecredito',cash_prepaid:'cash_prepaid',pago_en_local:'cash_prepaid',pago_en_tienda:'cash_prepaid'};
   state.payment_method = paymentAliases[fold(proposed.payment_method).replace(/[\s-]+/g,'_')] || previous.payment_method || '';
+  const qrChoice=!internal && /^(?:con |por |pagar con |pago con |y el |el |enviame el |mandame el )?qr(?: estaria bien| porfa| por favor)?$/.test(simpleTurn(customerText));
+  if (qrChoice || /^(?:transferencia|transfer)\s*\(qr\)$/.test(fold(proposed.payment_method))) state.payment_method='transfer';
   const fulfillmentAliases = {delivery:'delivery',domicilio:'delivery',pickup:'pickup',recogida:'pickup',recoger:'pickup'};
   state.fulfillment_type = fulfillmentAliases[fold(state.fulfillment_type)] || '';
   const tasks = (context.human_tasks || []).filter(t => !t.branch_id || t.branch_id === branch).slice().reverse();
   const negative = answer => /\b(no|rechazad\w*|pendiente\w*|falta\w*|invalido|insuficiente|sin confirmar|sin verificar)\b/.test(fold(answer));
-  const resolutionPositive = task => task?.status === 'resolved' && !negative(task.resolution?.answer) && (task.resolution?.approved === true || /\b(aprobado|aprobada|verificado|verificada|valido|valida|pago recibido|recibido correctamente)\b/.test(fold(task.resolution?.answer)));
+  const resolutionPositive = task => task?.status === 'resolved' && !negative(task.resolution?.answer) && (task.resolution?.approved === true || /\b(aprobado|aprobada|verificado|verificada|validado|validada|valido|valida|pago recibido|recibido correctamente)\b/.test(fold(task.resolution?.answer)));
   const fingerprint = items => JSON.stringify(normalizeItems(items).map(x => [x.product_id,x.name,x.qty,x.unit_price]));
   const sameItems = task => fingerprint(task.context?.sales_state?.items) === fingerprint(state.items);
   const sameDelivery = task => ['delivery_address','delivery_zone'].every(k => fold(task.context?.sales_state?.[k]) === fold(state[k]));
@@ -118,15 +123,27 @@ export function normalizeDecision(context, output) {
   const productTokens = value => fold(value).replace(/(\d)\s+(ml|l|cm|mm|kg|g)\b/g,'$1$2').split(/[^a-z0-9]+/).filter(w=>w && !['vaso','vasos','termo','termos','marca','estilo','color','de','el','la','un','una'].includes(w));
   const productSupported = (task,item) => {
     const answer=fold(task.resolution?.answer);
-    if (!amounts(answer).includes(item.unit_price) || item.unit_price===null || item.unit_price<=0) return false;
+    if (item.unit_price===null || item.unit_price<=0) return false;
     const requested=(task.context?.sales_state?.items||[]).find(x=>JSON.stringify(productTokens(x.name))===JSON.stringify(productTokens(item.name)));
+    // A short affirmative can confirm a precise quote visible to the operator.
+    // A price hidden only in task context is not enough to establish a price.
+    const affirmative=/^(si(?: correcto| claro| confirmado| ya te habia confirmado)?|correcto|confirmado|asi es|de acuerdo)$/.test(simpleTurn(answer));
+    if (affirmative && requested && Number(requested.qty)>=item.qty && requested.unit_price===item.unit_price
+      && amounts(task.question).includes(item.unit_price) && productTokens(item.name).every(w=>productTokens(task.question).includes(w))) return true;
+    if (!amounts(answer).includes(item.unit_price)) return false;
     if (requested && Number(requested.qty)>=item.qty) return true;
-    // A lookup often precedes the cart. Require matching variant, price AND stock
-    // in the actual human answer, never just a broad question or model assertion.
+    // Discovery replies inherit the product category from the original lookup.
+    // "Sí hay, tenemos marca Kalley a 250.000" confirms at least one unit,
+    // without having to repeat "ventilador de torre" from the question.
     const wanted=productTokens(item.name), supplied=productTokens(answer);
+    const subject=productTokens(task.context?.sales_state?.product_interest);
+    const explicitAvailability=/\b(si hay|tenemos|disponible|disponibles|hay existencias|hay stock)\b/.test(answer);
     const quantity=answer.match(/\b(?:hay|quedan|disponibles?|existencias?)\s+(\d+|uno|una|dos|tres)\b/) || answer.match(/\b(\d+)\s*(?:unidades?|disponibles?)\b/);
-    const stock=quantity ? ({uno:1,una:1,dos:2,tres:3}[quantity[1]]||Number(quantity[1])) : 0;
-    return wanted.length>=2 && wanted.every(w=>supplied.includes(w)) && stock>=item.qty;
+    const stock=quantity ? ({uno:1,una:1,dos:2,tres:3}[quantity[1]]||Number(quantity[1])) : explicitAvailability ? 1 : 0;
+    const matchesAnswer=wanted.every(w=>supplied.includes(w));
+    const matchesSubject=subject.length>0 && subject.every(w=>wanted.includes(w)) && wanted.every(w=>supplied.includes(w)||subject.includes(w))
+      && wanted.some(w=>supplied.includes(w));
+    return wanted.length>=2 && (matchesAnswer || matchesSubject) && stock>=item.qty;
   };
   const inventory = contextBranchChanged ? [] : (context.inventory || []);
   let unverifiedItems = false;
@@ -178,8 +195,15 @@ export function normalizeDecision(context, output) {
     state.payment_status=paymentTask?.status==='rejected' || negative(paymentTask?.resolution?.answer) ? 'rejected':'pending';
   }
   if (state.payment_method==='cash_prepaid' && state.fulfillment_type==='pickup') state.payment_status='pay_at_store';
-  const explicitCheckout=/\bconfirmo (el pedido|la compra)\b/.test(customerText) || (/^(si|si confirmo|confirmo|de acuerdo|adelante|correcto|esta bien)[.! ]*$/.test(customerText) && /resumen|confirmas (este|el) pedido/i.test(lastAssistant));
-  state.checkout_confirmed = raw.checkout_confirmed===true && !internal && explicitCheckout ? true : !materialChange && previous.checkout_confirmed===true;
+  const checkoutSnapshot=JSON.stringify([branch,state.items,state.fulfillment_type,state.delivery_address,state.delivery_zone,state.recipient_name,state.delivery_fee,state.payment_method]);
+  const total=state.items.reduce((sum,x)=>sum+x.qty*(x.unit_price||0),0)+(state.fulfillment_type==='delivery'?(state.delivery_fee||0):0);
+  // Accept the customer's answer to our actual checkout question, even when the
+  // model forgets its action or places the flag inside sales_state.
+  const legacyCheckoutQuestion=/todo esta correcto|confirmas (?:este|el) pedido|resumen/i.test(fold(lastAssistant))
+    && amounts(lastAssistant).includes(total) && (state.fulfillment_type==='pickup' || simpleTurn(lastAssistant).includes(simpleTurn(state.delivery_address)));
+  const confirmationQuestion=previous.checkout_snapshot===checkoutSnapshot || legacyCheckoutQuestion;
+  const explicitCheckout=/\bconfirmo (el pedido|la compra)\b/.test(customerText) || (/^(si|si confirmo|confirmo|de acuerdo|adelante|correcto|todo correcto|todo esta correcto|esta bien)[.! ]*$/.test(customerText) && confirmationQuestion);
+  state.checkout_confirmed = !internal && explicitCheckout ? true : !materialChange && previous.checkout_confirmed===true;
   if (materialChange) state.checkout_confirmed=false;
   const allowed = new Set(['reply','ask_branch','human_product_lookup','human_delivery_quote','human_payment_verification','human_credit_application','human_general','finalize_order','stop']);
   let action=allowed.has(raw.action) ? raw.action:'reply';
@@ -203,12 +227,14 @@ export function normalizeDecision(context, output) {
     else respond('Listo, continuamos con '+branches.find(b=>b.id===branch).name+'. ¿Qué producto u oferta te gustaría consultar?');
   }
   const addressReady=state.fulfillment_type==='delivery' && state.delivery_address && state.delivery_zone && state.recipient_name;
-  const claimsPayment=/\b(?:ya\s+)?pague\b|\bya pago\b|\bya (?:esta )?pagado\b/.test(customerText) && !/\bno (?:he )?pag(?:ue|ado)\b/.test(customerText);
+  const paymentAttachment=!internal && ['image','document'].includes(payload.message?.type) && state.payment_method==='transfer'
+    && (/transferencia|comprobante|pago/.test(customerText) || /env[ií]ame el comprobante/.test(lastAssistant));
+  const claimsPayment=(paymentAttachment || /\b(?:ya\s+)?pague\b|\bya pago\b|\bya (?:esta )?pagado\b/.test(customerText)) && !/\bno (?:he )?pag(?:ue|ado)\b/.test(customerText);
   const storePurchase=claimsPayment && /efectivo|local|tienda|sede/.test(customerText);
   const priorCustomerClaims=purchaseMessages.filter(m=>m.sender_type==='customer' && /\bpague\b|\bya pago\b/.test(fold(m.body)) && !/\bno (?:he )?pag(?:ue|ado)\b/.test(fold(m.body)));
   state.store_purchase_reported=previous.store_purchase_reported===true || storePurchase || priorCustomerClaims.some(m=>/efectivo|local|tienda|sede/.test(fold(m.body)));
   state.payment_reported=previous.payment_reported===true || claimsPayment || priorCustomerClaims.length>0;
-  const scheduling=/agend|program|salida|despach|franja/.test(fold([raw.intent,raw.reply,raw.task_title].join(' ')));
+  const scheduling=/agend|program|salida|despach|franja|prepar|salga a entrega|coordinamos la entrega|pedido (?:creado|registrado|confirmado)/.test(fold([raw.intent,raw.reply,raw.task_title].join(' ')));
   const statusQuestion=/\bya\b|seguro|confirmacion|estado|novedad/.test(customerText);
   // Claiming an action in prose never sends it. Advance a complete delivery quote
   // through the real task action, including after a recipient correction.
@@ -220,9 +246,17 @@ export function normalizeDecision(context, output) {
     else if (state.items.length && branch) {action='human_product_lookup';reply='Voy a confirmar con la sede el precio y la disponibilidad de los productos para darte una cotización correcta.';}
     else respond('¿Qué producto y cantidad te gustaría cotizar?');
   }
+  // Resolved product evidence remains valid when collecting delivery details.
+  // Override a redundant model request with the next missing checkout step.
+  if (action==='human_product_lookup' && state.items_verified && !interestTurn) {
+    if (addressReady && !state.delivery_quote_verified) action='human_delivery_quote';
+    else respond(!state.fulfillment_type ? '¿Prefieres recoger en la sede o recibir a domicilio?'
+      : state.fulfillment_type==='delivery' && !addressReady ? 'Para cotizar el domicilio me falta '+(!state.delivery_address?'la dirección completa':!state.delivery_zone?'el barrio y municipio':'el nombre de quien recibe')+'. ¿Me lo compartes?'
+      : 'Los productos y su precio ya están confirmados. ¿Qué deseas consultar para continuar con tu compra?');
+  }
   if (action==='human_product_lookup' && state.items.length) {
     taskTitle='Confirmar productos y disponibilidad';
-    taskQuestion='Confirmar precio unitario y unidades disponibles de: '+state.items.map(x=>x.qty+' × '+x.name).join(', ')+'. Indicar variantes o alternativas si no están disponibles.';
+    taskQuestion='Confirmar disponibilidad de: '+state.items.map(x=>x.qty+' × '+x.name+(x.unit_price>0?' a COP '+x.unit_price+' por unidad (confirmar este precio)':' (indicar precio unitario)')).join(', ')+'. Si estos datos son correctos, responder sí; si cambian, indicar la corrección.';
   }
   if (action==='human_delivery_quote') {
     const missing = !state.delivery_address ? 'la dirección completa' : !state.delivery_zone ? 'el barrio y municipio' : !state.recipient_name ? 'el nombre de quien recibe' : '';
@@ -241,6 +275,7 @@ export function normalizeDecision(context, output) {
   }
   const ready = Boolean(name && branch && state.items_verified && ['pickup','delivery'].includes(state.fulfillment_type) && (state.fulfillment_type==='pickup' || (state.delivery_address && state.delivery_zone && state.recipient_name && state.delivery_quote_verified && state.delivery_fee!==null)));
   const paymentReady = ['verified','approved','pay_at_store'].includes(state.payment_status);
+  if (!context.latest_order && !state.store_purchase_reported && ready && paymentReady && state.checkout_confirmed && ['reply','finalize_order','human_payment_verification','human_credit_application'].includes(action)) action='finalize_order';
   if (action==='finalize_order') {
     if (context.latest_order) respond('Tu pedido '+context.latest_order.order_number+' ya está registrado. ¿Qué necesitas consultar sobre él?');
     else if (!name) respond('¿A nombre de quién registramos el pedido?');
@@ -267,6 +302,15 @@ export function normalizeDecision(context, output) {
     request('human_general','La sede confirmó el pago. Voy a solicitar que Operación revise la programación del domicilio; aún no hay una salida confirmada.',
       'Coordinar domicilio de compra previa verificada','Pago revisado en tarea '+state.payment_verified_task_id+'. Coordinar entrega de compra previa sin duplicar la venta. Destinatario: '+state.recipient_name+'. Dirección: '+state.delivery_address+', '+state.delivery_zone+'. Confirmar programación real en Operación.');
   }
+  // Payment approval is separate from creating the order. Ask for the final
+  // summary once, then persist; only the DB can announce an order number.
+  if (!context.latest_order && !state.store_purchase_reported && ready && paymentReady && !state.checkout_confirmed && action!=='stop' && (approved || scheduling)) {
+    state.stage='awaiting_checkout_confirmation';state.checkout_snapshot=checkoutSnapshot;
+    respond((state.payment_status==='pay_at_store'?'':'La sede confirmó el pago. ')+'Resumen: '+state.items.map(x=>x.qty+' × '+x.name).join(', ')+'. '+(state.fulfillment_type==='pickup'?'Recogida en sede':'Domicilio: '+state.delivery_address+'; recibe '+state.recipient_name)+'. Total: $'+total.toLocaleString('es-CO')+'. ¿Confirmas este pedido?');
+  }
+  if (!paymentReady && /pago confirmado|pago verificado|validaron tu comprobante/.test(fold(reply))) respond('El pago todavía está pendiente de verificación por la sede. El pedido aún no está registrado.');
+  if (action==='finalize_order') {reply='Voy a registrar tu pedido con los datos confirmados.';state.stage='confirming_order';}
+  else if (!context.latest_order && /preparation|preparing|completed/.test(state.stage)) state.stage=paymentReady?'awaiting_checkout_confirmation':'payment';
   // Product discovery comes before checkout data. If no source can list options,
   // create a real lookup once a branch is known, retaining short follow-ups.
   const answeredInterest=productAnswers.some(t=>fold(t.context?.sales_state?.product_interest)===fold(interest) && interest);
@@ -286,7 +330,7 @@ export function normalizeDecision(context, output) {
   }
   if (!interestTurn && state.payment_method==='cash_prepaid' && state.fulfillment_type==='delivery' && !state.store_purchase_reported) {state.payment_method='';state.payment_status='pending';respond('El pago en la sede aplica para recogida. Para domicilio puedes usar transferencia, Addi o Sistecrédito. ¿Cuál prefieres?');}
   if (context.delivery_open===false && (action==='human_delivery_quote' || (action==='finalize_order' && state.fulfillment_type==='delivery'))) respond('Los domicilios se gestionan hasta las 7:00 p. m. Podemos continuar al abrir a las 9:00 a. m. o revisar recogida en sede.');
-  let sendQr = !interestTurn && raw.request_qr===true && Boolean(context.payment_qr?.available) && !contextBranchChanged && state.payment_method==='transfer' && !['verified','approved'].includes(state.payment_status) && action!=='stop';
+  let sendQr = !interestTurn && (raw.request_qr===true || qrChoice) && Boolean(context.payment_qr?.available) && !contextBranchChanged && state.payment_method==='transfer' && !['verified','approved'].includes(state.payment_status) && action!=='stop';
   if (sendQr && !/(\bqr\b|transferencia|codigo)/.test(customerText) && !instruction) sendQr=false;
   if (sendQr) {reply='Te comparto el QR de '+context.branch_name+'. Cuando hagas la transferencia, envíame el comprobante para que el equipo lo verifique.';}
   if (context.service_open===false && !instruction && !(internal && context.operator_confirmation)) {respond('En este momento no hay atención. Volvemos a las 9:00 a. m.; conservamos tu consulta para continuar.');sendQr=false;}
