@@ -8,6 +8,11 @@ export function normalizeDecision(context, output) {
   raw = object(raw?.output ?? raw);
   const previous = object(context.sales_state);
   const proposed = object(raw.sales_state);
+  // Tolerate control fields placed inside sales_state by the model. These are
+  // parsing hints only; stock, checkout and payment proof still use their guards.
+  for (const field of ['turn_kind','cart_operation','address_operation','name_confirmed','customer_name','branch_id','branch_change_confirmed','request_qr']) {
+    if (raw[field]===undefined && proposed[field]!==undefined) raw={...raw,[field]:proposed[field]};
+  }
   const payload = object(context.current_message_payload);
   const internal = context.current_sender_type === 'human';
   const instruction = internal && payload.operator_instruction === true;
@@ -16,7 +21,15 @@ export function normalizeDecision(context, output) {
   const branches = context.branches || [];
   const storedBranch = context.stored_branch_id === undefined ? context.branch_id : context.stored_branch_id;
   const resolvedSelection = context.branch_id && context.branch_id !== storedBranch;
-  const candidate = resolvedSelection ? context.branch_id : branches.find(b => b.id === raw.branch_id)?.id || '';
+  const proposedBranch=branches.find(b=>b.id===raw.branch_id);
+  const branchLabel=fold(proposedBranch?.name);
+  const branchLastWord=branchLabel.split(/\s+/).at(-1)||'';
+  const messageWords=customerText.split(/[^\p{L}\p{N}]+/u);
+  const explicitInitialBranch=Boolean(proposedBranch && (customerText.includes(branchLabel)
+    || (branchLastWord.length>3 && /^[a-z]+$/.test(branchLastWord) && messageWords.includes(branchLastWord)
+      && branches.filter(b=>fold(b.name).split(/\s+/).includes(branchLastWord)).length===1)));
+  // Suggesting a branch in the generated reply is not a customer selection.
+  const candidate = resolvedSelection ? context.branch_id : (storedBranch || context.branch_id || explicitInitialBranch ? proposedBranch?.id || '' : '');
   const branchChange = Boolean(storedBranch && candidate && candidate !== storedBranch && (resolvedSelection || raw.branch_change_confirmed === true) && !context.latest_order);
   const branch = branchChange ? candidate : (storedBranch || context.branch_id || candidate);
   const contextBranchChanged = Boolean(branch && branch !== context.branch_id);
@@ -97,9 +110,9 @@ export function normalizeDecision(context, output) {
   };
   const directInterest=internal?'':interestFromMessage(context.customer_message);
   const productQuery=!internal && (raw.turn_kind==='product_query' || Boolean(directInterest));
-  const shortFollowup=!internal && /^(porfa|por favor|si|si porfa|si por favor|claro|cuales tienes|cuales tienen|que opciones hay|que tienes|muestrame|muestrame las opciones|ver opciones)$/.test(simpleTurn(customerText));
+  const shortFollowup=!internal && (raw.turn_kind==='followup' || /^(porfa|por favor|si|si porfa|si por favor|claro|cuales tienes|cuales tienen|que opciones hay|que tienes|muestrame|muestrame las opciones|ver opciones)$/.test(simpleTurn(customerText)));
   const historicalInterest=shortFollowup ? purchaseMessages.filter(m=>m.sender_type==='customer').map(m=>interestFromMessage(m.body)).filter(Boolean).at(-1)||'' : '';
-  const interest=productQuery ? text(proposed.product_interest)||directInterest : text(previous.product_interest)||historicalInterest;
+  const interest=productQuery ? text(proposed.product_interest)||directInterest : text(previous.product_interest)||(raw.turn_kind==='followup'?text(proposed.product_interest):'')||historicalInterest;
   const interestTurn=Boolean(interest) && (productQuery || (shortFollowup && !previous.items?.length) || resolvedSelection || (!storedBranch && branch));
   const state = {...previous};
   state.product_interest=interest.slice(0,240);

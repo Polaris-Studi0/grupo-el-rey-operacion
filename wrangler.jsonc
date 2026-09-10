@@ -5,6 +5,7 @@
   "main": "./src/worker.js",
   "workers_dev": true,
   "keep_vars": true,
+  "triggers": { "crons": ["* * * * *"] },
   "vars": {
     "N8N_AUTOMATION_URL": "https://almaceneselrey.app.n8n.cloud/webhook/el-rey-whatsapp-automation"
   },

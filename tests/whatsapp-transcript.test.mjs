@@ -304,3 +304,22 @@ test('recupera nombre explícito descartado por versión anterior sin preguntar 
   const r=run({preferred_name:null,customer_message:'Listo',sales_state:quoteReadyState,recent_messages:[{sender_type:'assistant',body:'¿A nombre de quién registramos el pedido?'},{sender_type:'customer',body:'Emmanuel'},{sender_type:'assistant',body:'¿A nombre de quién registramos el pedido?'}]});
   assert.equal(r.customer_name,'Emmanuel');assert.match(r.reply,/Resumen:/);
 });
+
+
+test('seguimiento natural conserva interés aunque el modelo anide turn_kind en sales_state',()=>{
+ const r=run({branch_id:null,stored_branch_id:null,preferred_name:'Cliente de prueba',sales_state:{},customer_message:'?',recent_messages:[{sender_type:'customer',body:'me gustaria preguntar por algun producto para amor y amistad'}]},
+  {branch_id:'',turn_kind:undefined,action:'reply',reply:'¿Quieres chocolates o flores?',sales_state:{turn_kind:'followup',product_interest:'productos para Amor y Amistad'}});
+ assert.match(r.sales_state.product_interest,/Amor y Amistad/);assert.match(r.reply,/sede o zona/);assert.doesNotMatch(r.reply,/flores|chocolates|Hola/);
+});
+
+test('respuestas de la IA real mantienen consulta y seguimiento sin inventar surtido',async()=>{
+ const {readFile}=await import('node:fs/promises');
+ const fixture={cases:(await Promise.all(['reception','branch'].map(async name=>JSON.parse(await readFile(new URL('./fixtures/whatsapp-real-model-'+name+'.json',import.meta.url),'utf8'))))).flatMap(x=>x.cases)};
+ for(const {context,output} of fixture.cases){
+  const result=normalizeDecision(context,output).ai;
+  assert.match(result.sales_state.product_interest,/Amor y Amistad/i);
+  if(context.branch_id)assert.equal(result.action,'human_product_lookup');
+  else assert.match(result.reply,/sede o zona/);
+  assert.doesNotMatch(result.reply,/chocolates|flores|Hola|¿quieres que/i);
+ }
+});

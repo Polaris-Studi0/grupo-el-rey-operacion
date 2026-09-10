@@ -143,13 +143,26 @@ async function supabaseRpc(name,body,env){
 }
 
 async function forwardToN8n(payload,eventKey,eventType,leaseId,env){
-  if(!env.N8N_WEBHOOK_URL)return;
-  const result=await fetch(env.N8N_WEBHOOK_URL,{
-    method:"POST",
-    headers:{"content-type":"application/json","x-elrey-event-key":eventKey,"x-elrey-event-type":eventType,"x-elrey-lease-id":leaseId,"x-elrey-webhook-secret":env.N8N_WEBHOOK_SECRET||""},
-    body:JSON.stringify(payload)
-  });
-  if(!result.ok)throw new Error(`n8n respondió ${result.status}`);
+  if(!env.N8N_WEBHOOK_URL)throw new Error("n8n webhook is not configured");
+  // Retry transient transport errors with the SAME event/message IDs. Ingress,
+  // decisions and outbound messages already have independent idempotency keys.
+  for(let attempt=0;attempt<3;attempt+=1){
+    try{
+      const result=await fetch(env.N8N_WEBHOOK_URL,{
+        method:"POST",
+        headers:{"content-type":"application/json","x-elrey-event-key":eventKey,"x-elrey-event-type":eventType,"x-elrey-lease-id":leaseId,"x-elrey-webhook-secret":env.N8N_WEBHOOK_SECRET||""},
+        body:JSON.stringify(payload),
+        signal:AbortSignal.timeout(25000)
+      });
+      if(result.ok)return;
+      const error=new Error(`n8n respondió ${result.status}`);
+      error.permanent=result.status<500&&![408,429].includes(result.status);
+      throw error;
+    }catch(error){
+      if(error.permanent||attempt===2)throw error;
+      await new Promise(resolve=>setTimeout(resolve,500*(attempt+1)));
+    }
+  }
 }
 
 function mediaExtension(mimeType,messageType){
@@ -303,11 +316,15 @@ async function processWebhook(payload,eventKey,eventType,env){
   const claimed=await supabaseRpc("claim_whatsapp_event",{p_event_key:eventKey},env);
   const inbox=claimed?.[0];
   if(!inbox)return;
+  return processClaimedWebhook(payload,eventKey,eventType,inbox,env);
+}
+
+async function processClaimedWebhook(payload,eventKey,eventType,inbox,env){
   try{
     const statuses=collectMessageStatuses(payload,eventKey);
     if(statuses.length)await persistMessageStatuses(payload,eventKey,env);
     const hasMessages=(payload.entry||[]).some(entry=>(entry.changes||[]).some(change=>Array.isArray(change.value?.messages)&&change.value.messages.length>0));
-    if(hasMessages&&env.N8N_WEBHOOK_URL){
+    if(hasMessages){
       // Meta may batch delivery statuses and customer messages in one event.
       // Statuses are already persisted here; only messages need an n8n run.
       const messagePayload={...payload,entry:payload.entry.map(entry=>({...entry,changes:(entry.changes||[]).map(change=>({...change,value:{...change.value,statuses:[]}}))}))};
@@ -321,6 +338,16 @@ async function processWebhook(payload,eventKey,eventType,env){
     await supabaseRpc("complete_whatsapp_event",{p_event_key:eventKey,p_lease_id:inbox.lease_id,p_error:error.message},env);
     throw error;
   }
+}
+
+// Durable inbox recovery runs in Cloudflare, not n8n. An empty inbox costs no
+// n8n executions. Expired leases recover jobs interrupted after HTTP acknowledgement.
+async function recoverWebhookInbox(env){
+  const pending=await supabaseRpc("claim_pending_whatsapp_events",{p_limit:5},env)||[];
+  await Promise.all(pending.map(async inbox=>{
+    try{await processClaimedWebhook(inbox.payload,inbox.event_key,inbox.event_type,inbox,env);}
+    catch(error){console.error("WhatsApp inbox retry failed",error.message);}
+  }));
 }
 
 async function receiveWebhook(request,env,context){
@@ -467,6 +494,9 @@ function health(env){
 }
 
 export default {
+  async scheduled(_controller,env,context){
+    context.waitUntil(recoverWebhookInbox(env));
+  },
   async fetch(request,env,context){
     const url = new URL(request.url);
     if(url.pathname===WEBHOOK_PATH&&request.method==="GET")return verifySubscription(request,env);

@@ -191,5 +191,20 @@ assert.equal((await db.query('select count(*)::int as n from whatsapp_contacts')
 assert.equal((await db.query("select count(*)::int as n from elrey_test_backups.whatsapp_20260909 where table_name='whatsapp_contacts'")).rows[0].n,1);
 console.log('PASS test cleanup rejects other data and retains a private backup before clearing');
 console.log('DEPLOYMENT_FUNCTION_HASH', (await db.query("select md5(pg_get_functiondef('public.persist_whatsapp_commercial_response(uuid,uuid,jsonb,jsonb)'::regprocedure)) as hash")).rows[0].hash);
+
+await db.query(`insert into whatsapp_webhook_inbox(event_key,event_type,payload,processed_at,processing_started_at,next_attempt_at) values
+ ('recovery-lost','message','{}',null,null,now()-interval '1 minute'),
+ ('recovery-completed','message','{}',now(),null,now()),
+ ('recovery-running','message','{}',null,now(),now()),
+ ('recovery-interrupted','message','{}',null,now()-interval '3 minutes',now())`);
+const recovered=(await db.query('select event_key,lease_id from public.claim_pending_whatsapp_events(10)')).rows;
+assert.deepEqual(recovered.map(x=>x.event_key).sort(),['recovery-interrupted','recovery-lost']);
+assert.equal((await db.query('select event_key from public.claim_pending_whatsapp_events(10)')).rows.length,0);
+const lost=recovered.find(x=>x.event_key==='recovery-lost');
+assert.equal((await db.query('select public.complete_whatsapp_event($1,$2,null) as ok',[lost.event_key,'00000000-0000-4000-8000-000000000000'])).rows[0].ok,false);
+assert.equal((await db.query('select public.complete_whatsapp_event($1,$2,null) as ok',[lost.event_key,lost.lease_id])).rows[0].ok,true);
+console.log('PASS durable inbox recovers lost and interrupted events, excludes completed and active leases, and validates completion owner');
+
 await db.close();
 console.log('All database scenarios passed in isolated PostgreSQL; no network or live messages.');
+

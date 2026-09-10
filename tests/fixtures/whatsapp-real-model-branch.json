@@ -1,0 +1,147 @@
+{
+  "execution": "1319",
+  "cases": [
+    {
+      "context": {
+        "inbound_message_id": "00000000-0000-4000-8000-000000000001",
+        "conversation_id": "00000000-0000-4000-8000-000000000002",
+        "branch_id": null,
+        "stored_branch_id": null,
+        "preferred_name": "Cliente de prueba",
+        "current_sender_type": "customer",
+        "current_message_payload": {},
+        "service_open": true,
+        "delivery_open": true,
+        "sales_state": {},
+        "inventory": [],
+        "human_tasks": [],
+        "pending_human_tasks": [],
+        "knowledge": [],
+        "recent_messages": [],
+        "branches": [
+          {
+            "id": "b1",
+            "name": "Robledo Aures"
+          }
+        ],
+        "case_id": "consulta-natural",
+        "customer_message": "me gustaria preguntar por algun producto para amor y amistad"
+      },
+      "output": {
+        "output": {
+          "intent": "consultar productos temporada",
+          "action": "ask_branch",
+          "branch_id": "b1",
+          "reply": "¡Perfecto! ¿Quieres que consulte opciones para “Amor y Amistad” en la sede Robledo Aures? Dime también si prefieres: regalos (detalles), flores/arreglos o chocolates/dulces — o escribe otra idea.",
+          "customer_name": "",
+          "summary": "Cliente interesado en productos para Amor y Amistad. Proponer consultar opciones en la sede Robledo Aures y pedir categoría preferida.",
+          "task_title": "Confirmar sede y categoría para buscar productos de Amor y Amistad",
+          "task_question": "¿Confirmas que consulte en la sede b1 (Robledo Aures)? ¿Qué categoría prefieres: regalos, flores/arreglos, chocolates/dulces u otra? (Con esto consulto productos, precios y disponibilidad.)",
+          "confidence": 0.9,
+          "sales_state": {
+            "product_interest": "Amor y Amistad"
+          },
+          "cart_operation": "keep",
+          "address_operation": "keep",
+          "turn_kind": "product_query"
+        }
+      }
+    },
+    {
+      "context": {
+        "inbound_message_id": "00000000-0000-4000-8000-000000000001",
+        "conversation_id": "00000000-0000-4000-8000-000000000002",
+        "branch_id": null,
+        "stored_branch_id": null,
+        "preferred_name": "Cliente de prueba",
+        "current_sender_type": "customer",
+        "current_message_payload": {},
+        "service_open": true,
+        "delivery_open": true,
+        "sales_state": {},
+        "inventory": [],
+        "human_tasks": [],
+        "pending_human_tasks": [],
+        "knowledge": [],
+        "recent_messages": [
+          {
+            "sender_type": "customer",
+            "body": "me gustaria preguntar por algun producto para amor y amistad"
+          }
+        ],
+        "branches": [
+          {
+            "id": "b1",
+            "name": "Robledo Aures"
+          }
+        ],
+        "case_id": "seguimiento-contextual",
+        "customer_message": "?"
+      },
+      "output": {
+        "output": {
+          "intent": "provide_options",
+          "action": "reply",
+          "reply": "Retomando: buscas productos para Amor y Amistad. ¿Qué prefieres: flores, chocolates y peluches, o desayunos/regalos? Puedo consultar disponibilidad y precios en la sede Robledo Aures o en otra sede si prefieres. ¿Cuál opción quieres que consulte?",
+          "summary": "Cliente interesado en productos para Amor y Amistad. Pendiente elegir subcategoría (flores / chocolates y peluches / desayunos-regalos) y confirmar sede para consultar stock y precios.",
+          "confidence": 0.8,
+          "sales_state": {
+            "product_interest": "producto para Amor y Amistad",
+            "branch_id": "",
+            "branch_change_confirmed": false,
+            "name_confirmed": false
+          },
+          "cart_operation": "keep",
+          "address_operation": "keep",
+          "turn_kind": "followup"
+        }
+      }
+    },
+    {
+      "context": {
+        "inbound_message_id": "00000000-0000-4000-8000-000000000001",
+        "conversation_id": "00000000-0000-4000-8000-000000000002",
+        "branch_id": "b1",
+        "stored_branch_id": "b1",
+        "preferred_name": "Cliente de prueba",
+        "current_sender_type": "customer",
+        "current_message_payload": {},
+        "service_open": true,
+        "delivery_open": true,
+        "sales_state": {},
+        "inventory": [],
+        "human_tasks": [],
+        "pending_human_tasks": [],
+        "knowledge": [],
+        "recent_messages": [],
+        "branches": [
+          {
+            "id": "b1",
+            "name": "Robledo Aures"
+          }
+        ],
+        "case_id": "consulta-sede",
+        "customer_message": "estoy buscando un detallito para mi pareja por amor y amistad, que me recomiendan?"
+      },
+      "output": {
+        "output": {
+          "intent": "buscar_ofertas",
+          "action": "human_product_lookup",
+          "branch_id": "b1",
+          "reply": "Qué bonito detalle. Voy a consultar con la sede Robledo Aures qué opciones tienen para Amor y Amistad y te traigo alternativas. ¿Quieres que priorice algo: romántico (flores, peluches), práctico (kits, accesorios) o sorpresa (kits temáticos)?",
+          "customer_name": "",
+          "summary": "Cliente busca un detallito para su pareja por Amor y Amistad. Se consultará la sede Robledo Aures para obtener opciones, precio y disponibilidad. Pregunté preferencia de estilo para orientar la búsqueda.",
+          "task_title": "Consultar opciones para detalle Amor y Amistad en Robledo Aures",
+          "task_question": "Por favor revisar en la sede Robledo Aures (id b1) las opciones disponibles para un 'detallito para pareja' por Amor y Amistad. Traer hasta 3 opciones reales con: nombre del producto, precio en COP, disponibilidad/stock y cualquier promoción vigente. Responder también si hay alternativas por categoría: romántico, práctico o sorpresa.",
+          "confidence": 0.6,
+          "sales_state": {
+            "product_interest": "detallito para pareja - Amor y Amistad"
+          },
+          "cart_operation": "keep",
+          "address_operation": "keep",
+          "turn_kind": "product_query"
+        }
+      }
+    }
+  ]
+}
