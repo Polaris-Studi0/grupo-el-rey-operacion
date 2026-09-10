@@ -30,7 +30,7 @@ export function normalizeDecision(context, output) {
     const candidate=text(value).replace(/^(?:me llamo|mi nombre es|a nombre de)\s+/i,'').replace(/[.!]+$/,'').trim();
     return (isBuyerQuestion(question) || /^(me llamo|mi nombre es|a nombre de)\s/i.test(text(value)))
       && /^[\p{L}]+(?:[ '-][\p{L}]+){0,4}$/u.test(candidate)
-      && !/\b(si|no|hola|gracias|correcto|confirmo|quiero|domicilio|pedido|nombre|qr|transferencia|addi|sistecredito)\b/.test(fold(candidate)) ? candidate.slice(0,120) : '';
+      && !/\b(si|no|hola|gracias|correcto|confirmo|quiero|domicilio|pedido|nombre|listo|claro|vale|ok|dale|adelante|seguro|qr|transferencia|addi|sistecredito)\b/.test(fold(candidate)) ? candidate.slice(0,120) : '';
   };
   const nameAnswer=!internal && buyerAnswer(context.customer_message,lastAssistant);
   if (nameAnswer) name=nameAnswer;
