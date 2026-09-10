@@ -391,6 +391,14 @@ Si aparece un error, abrir primero la ejecución más reciente del workflow 01 o
 
 ## Documentación adicional del repositorio
 
+### Aviso interno de compra — 9 septiembre noche / 10 septiembre UTC
+
+03 publicado y verificado `ad6ea299-d7fa-4b6e-9dc0-94586d9bc8ce`, 13 nodos, mismo borrador. `persist.sql` añade como tercer mensaje opcional el aviso al administrador, usando el mismo destinatario de 04 (+573127378289) como quinto parámetro SQL. `prepare_whatsapp_order_notification` valida el recibo contra un pedido real y usa clave única por pedido; excluye el aviso del contexto del bot. Sin ejecución adicional por mensaje ni nueva llamada al modelo.
+
+Migraciones `202609100001_whatsapp_order_notification.sql` y `202609100002_whatsapp_order_subtotal.sql` aplicadas con conexión PostgreSQL existente de n8n (ejecución manual 1259). La segunda corrige `orders.total` para almacenar subtotal de productos, como espera el panel, y repara únicamente filas automáticas con el patrón exacto de domicilio duplicado. REY-1001: subtotal 250000 + domicilio 10000 = 260000, verificado en producción.
+
+Aviso de REY-1001 recuperado en ejecución 1260; mensaje `30ed9c3a-0f88-498b-a7ce-7b6f92ce704a`, estado `delivered` y una sola copia comprobados en ejecución 1261. Los dos nodos temporales de instalación/verificación se eliminaron antes de publicar. Pruebas: 87 unitarias + 18 escenarios PostgreSQL; verificación de destinatario, clave única, reintento en caché y total sin duplicar envío. ESLint pasa. No se creó otro pedido.
+
 ### Cierre real después del pago — 2026-09-09
 
 Última versión de 03: `54b1bd96-931f-4031-ae13-5c1b2b227304`. Corrige las ejecuciones 1245/1249/1252/1254: alias `transferencia (QR)` y solicitud directa de QR; comprobante inicia revisión sin volver a preguntar; `Validado/Validada` del responsable se reconoce solo con tarea y compra coincidentes; aceptación del resumen (`Todo correcto`) activa `finalize_order` aunque el modelo devuelva `reply`. Las promesas de preparación se sustituyen por el paso real pendiente. La confirmación numerada la produce PostgreSQL después de insertar el pedido, de forma idempotente.

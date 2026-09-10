@@ -79,9 +79,10 @@ export async function uploadPaymentReceipt(order,file,profile){
   const { data,error }=await supabase.rpc("attach_payment_receipt",{p_order_id:order.id,p_path:path,p_name:file.name,p_mime_type:file.type,p_size:file.size});
   if(error) throw error; return data;
 }
-export async function getPaymentReceiptUrl(path){
+export async function getPaymentReceiptUrl(path,bucket="payment-receipts"){
   if(isDemoMode) return demoStore.getReceiptUrl(path);
-  const {data,error}=await supabase.storage.from("payment-receipts").createSignedUrl(path,300);
+  if(!["payment-receipts","whatsapp-media"].includes(bucket)) throw new Error("Origen del comprobante inválido.");
+  const {data,error}=await supabase.storage.from(bucket).createSignedUrl(path,300);
   if(error) throw error; return data.signedUrl;
 }
 export async function saveCourier(values){
