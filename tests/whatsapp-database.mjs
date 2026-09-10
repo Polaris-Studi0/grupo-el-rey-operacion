@@ -207,4 +207,3 @@ console.log('PASS durable inbox recovers lost and interrupted events, excludes c
 
 await db.close();
 console.log('All database scenarios passed in isolated PostgreSQL; no network or live messages.');
-

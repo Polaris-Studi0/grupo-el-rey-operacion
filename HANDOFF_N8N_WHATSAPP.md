@@ -430,3 +430,15 @@ Migración `202609100003_whatsapp_order_receipt.sql` aplicada en ejecución 1263
 REY-1001: comprobante `archivo-whatsapp.jpg`, 63162 bytes, asociado al campo correspondiente; panel recargado muestra 260.000 COP y botón «Ver comprobante». Frontend publicado en Worker versión `de66a44b-c28e-4c90-a3e7-8ac4f9df993a`. ESLint y build aprobados. El subtotal de productos es 250.000 y el domicilio 10.000; no se vuelve a sumar el envío al subtotal guardado.
 
 Preferencia de Samuel: preparar un título descriptivo en GitHub Desktop para que él confirme el commit con un clic; no hacer commit ni push automáticamente.
+
+### Recepción fiable y seguimiento natural — 2026-09-10, tarde
+
+Incidente confirmado: el mensaje «me gustaria preguntar por algun producto para amor y amistad» de las 18:10 quedó en `whatsapp_webhook_inbox` con `last_error = n8n respondió 502`. No llegó a 01 ni a 03. La ejecución 1315 recibió únicamente «?» y el historial de saludo; no era una falta de comprensión de la consulta por la IA. La recepción acusaba recibo a Meta tras guardar el evento, pero no había consumidor de reintentos.
+
+Worker `385ac5ca-e337-4510-b0b3-eec00ae82f87` publicado: reintenta fallos transitorios de n8n hasta tres veces con los mismos IDs, conserva el error si persiste y recupera la bandeja durable mediante un cron de Cloudflare cada minuto. No ejecuta n8n cuando no hay mensajes pendientes. Reclama como máximo cinco eventos con leases existentes y los procesa en paralelo para no dejar leases esperando en cola. Una interrupción del Worker se recupera después de expirar el lease; eventos ya terminados no se vuelven a reclamar. La ausencia de configuración n8n deja un error recuperable en lugar de marcar el mensaje como procesado.
+
+03 publicado `793f047a-3db2-4d67-8d1f-eee4f561d668`, 13 nodos: conserva el interés semántico en seguimientos y tolera indicadores de formato que el modelo coloque dentro de sales_state. Un branch_id sugerido por el modelo ya no selecciona una sede que el cliente no indicó. Sin catálogo se consulta la sede; no se presentan categorías inventadas como surtido confirmado.
+
+Validación: 100 pruebas unitarias y 21 escenarios PostgreSQL, ESLint y build. Pruebas con IA REAL en ramas temporales sin envíos: 1318 detectó turn_kind anidado; 1319 detectó sede sugerida tomada como elegida; ambas respuestas quedaron como fixtures de regresión. Ejecución 1321 pasa consulta textual original, seguimiento «?» con historial y consulta con sede conocida. Las ocho ramas/nodos auxiliares se retiraron antes de publicar. Mantener los fallos de estas evaluaciones como evidencia de diagnóstico, no interpretarlos como errores de conversaciones reales.
+
+Título preparado en GitHub Desktop: «Recupera mensajes de WhatsApp y conserva el contexto». No hacer commit ni push por Samuel.
