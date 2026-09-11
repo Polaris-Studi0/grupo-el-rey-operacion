@@ -1,0 +1,718 @@
+{
+  "execution": "1344",
+  "cases": [
+    {
+      "context": {
+        "branch_id": null,
+        "stored_branch_id": null,
+        "branch_name": "Robledo Aures",
+        "preferred_name": "Cliente de prueba",
+        "current_sender_type": "customer",
+        "current_message_payload": {},
+        "service_open": true,
+        "delivery_open": true,
+        "branches": [
+          {
+            "id": "b9",
+            "name": "Campo Valdez"
+          },
+          {
+            "id": "b6",
+            "name": "Floresta"
+          },
+          {
+            "id": "b7",
+            "name": "La 80"
+          },
+          {
+            "id": "b8",
+            "name": "La Estrella"
+          },
+          {
+            "id": "b1",
+            "name": "Robledo Aures"
+          },
+          {
+            "id": "b2",
+            "name": "Robledo Diamante - Calle 80"
+          },
+          {
+            "id": "b5",
+            "name": "Robledo Diamante - Diagonal 85"
+          },
+          {
+            "id": "b10",
+            "name": "San Antonio de Prado"
+          },
+          {
+            "id": "b4",
+            "name": "San Gabriel, Itagüí"
+          },
+          {
+            "id": "b3",
+            "name": "Santa Cruz"
+          }
+        ],
+        "sales_state": {
+          "items": [],
+          "product_interest": "Amor y amistad"
+        },
+        "knowledge": [],
+        "inventory": [],
+        "human_tasks": [
+          {
+            "id": "d3136a9c-9cc3-4c04-bc8e-9d1b3dc161c4",
+            "branch_id": "b1",
+            "type": "product_lookup",
+            "status": "resolved",
+            "question": "El cliente busca: Amor y amistad. Confirmar opciones disponibles, variantes, precio y existencias. No hay catálogo confirmado para mostrarle; no solicitar datos de entrega antes de confirmar productos.",
+            "resolution": {
+              "answer": "tenemos un peluche gigante de oso a 300.000 y también un ramo de rosas a 50.000"
+            },
+            "context": {
+              "sales_state": {
+                "items": [],
+                "stage": "product_discovery",
+                "credit_code": "",
+                "credit_phone": "",
+                "delivery_fee": null,
+                "delivery_zone": "",
+                "customer_notes": "",
+                "items_verified": false,
+                "payment_method": "",
+                "payment_status": "pending",
+                "recipient_name": "",
+                "credit_document": "",
+                "delivery_address": "",
+                "fulfillment_type": "",
+                "payment_reported": false,
+                "product_interest": "Amor y amistad",
+                "payment_reference": "",
+                "checkout_confirmed": false,
+                "credit_installments": "",
+                "store_purchase_reported": false
+              }
+            }
+          }
+        ],
+        "pending_human_tasks": [],
+        "recent_messages": [
+          {
+            "sender_type": "assistant",
+            "body": "En Robledo Aures hay dos opciones para Amor y amistad:\n\n• Peluche gigante de oso — COP 300.000\n• Ramo de rosas — COP 50.000\n\n¿Cuál quieres y cuántas unidades de cada uno?"
+          }
+        ],
+        "case_id": "sedes",
+        "customer_message": "que sedes hay?"
+      },
+      "output": {
+        "output": {
+          "action": "reply",
+          "branch_id": "",
+          "reply": "Estas son todas nuestras sedes:\n\n• Campo Valdez\n• Floresta\n• La 80\n• La Estrella\n• Robledo Aures\n• Robledo Diamante - Calle 80\n• Robledo Diamante - Diagonal 85\n• San Antonio de Prado\n• San Gabriel, Itagüí\n• Santa Cruz\n\n¿Cuál sede deseas escoger?",
+          "confidence": 1,
+          "sales_state": {
+            "product_interest": "Amor y amistad"
+          },
+          "cart_operation": "keep",
+          "address_operation": "keep",
+          "turn_kind": "other",
+          "response_topic": "branch_list"
+        }
+      }
+    },
+    {
+      "context": {
+        "branch_id": "b1",
+        "stored_branch_id": null,
+        "branch_name": "Robledo Aures",
+        "preferred_name": "Cliente de prueba",
+        "current_sender_type": "customer",
+        "current_message_payload": {},
+        "service_open": true,
+        "delivery_open": true,
+        "branches": [
+          {
+            "id": "b9",
+            "name": "Campo Valdez"
+          },
+          {
+            "id": "b6",
+            "name": "Floresta"
+          },
+          {
+            "id": "b7",
+            "name": "La 80"
+          },
+          {
+            "id": "b8",
+            "name": "La Estrella"
+          },
+          {
+            "id": "b1",
+            "name": "Robledo Aures"
+          },
+          {
+            "id": "b2",
+            "name": "Robledo Diamante - Calle 80"
+          },
+          {
+            "id": "b5",
+            "name": "Robledo Diamante - Diagonal 85"
+          },
+          {
+            "id": "b10",
+            "name": "San Antonio de Prado"
+          },
+          {
+            "id": "b4",
+            "name": "San Gabriel, Itagüí"
+          },
+          {
+            "id": "b3",
+            "name": "Santa Cruz"
+          }
+        ],
+        "sales_state": {
+          "items": [],
+          "product_interest": "Amor y amistad"
+        },
+        "knowledge": [],
+        "inventory": [],
+        "human_tasks": [],
+        "pending_human_tasks": [],
+        "recent_messages": [
+          {
+            "sender_type": "assistant",
+            "body": "En Robledo Aures hay dos opciones para Amor y amistad:\n\n• Peluche gigante de oso — COP 300.000\n• Ramo de rosas — COP 50.000\n\n¿Cuál quieres y cuántas unidades de cada uno?"
+          }
+        ],
+        "case_id": "aures",
+        "customer_message": "aures"
+      },
+      "output": {
+        "output": {
+          "intent": "continuar elección de producto",
+          "action": "reply",
+          "reply": "Perfecto, en Robledo Aures tienes estas opciones para Amor y amistad:\n• Peluche gigante de oso — $300.000\n• Ramo de rosas — $50.000\n¿Cuál deseas y cuántas unidades?",
+          "confidence": 0.98,
+          "sales_state": {
+            "stage": "product_selection",
+            "fulfillment_type": "",
+            "delivery_address": "",
+            "delivery_zone": "",
+            "recipient_name": "",
+            "delivery_fee": null,
+            "payment_method": "",
+            "payment_status": "",
+            "payment_reference": "",
+            "customer_notes": "",
+            "credit_document": "",
+            "credit_phone": "",
+            "credit_installments": "",
+            "credit_code": "",
+            "product_interest": "Amor y amistad"
+          },
+          "cart_operation": "keep",
+          "address_operation": "keep",
+          "turn_kind": "followup",
+          "response_topic": "product"
+        }
+      }
+    },
+    {
+      "context": {
+        "branch_id": "b1",
+        "stored_branch_id": "b1",
+        "branch_name": "Robledo Aures",
+        "preferred_name": "Cliente de prueba",
+        "current_sender_type": "customer",
+        "current_message_payload": {},
+        "service_open": true,
+        "delivery_open": true,
+        "branches": [
+          {
+            "id": "b9",
+            "name": "Campo Valdez"
+          },
+          {
+            "id": "b6",
+            "name": "Floresta"
+          },
+          {
+            "id": "b7",
+            "name": "La 80"
+          },
+          {
+            "id": "b8",
+            "name": "La Estrella"
+          },
+          {
+            "id": "b1",
+            "name": "Robledo Aures"
+          },
+          {
+            "id": "b2",
+            "name": "Robledo Diamante - Calle 80"
+          },
+          {
+            "id": "b5",
+            "name": "Robledo Diamante - Diagonal 85"
+          },
+          {
+            "id": "b10",
+            "name": "San Antonio de Prado"
+          },
+          {
+            "id": "b4",
+            "name": "San Gabriel, Itagüí"
+          },
+          {
+            "id": "b3",
+            "name": "Santa Cruz"
+          }
+        ],
+        "sales_state": {
+          "items": [],
+          "stage": "product_discovery",
+          "credit_code": "",
+          "credit_phone": "",
+          "delivery_fee": null,
+          "delivery_zone": "",
+          "customer_notes": "",
+          "items_verified": false,
+          "payment_method": "",
+          "payment_status": "pending",
+          "recipient_name": "",
+          "credit_document": "",
+          "delivery_address": "",
+          "fulfillment_type": "",
+          "payment_reported": false,
+          "product_interest": "Amor y amistad",
+          "payment_reference": "",
+          "checkout_confirmed": false,
+          "credit_installments": "",
+          "store_purchase_reported": false,
+          "offered_products": [
+            {
+              "id": "d3136a9c-9cc3-4c04-bc8e-9d1b3dc161c4:peluche gigante de oso:300000",
+              "source_task_id": "d3136a9c-9cc3-4c04-bc8e-9d1b3dc161c4",
+              "branch_id": "b1",
+              "name": "peluche gigante de oso",
+              "unit_price": 300000,
+              "available_qty": 1,
+              "source_quote": "tenemos un peluche gigante de oso a 300.000"
+            },
+            {
+              "id": "d3136a9c-9cc3-4c04-bc8e-9d1b3dc161c4:ramo de rosas:50000",
+              "source_task_id": "d3136a9c-9cc3-4c04-bc8e-9d1b3dc161c4",
+              "branch_id": "b1",
+              "name": "ramo de rosas",
+              "unit_price": 50000,
+              "available_qty": 1,
+              "source_quote": "un ramo de rosas a 50.000"
+            }
+          ]
+        },
+        "knowledge": [],
+        "inventory": [],
+        "human_tasks": [
+          {
+            "id": "d3136a9c-9cc3-4c04-bc8e-9d1b3dc161c4",
+            "branch_id": "b1",
+            "type": "product_lookup",
+            "status": "resolved",
+            "question": "El cliente busca: Amor y amistad. Confirmar opciones disponibles, variantes, precio y existencias. No hay catálogo confirmado para mostrarle; no solicitar datos de entrega antes de confirmar productos.",
+            "resolution": {
+              "answer": "tenemos un peluche gigante de oso a 300.000 y también un ramo de rosas a 50.000"
+            },
+            "context": {
+              "sales_state": {
+                "items": [],
+                "stage": "product_discovery",
+                "credit_code": "",
+                "credit_phone": "",
+                "delivery_fee": null,
+                "delivery_zone": "",
+                "customer_notes": "",
+                "items_verified": false,
+                "payment_method": "",
+                "payment_status": "pending",
+                "recipient_name": "",
+                "credit_document": "",
+                "delivery_address": "",
+                "fulfillment_type": "",
+                "payment_reported": false,
+                "product_interest": "Amor y amistad",
+                "payment_reference": "",
+                "checkout_confirmed": false,
+                "credit_installments": "",
+                "store_purchase_reported": false
+              }
+            }
+          }
+        ],
+        "pending_human_tasks": [],
+        "recent_messages": [
+          {
+            "sender_type": "assistant",
+            "body": "En Robledo Aures hay dos opciones para Amor y amistad:\n\n• Peluche gigante de oso — COP 300.000\n• Ramo de rosas — COP 50.000\n\n¿Cuál quieres y cuántas unidades de cada uno?"
+          }
+        ],
+        "case_id": "peluche",
+        "customer_message": "quiero un peluche",
+        "expectedPrice": 300000
+      },
+      "output": {
+        "output": {
+          "action": "reply",
+          "reply": "Listo, te separo 1 peluche gigante de oso por $300.000. ¿A nombre de quién registramos el pedido?",
+          "confidence": 1,
+          "sales_state": {
+            "stage": "checkout_data",
+            "items": [
+              {
+                "product_id": "",
+                "name": "peluche gigante de oso",
+                "qty": 1,
+                "unit_price": 300000
+              }
+            ],
+            "payment_status": "pending"
+          },
+          "cart_operation": "replace",
+          "turn_kind": "product_query",
+          "response_topic": "product",
+          "selection": {
+            "offer_id": "d3136a9c-9cc3-4c04-bc8e-9d1b3dc161c4:peluche gigante de oso:300000",
+            "product_name": "peluche gigante de oso",
+            "qty": 1
+          }
+        }
+      }
+    },
+    {
+      "context": {
+        "branch_id": "b1",
+        "stored_branch_id": "b1",
+        "branch_name": "Robledo Aures",
+        "preferred_name": "Cliente de prueba",
+        "current_sender_type": "customer",
+        "current_message_payload": {},
+        "service_open": true,
+        "delivery_open": true,
+        "branches": [
+          {
+            "id": "b9",
+            "name": "Campo Valdez"
+          },
+          {
+            "id": "b6",
+            "name": "Floresta"
+          },
+          {
+            "id": "b7",
+            "name": "La 80"
+          },
+          {
+            "id": "b8",
+            "name": "La Estrella"
+          },
+          {
+            "id": "b1",
+            "name": "Robledo Aures"
+          },
+          {
+            "id": "b2",
+            "name": "Robledo Diamante - Calle 80"
+          },
+          {
+            "id": "b5",
+            "name": "Robledo Diamante - Diagonal 85"
+          },
+          {
+            "id": "b10",
+            "name": "San Antonio de Prado"
+          },
+          {
+            "id": "b4",
+            "name": "San Gabriel, Itagüí"
+          },
+          {
+            "id": "b3",
+            "name": "Santa Cruz"
+          }
+        ],
+        "sales_state": {
+          "items": [],
+          "stage": "product_discovery",
+          "credit_code": "",
+          "credit_phone": "",
+          "delivery_fee": null,
+          "delivery_zone": "",
+          "customer_notes": "",
+          "items_verified": false,
+          "payment_method": "",
+          "payment_status": "pending",
+          "recipient_name": "",
+          "credit_document": "",
+          "delivery_address": "",
+          "fulfillment_type": "",
+          "payment_reported": false,
+          "product_interest": "Amor y amistad",
+          "payment_reference": "",
+          "checkout_confirmed": false,
+          "credit_installments": "",
+          "store_purchase_reported": false,
+          "offered_products": [
+            {
+              "id": "d3136a9c-9cc3-4c04-bc8e-9d1b3dc161c4:peluche gigante de oso:300000",
+              "source_task_id": "d3136a9c-9cc3-4c04-bc8e-9d1b3dc161c4",
+              "branch_id": "b1",
+              "name": "peluche gigante de oso",
+              "unit_price": 300000,
+              "available_qty": 1,
+              "source_quote": "tenemos un peluche gigante de oso a 300.000"
+            },
+            {
+              "id": "d3136a9c-9cc3-4c04-bc8e-9d1b3dc161c4:ramo de rosas:50000",
+              "source_task_id": "d3136a9c-9cc3-4c04-bc8e-9d1b3dc161c4",
+              "branch_id": "b1",
+              "name": "ramo de rosas",
+              "unit_price": 50000,
+              "available_qty": 1,
+              "source_quote": "un ramo de rosas a 50.000"
+            }
+          ]
+        },
+        "knowledge": [],
+        "inventory": [],
+        "human_tasks": [
+          {
+            "id": "d3136a9c-9cc3-4c04-bc8e-9d1b3dc161c4",
+            "branch_id": "b1",
+            "type": "product_lookup",
+            "status": "resolved",
+            "question": "El cliente busca: Amor y amistad. Confirmar opciones disponibles, variantes, precio y existencias. No hay catálogo confirmado para mostrarle; no solicitar datos de entrega antes de confirmar productos.",
+            "resolution": {
+              "answer": "tenemos un peluche gigante de oso a 300.000 y también un ramo de rosas a 50.000"
+            },
+            "context": {
+              "sales_state": {
+                "items": [],
+                "stage": "product_discovery",
+                "credit_code": "",
+                "credit_phone": "",
+                "delivery_fee": null,
+                "delivery_zone": "",
+                "customer_notes": "",
+                "items_verified": false,
+                "payment_method": "",
+                "payment_status": "pending",
+                "recipient_name": "",
+                "credit_document": "",
+                "delivery_address": "",
+                "fulfillment_type": "",
+                "payment_reported": false,
+                "product_interest": "Amor y amistad",
+                "payment_reference": "",
+                "checkout_confirmed": false,
+                "credit_installments": "",
+                "store_purchase_reported": false
+              }
+            }
+          }
+        ],
+        "pending_human_tasks": [],
+        "recent_messages": [
+          {
+            "sender_type": "assistant",
+            "body": "En Robledo Aures hay dos opciones para Amor y amistad:\n\n• Peluche gigante de oso — COP 300.000\n• Ramo de rosas — COP 50.000\n\n¿Cuál quieres y cuántas unidades de cada uno?"
+          }
+        ],
+        "case_id": "barato",
+        "customer_message": "me llevo el más barato",
+        "expectedPrice": 50000
+      },
+      "output": {
+        "output": {
+          "action": "reply",
+          "reply": "Perfecto, te llevo 1 ramo de rosas por COP 50.000. ¿Prefieres recogerlo en Robledo Aures o solicitar domicilio?",
+          "summary": "Samuel eligió 1 ramo de rosas por COP 50.000. Siguiente paso: definir recogida en Robledo Aures o domicilio.",
+          "confidence": 1,
+          "sales_state": {
+            "stage": "fulfillment",
+            "items": [
+              {
+                "product_id": "d3136a9c-9cc3-4c04-bc8e-9d1b3dc161c4:ramo de rosas:50000",
+                "name": "ramo de rosas",
+                "qty": 1,
+                "unit_price": 50000
+              }
+            ],
+            "product_interest": "Amor y amistad",
+            "customer_name": "Samuel"
+          },
+          "cart_operation": "replace",
+          "turn_kind": "product_query",
+          "response_topic": "product",
+          "selection": {
+            "offer_id": "d3136a9c-9cc3-4c04-bc8e-9d1b3dc161c4:ramo de rosas:50000",
+            "product_name": "ramo de rosas",
+            "qty": 1
+          }
+        }
+      }
+    },
+    {
+      "context": {
+        "branch_id": "b1",
+        "stored_branch_id": "b1",
+        "branch_name": "Robledo Aures",
+        "preferred_name": "Cliente de prueba",
+        "current_sender_type": "customer",
+        "current_message_payload": {},
+        "service_open": true,
+        "delivery_open": true,
+        "branches": [
+          {
+            "id": "b9",
+            "name": "Campo Valdez"
+          },
+          {
+            "id": "b6",
+            "name": "Floresta"
+          },
+          {
+            "id": "b7",
+            "name": "La 80"
+          },
+          {
+            "id": "b8",
+            "name": "La Estrella"
+          },
+          {
+            "id": "b1",
+            "name": "Robledo Aures"
+          },
+          {
+            "id": "b2",
+            "name": "Robledo Diamante - Calle 80"
+          },
+          {
+            "id": "b5",
+            "name": "Robledo Diamante - Diagonal 85"
+          },
+          {
+            "id": "b10",
+            "name": "San Antonio de Prado"
+          },
+          {
+            "id": "b4",
+            "name": "San Gabriel, Itagüí"
+          },
+          {
+            "id": "b3",
+            "name": "Santa Cruz"
+          }
+        ],
+        "sales_state": {
+          "items": [],
+          "product_interest": "Peluche gigante de oso"
+        },
+        "knowledge": [],
+        "inventory": [],
+        "human_tasks": [
+          {
+            "id": "d3136a9c-9cc3-4c04-bc8e-9d1b3dc161c4",
+            "branch_id": "b1",
+            "type": "product_lookup",
+            "status": "resolved",
+            "question": "El cliente busca: Amor y amistad. Confirmar opciones disponibles, variantes, precio y existencias. No hay catálogo confirmado para mostrarle; no solicitar datos de entrega antes de confirmar productos.",
+            "resolution": {
+              "answer": "tenemos un peluche gigante de oso a 300.000 y también un ramo de rosas a 50.000"
+            },
+            "context": {
+              "sales_state": {
+                "items": [],
+                "stage": "product_discovery",
+                "credit_code": "",
+                "credit_phone": "",
+                "delivery_fee": null,
+                "delivery_zone": "",
+                "customer_notes": "",
+                "items_verified": false,
+                "payment_method": "",
+                "payment_status": "pending",
+                "recipient_name": "",
+                "credit_document": "",
+                "delivery_address": "",
+                "fulfillment_type": "",
+                "payment_reported": false,
+                "product_interest": "Amor y amistad",
+                "payment_reference": "",
+                "checkout_confirmed": false,
+                "credit_installments": "",
+                "store_purchase_reported": false
+              }
+            }
+          }
+        ],
+        "pending_human_tasks": [],
+        "recent_messages": [
+          {
+            "sender_type": "assistant",
+            "body": "En Robledo Aures hay dos opciones para Amor y amistad:\n\n• Peluche gigante de oso — COP 300.000\n• Ramo de rosas — COP 50.000\n\n¿Cuál quieres y cuántas unidades de cada uno?"
+          },
+          {
+            "sender_type": "customer",
+            "body": "quiero un peluche"
+          },
+          {
+            "sender_type": "assistant",
+            "body": "Voy a consultar con Robledo Aures qué opciones y precios tienen para tu búsqueda."
+          }
+        ],
+        "case_id": "continuar",
+        "customer_message": "a domicilio",
+        "expectedPrice": 300000
+      },
+      "output": {
+        "output": {
+          "action": "reply",
+          "reply": "Perfecto, llevarías 1 peluche gigante de oso por COP 300.000 a domicilio.\n\nPara cotizar el envío, compárteme la dirección completa, barrio o municipio y el nombre de quien recibe.",
+          "confidence": 0.99,
+          "sales_state": {
+            "stage": "checkout",
+            "items": [
+              {
+                "name": "Peluche gigante de oso",
+                "qty": 1,
+                "unit_price": 300000
+              }
+            ],
+            "fulfillment_type": "delivery",
+            "product_interest": "Peluche gigante de oso",
+            "offered_products": [
+              {
+                "task_id": "d3136a9c-9cc3-4c04-bc8e-9d1b3dc161c4",
+                "name": "Peluche gigante de oso",
+                "unit_price": 300000,
+                "available_qty": null,
+                "source_quote": "tenemos un peluche gigante de oso a 300.000"
+              }
+            ]
+          },
+          "cart_operation": "replace",
+          "address_operation": "keep",
+          "turn_kind": "followup",
+          "response_topic": "checkout",
+          "selection": {
+            "product_name": "Peluche gigante de oso",
+            "qty": 1
+          }
+        }
+      }
+    }
+  ]
+}

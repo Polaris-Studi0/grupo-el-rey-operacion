@@ -84,7 +84,7 @@ export function normalizeDecision(context, output) {
   }
   // Answer navigation before resuming a sale. A product interest is memory,
   // not an instruction to replace every customer question with a quotation.
-  const branchListQuestion=!internal && (raw.response_topic==='branch_list'
+  const branchListQuestion=!internal && !resolvedSelection && (raw.response_topic==='branch_list'
     || /\b(?:que|cuales|cuantas)\s+(?:(?:son|otras|las|sus)\s+)*(?:sedes|sucursales|tiendas|puntos de venta)\b/.test(customerText)
     || /\b(?:lista|listado|muestra\w*|dime|conocer)\b.{0,35}\b(?:sedes|sucursales|tiendas|puntos de venta)\b/.test(customerText)
     || /\bdonde\s+(?:estan|quedan|tienen)\b.{0,30}\b(?:sedes|sucursales|tiendas|ubicados)\b/.test(customerText));
@@ -172,7 +172,7 @@ export function normalizeDecision(context, output) {
   // Resolve options once against the responsible branch's actual answer. The
   // model interprets free language; amounts and quantities remain source-bound.
   const verifiedOffers=[];
-  const offerKey=o=>JSON.stringify([productTokens(o.name),o.unit_price]);
+  const offerKey=o=>JSON.stringify(productTokens(o.name));
   const addOffer=(task,candidate)=>{
     const quote=text(candidate.source_quote), answer=text(task.resolution?.answer);
     const price=number(candidate.unit_price), label=text(candidate.name);

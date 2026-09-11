@@ -205,5 +205,19 @@ assert.equal((await db.query('select public.complete_whatsapp_event($1,$2,null) 
 assert.equal((await db.query('select public.complete_whatsapp_event($1,$2,null) as ok',[lost.event_key,lost.lease_id])).rows[0].ok,true);
 console.log('PASS durable inbox recovers lost and interrupted events, excludes completed and active leases, and validates completion owner');
 
+const optionFlow=await fixture();
+await db.query("insert into human_tasks(conversation_id,branch_id,task_type,status,title,question,context,resolution,resolved_at) values($1,'b1','product_lookup','resolved','Regalos','Opciones para Amor y amistad',$2::jsonb,$3::jsonb,now())",[optionFlow.c,JSON.stringify({sales_state:{items:[],product_interest:'Amor y amistad'}}),JSON.stringify({answer:'tenemos un peluche gigante de oso a 300.000 y también un ramo de rosas a 50.000'})]);
+const optionContext=(await db.query(context,[optionFlow.m])).rows[0];
+const offered=normalizeDecision({...optionContext,current_sender_type:'human'},{action:'reply',reply:'Opciones confirmadas',sales_state:{product_interest:'Amor y amistad'}}).ai;
+assert.equal(offered.sales_state.offered_products.length,2);
+await persist(optionFlow,offered);
+const nextMessage=(await db.query("insert into whatsapp_messages(conversation_id,direction,sender_type,message_type,body) values($1,'inbound','customer','text','quiero un peluche') returning id",[optionFlow.c])).rows[0];
+const selectionContext=(await db.query(context,[nextMessage.id])).rows[0];
+assert.equal(selectionContext.sales_state.offered_products.length,2);
+const selectedOption=normalizeDecision(selectionContext,{action:'reply',intent:'select_product',reply:'¿Cuántos?',cart_operation:'keep',sales_state:{product_interest:'Peluche gigante de oso'}}).ai;
+assert.equal(selectedOption.sales_state.items[0].qty,1);assert.equal(selectedOption.sales_state.items[0].unit_price,300000);assert.equal(selectedOption.sales_state.items_verified,true);
+await persist({c:optionFlow.c,m:nextMessage.id},selectedOption);
+assert.equal((await db.query("select count(*)::int as n from human_tasks where conversation_id=$1 and status='pending'",[optionFlow.c])).rows[0].n,0);
+console.log('PASS verified options persist across messages and natural selection advances without creating another stock task');
 await db.close();
 console.log('All database scenarios passed in isolated PostgreSQL; no network or live messages.');

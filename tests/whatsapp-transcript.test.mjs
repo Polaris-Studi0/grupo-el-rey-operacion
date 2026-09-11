@@ -352,3 +352,49 @@ test('horarios y medios de pago no son reemplazados por la cotización pendiente
   assert.equal(r.reply,reply);assert.equal(r.action,'reply');assert.equal(r.sales_state.product_interest,'regalos');
  }
 });
+
+const giftTask={id:'gift-task',type:'product_lookup',status:'resolved',branch_id:'b1',context:{sales_state:{items:[],product_interest:'Amor y amistad'}},resolution:{answer:'tenemos un peluche gigante de oso a 300.000 y también un ramo de rosas a 50.000'}};
+const giftContext={...context,sales_state:{items:[],product_interest:'Amor y amistad'},human_tasks:[giftTask]};
+test('opciones confirmadas se conservan separadas y quiero un peluche elige uno sin repetir stock',()=>{
+ const offer=normalizeDecision({...giftContext,current_sender_type:'human'},{action:'reply',reply:'Tenemos peluche y rosas.'}).ai;
+ assert.equal(offer.sales_state.offered_products.length,2);assert.equal(offer.sales_state.items.length,0);
+ const selected=normalizeDecision({...giftContext,sales_state:offer.sales_state,customer_message:'quiero un peluche'}, {action:'reply',intent:'select_product',turn_kind:'product_query',cart_operation:'keep',sales_state:{product_interest:'Peluche gigante de oso'},reply:'¿Cuántas unidades quieres?'}).ai;
+ assert.equal(selected.sales_state.items.length,1);assert.equal(selected.sales_state.items[0].qty,1);assert.equal(selected.sales_state.items[0].unit_price,300000);
+ assert.equal(selected.sales_state.items_verified,true);assert.equal(selected.action,'reply');assert.match(selected.reply,/recoger.*domicilio/);assert.doesNotMatch(selected.reply,/cuántas|consultar|confirmar.*sede/i);
+ const delivery=normalizeDecision({...giftContext,sales_state:selected.sales_state,customer_message:'a domicilio'}, {action:'reply',sales_state:{fulfillment_type:'delivery'},reply:'¿Dirección y quién recibe?'}).ai;
+ assert.equal(delivery.sales_state.items_verified,true);assert.notEqual(delivery.action,'human_product_lookup');
+});
+test('selección semántica por referencia usa el precio de su opción y no el de otro producto',()=>{
+ const offers=normalizeDecision({...giftContext,current_sender_type:'human'},{action:'reply',reply:'Opciones.'}).ai.sales_state.offered_products;
+ const rose=offers.find(o=>o.name==='ramo de rosas');
+ const r=normalizeDecision({...giftContext,customer_message:'me llevo el más barato'}, {action:'reply',selection:{offer_id:rose.id,qty:1},cart_operation:'keep',reply:'Listo'}).ai;
+ assert.equal(r.sales_state.items[0].unit_price,50000);assert.equal(r.sales_state.items_verified,true);
+ const wrong=normalizeDecision({...giftContext,customer_message:'quiero un peluche'}, {action:'reply',cart_operation:'replace',sales_state:{items:[{name:'peluche gigante de oso',qty:1,unit_price:50000}]},reply:'Listo'}).ai;
+ assert.equal(wrong.sales_state.items_verified,false);assert.equal(wrong.action,'human_product_lookup');
+});
+test('más unidades que las ofrecidas consulta cantidad, sin volver a preguntar opciones',()=>{
+ const r=normalizeDecision({...giftContext,customer_message:'quiero tres peluches'}, {action:'reply',selection:{product_name:'peluche gigante de oso',qty:3},cart_operation:'keep',reply:'Listo'}).ai;
+ assert.equal(r.sales_state.items[0].qty,3);assert.equal(r.sales_state.items_verified,false);assert.equal(r.action,'human_product_lookup');assert.match(r.task_question,/3 ×/);
+});
+test('citas inventadas o precio de otro artículo no producen una opción verificada',()=>{
+ const r=normalizeDecision({...giftContext,current_sender_type:'human'}, {action:'reply',reply:'Opciones',product_offers:[{task_id:giftTask.id,name:'televisor',unit_price:50000,source_quote:'tenemos televisor a 50.000'},{task_id:giftTask.id,name:'peluche gigante de oso',unit_price:50000,source_quote:giftTask.resolution.answer}]}).ai;
+ assert.equal(r.sales_state.offered_products.length,2);assert.ok(!r.sales_state.offered_products.some(o=>o.name==='televisor'));assert.equal(r.sales_state.offered_products.find(o=>o.name.includes('peluche')).unit_price,300000);
+});
+
+test('una cotización nueva reemplaza el precio anterior de la misma opción',()=>{
+ const newer={...giftTask,id:'gift-price-update',resolution:{answer:'tenemos un peluche gigante de oso a 280.000'}};
+ const r=normalizeDecision({...giftContext,current_sender_type:'human',human_tasks:[giftTask,newer]}, {action:'reply',reply:'Precio actualizado'}).ai;
+ assert.equal(r.sales_state.offered_products.filter(o=>o.name.includes('peluche')).length,1);
+ assert.equal(r.sales_state.offered_products.find(o=>o.name.includes('peluche')).unit_price,280000);
+});
+
+test('IA real: sedes, elección, comparación de precios y continuación desde conversación rota',async()=>{
+ const {readFile}=await import('node:fs/promises');
+ const fixture=JSON.parse(await readFile(new URL('./fixtures/whatsapp-real-model-selection.json',import.meta.url),'utf8'));
+ for(const {context:c,output} of fixture.cases){
+  const a=normalizeDecision(c,output).ai;
+  if(c.case_id==='sedes'){for(const b of c.branches)assert.ok(a.reply.includes(b.name));}
+  else if(c.case_id==='aures'){assert.equal(a.action,'human_product_lookup');assert.equal(a.branch_id,'b1');}
+  else {assert.equal(a.sales_state.items.length,1);assert.equal(a.sales_state.items[0].qty,1);assert.equal(a.sales_state.items[0].unit_price,c.expectedPrice);assert.equal(a.sales_state.items_verified,true);assert.notEqual(a.action,'human_product_lookup');}
+ }
+});
