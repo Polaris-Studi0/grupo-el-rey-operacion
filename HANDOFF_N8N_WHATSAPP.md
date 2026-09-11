@@ -456,3 +456,16 @@ Las ejecuciones 1337/1339 demostraron otro error: al elegir «quiero un peluche�
 Prueba REAL con el modelo configurado en n8n (actualmente gpt-5.6-luna): ejecución 1344, cinco casos aprobados sin envíos a clientes: lista completa de sedes, elegir Aures, «quiero un peluche» → 1 × oso COP 300000, «me llevo el más barato» → 1 × rosas COP 50000, y «a domicilio» recuperando la elección de una conversación con carrito vacío. Fixtures de las salidas reales guardados como regresión. La prueba previa 1341 detectó clasificación branch_list atrasada al elegir sede; se corrigió antes de publicar. Ramas de evaluación retiradas.
 
 Pruebas locales: suite completa comercial/recepción/conversación, replay adicional de las cinco salidas reales, ESLint y 22 escenarios PostgreSQL. El nuevo escenario verifica persistencia de las opciones entre mensajes, selección de una unidad y ausencia de otra tarea pendiente de stock. No se ha reejecutado la conversación del cliente ni enviado otra respuesta durante esta corrección. Se conservó el modelo que estaba configurado; solo se retiró builtInTools vacío incompatible con su configuración.
+
+## 2026-09-10 · Seguimiento después de registrar el pedido
+- Migración 202609100005 aplicada: ingest conserva conversaciones converted. Se cierran solo tras entrega/cancelación registrada + 24 horas sin actividad; pendientes humanos evitan el cierre. La revisión utiliza el cron existente de recuperación y el ingreso de mensajes, sin nuevas ejecuciones n8n.
+- Normalizador y prompt publicados: seguimiento usa latest_order; ante fallo del modelo informa estado real y no inventa ETA. REY-1002 conserva su conversación; se cerró el hilo vacío abierto por el error anterior.
+- Pruebas de conversación, base de datos y lint pasan; comprobado seguimiento, ventana por inactividad y bloqueo por atención pendiente.
+- BLOQUEO EXTERNO: ejecución 1388 agotó los créditos gratuitos de IA de n8n. Hace falta una credencial OpenAI con saldo para respuestas generales; la respuesta de respaldo de seguimiento funciona sin salida válida de IA.
+- Commit sugerido: Mantiene el contexto del pedido hasta después de la entrega.
+
+## 2026-09-11 · Consultas desconocidas y cambios requieren asistencia
+- Publicado en 03: las consultas distintas al seguimiento ya no reciben el estado del pedido cuando falla la IA. Cambios de pedidos registrados, ETA desconocida y consultas no resueltas pasan a human_general con la pregunta textual y número del pedido, sin alterar carrito ni pago.
+- Se conserva el mecanismo existente de pendientes: una solicitud general abierta se reutiliza; el mensaje y resumen más reciente permanecen en su contexto. Sin sede se pide la sede necesaria para dirigir la atención.
+- Pruebas completas de WhatsApp/PostgreSQL y lint correctos. No se enviaron mensajes de prueba al cliente. La IA general sigue dependiendo del saldo de la credencial.
+- Título de commit: Deriva a la sede las consultas que el bot no puede resolver.

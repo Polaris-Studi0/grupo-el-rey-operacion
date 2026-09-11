@@ -58,6 +58,39 @@ export function normalizeDecision(context, output) {
     customer_name:name,reply,summary:options.summary||reply,task_title:options.task_title||'',task_question:options.task_question||'',
     confidence:1,sales_state:salesState,send_qr:false,reset_purchase:options.reset_purchase===true,
   }});
+  const requestHuman = reason => {
+    const pending=(context.pending_human_tasks||[]).some(t=>t.type==='general' && (!t.branch_id||t.branch_id===branch));
+    const question='Consulta del cliente: '+text(context.customer_message)+(context.latest_order?' Pedido: '+context.latest_order.order_number+'.':'')+' '+reason;
+    return earlyReply(!branch
+      ? 'Necesito que una sede revise tu consulta. ¿Con cuál deseas que lo gestione?'
+      : pending ? 'Dejo esta consulta en la atención pendiente con la sede para que también la revisen.'
+      : 'Voy a pedir ayuda a la sede para resolver tu consulta. Te compartiremos la respuesta cuando la confirmen.',
+      {...previous},{action:branch?'human_general':'reply',intent:'human_assistance',
+        task_title:context.latest_order?'Consulta sobre '+context.latest_order.order_number:'Consulta que requiere asistencia',
+        task_question:question,summary:question});
+  };
+  const orderChange = context.latest_order && (/\b(?:agregar|anadir|sumar|incluir|cambiar|modificar|quitar|anular)\b/u.test(customerText)
+    || raw.intent==='order_change');
+  if (!internal && !resetPurchase && !optOut(customerText) && orderChange) {
+    return requestHuman('Confirmar si el cambio es posible antes de modificar el pedido o solicitar otro pago.');
+  }
+  // A registered order remains the source of truth even when the model fails.
+  const trackingQuestion = /(?:cuanto.*(?:llega|demora|tarda)|cuando.*(?:llega|entreg)|donde.*pedido|estado.*pedido|ya.*(?:salio|despach))/u.test(customerText);
+  if (context.latest_order && !internal && !resetPurchase && !optOut(customerText)
+      && (trackingQuestion || raw.intent==='order_tracking')) {
+    const order=context.latest_order;
+    const statuses={preparing:'está en preparación',ready:order.fulfillment_type==='pickup'?'está listo para recoger':'está listo para despacho',dispatched:'va en camino',delivered:'figura como entregado',cancelled:'figura como cancelado'};
+    let reply='Tu pedido '+order.order_number+' '+(statuses[order.status]||'está registrado')+'.';
+    if (['preparing','ready','dispatched'].includes(order.status) && order.fulfillment_type==='delivery') {
+      const promised=Date.parse(order.promised_at||'');
+      const now=Date.parse(context.current_message_created_at||'') || Date.now();
+      if (!Number.isFinite(promised) || promised<=now) return requestHuman('Confirmar con Operación la hora de llegada; no existe una estimación vigente.');
+      reply+=Number.isFinite(promised)&&promised>now
+        ? ' La hora estimada registrada es '+new Date(promised).toLocaleTimeString('es-CO',{timeZone:'America/Bogota',hour:'numeric',minute:'2-digit'})+'. Puede variar según el recorrido.'
+        : ' Aún no hay una hora de llegada confirmada en el sistema.';
+    }
+    return earlyReply(reply,{...previous},{intent:'order_tracking'});
+  }
   if (!internal && pureGreeting) {
     return earlyReply(context.service_open===false
       ? '¡Hola'+(name?' '+name:'')+'! Volvemos a las 9:00 a. m. ¿Qué te gustaría consultar?'
@@ -95,6 +128,9 @@ export function normalizeDecision(context, output) {
     const result=earlyReply(reply,{...previous},{intent:'branch_list',summary:'El cliente pidió las sedes. Se mostró la lista disponible y se conservó su interés y selección anterior.'});
     result.ai.branch_id=storedBranch||context.branch_id||'';
     return result;
+  }
+  if (!internal && !optOut(customerText) && ((context.latest_order && !text(raw.reply)) || raw.action==='human_general')) {
+    return requestHuman('Revisar la consulta: el asistente no tiene una respuesta confirmada.');
   }
   const informationalTurn=!internal && raw.response_topic==='store_information';
   // Limit fallback interpretation to the current purchase, including histories
@@ -489,6 +525,7 @@ export function normalizeDecision(context, output) {
   if (sendQr) {reply='Te comparto el QR de '+context.branch_name+'. Cuando hagas la transferencia, envíame el comprobante para que el equipo lo verifique.';}
   if (context.service_open===false && !instruction && !(internal && context.operator_confirmation)) {respond('En este momento no hay atención. Volvemos a las 9:00 a. m.; conservamos tu consulta para continuar.');sendQr=false;}
   if (raw.action==='stop' && !interestTurn) {action='stop';reply='Entendido. Gracias por escribirnos; quedamos a tu disposición cuando lo necesites.';sendQr=false;}
+  if (!internal && action==='reply' && /dificultad para interpretar/.test(reply)) return requestHuman('El asistente no pudo resolver la consulta.');
   const summary='Interés actual: '+state.product_interest+'. Carrito: '+state.items.map(x=>x.qty+' × '+x.name).join(', ')+'. Productos verificados: '+state.items_verified+'. Entrega: '+state.fulfillment_type+'; destinatario: '+state.recipient_name+'; dirección: '+state.delivery_address+', '+state.delivery_zone+'. Domicilio: '+(state.delivery_quote_verified?state.delivery_fee:'sin confirmar')+'. Pago: '+state.payment_status+(state.payment_reported?' (reportado por cliente)':'')+'. Pedido registrado: '+(context.latest_order?.order_number||'no')+'. Acción de este turno: '+action+'.';
   return {...context, ai:{intent:text(raw.intent||'general').slice(0,80),action,branch_id:branch||'',branch_change_confirmed:branchChange,customer_name:name,reply:reply.slice(0,1500),summary:summary.slice(0,1000),task_title:text(taskTitle||'Consulta de WhatsApp para la sede').slice(0,180),task_question:text(taskQuestion||context.customer_message||'Revisar los datos de la conversación.').slice(0,1200),confidence:Math.max(0,Math.min(1,Number(raw.confidence)||0)),sales_state:state,send_qr:sendQr,reset_purchase:false}};
 }

@@ -398,3 +398,31 @@ test('IA real: sedes, elección, comparación de precios y continuación desde c
   else {assert.equal(a.sales_state.items.length,1);assert.equal(a.sales_state.items[0].qty,1);assert.equal(a.sales_state.items[0].unit_price,c.expectedPrice);assert.equal(a.sales_state.items_verified,true);assert.notEqual(a.action,'human_product_lookup');}
  }
 });
+
+
+test('post-order delivery questions retain order and survive model failure',()=>{
+ const c={...context,customer_message:'sabes en cuanto tiempo llegará?',latest_order:{order_number:'REY-1002',status:'preparing',fulfillment_type:'delivery'}};
+ for(const raw of [{error:'Bad request'},{intent:'order_tracking',reply:'¿Qué sede?'}]){
+  const a=normalizeDecision(c,raw).ai;
+  assert.match(a.task_question,/REY-1002/);assert.match(a.task_question,/hora de llegada/);
+  assert.equal(a.action,'human_general');assert.equal(a.branch_id,'b1');assert.deepEqual(a.sales_state,state);
+ }
+ assert.equal(normalizeDecision({...c,latest_order:{...c.latest_order,status:'dispatched'}},{}).ai.action,'human_general');
+ assert.match(normalizeDecision({...c,latest_order:{...c.latest_order,status:'delivered'}},{}).ai.reply,/entregado/);
+});
+
+
+test('unknown queries and changes reach humans without repeating delivery status',()=>{
+ const c={...context,latest_order:{order_number:'REY-1002',status:'preparing',fulfillment_type:'delivery',promised_at:'2099-01-01T12:00:00Z'}};
+ for(const message of ['podria agregar otro producto?','que horario manejan las sedes?','necesito algo que no sé cómo explicar']){
+  const a=normalizeDecision({...c,customer_message:message},{error:'AI credits exhausted'}).ai;
+  assert.equal(a.action,'human_general');assert.ok(a.task_question.includes(message));assert.deepEqual(a.sales_state,state);
+  assert.doesNotMatch(a.reply,/preparación|hora estimada/);
+ }
+ const a=normalizeDecision({...c,customer_message:'Me llevas también el azul?'},{intent:'order_change',reply:'Sí'}).ai;
+ assert.equal(a.action,'human_general');assert.match(a.task_question,/antes de modificar/);
+ const hours=normalizeDecision({...c,customer_message:'qué horario tienen?'},{action:'reply',response_topic:'store_information',reply:'Abrimos de 9 a 7.'}).ai;
+ assert.equal(hours.reply,'Abrimos de 9 a 7.');assert.equal(hours.action,'reply');
+ const tracking=normalizeDecision({...c,customer_message:'cuando llega?'},{}).ai;
+ assert.equal(tracking.action,'reply');assert.match(tracking.reply,/hora estimada/);
+});

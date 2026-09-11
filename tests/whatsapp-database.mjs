@@ -80,6 +80,29 @@ const doneRetry=await persist(order,{...baseAI,action:'finalize_order',sales_sta
 assert.equal((await db.query('select available_qty from branch_inventory where product_id=$1',[product.id])).rows[0].available_qty,4);
 assert.equal((await db.query('select count(*)::int as count from orders where whatsapp_conversation_id=$1',[order.c])).rows[0].count,1);
 console.log('PASS checkout creates one order and deducts inventory exactly once');
+const contactForOrder=(await db.query('select wc.* from whatsapp_contacts wc join whatsapp_conversations c on c.contact_id=wc.id where c.id=$1',[order.c])).rows[0];
+const incomingAfterOrder=async key=>(await db.query("select ingest_whatsapp_message($1,$2,'Cliente',$3,'text','¿Cuándo llega?',null,'{}'::jsonb) as r",[contactForOrder.phone_e164,contactForOrder.whatsapp_id,key])).rows[0].r;
+assert.equal((await incomingAfterOrder('tracking-first')).conversation_id,order.c);
+await db.query("update whatsapp_conversations set last_message_at=now()-interval '3 days' where id=$1",[order.c]);
+await db.query('select close_completed_whatsapp_conversations()');
+assert.notEqual((await db.query('select status from whatsapp_conversations where id=$1',[order.c])).rows[0].status,'closed');
+// Time fixture only: bypass operational actor checks in the isolated database.
+await db.exec('alter table orders disable trigger user');
+await db.query("update orders set status='delivered',delivered_at=now()-interval '25 hours' where id=$1",[done.order_id]);
+await db.exec('alter table orders enable trigger user');
+await db.query("update whatsapp_conversations set last_message_at=now()-interval '1 hour' where id=$1",[order.c]);
+await db.query('select close_completed_whatsapp_conversations()');
+assert.notEqual((await db.query('select status from whatsapp_conversations where id=$1',[order.c])).rows[0].status,'closed');
+await db.query("update whatsapp_conversations set last_message_at=now()-interval '25 hours' where id=$1",[order.c]);
+await db.query("insert into human_tasks(conversation_id,branch_id,task_type,status,title,question) values($1,'b1','general','pending','Seguimiento','Revisión pendiente')",[order.c]);
+await db.query('select close_completed_whatsapp_conversations()');
+assert.notEqual((await db.query('select status from whatsapp_conversations where id=$1',[order.c])).rows[0].status,'closed');
+await db.query("update human_tasks set status='cancelled' where conversation_id=$1 and status='pending'",[order.c]);
+const freshAfterDelivery=await incomingAfterOrder('tracking-expired');
+assert.notEqual(freshAfterDelivery.conversation_id,order.c);
+assert.equal((await db.query('select status from whatsapp_conversations where id=$1',[order.c])).rows[0].status,'closed');
+console.log('PASS order continuity, delivery-dependent quiet window, pending support protection and fresh conversation after expiry');
+
 const unsafe=await fixture();await persist(unsafe,{...baseAI,action:'finalize_order',sales_state:{...saleState,payment_method:'transfer',payment_status:'verified'}});
 assert.equal((await db.query('select count(*)::int as count from orders where whatsapp_conversation_id=$1',[unsafe.c])).rows[0].count,0);
 console.log('PASS DB rejects forged payment verification');
