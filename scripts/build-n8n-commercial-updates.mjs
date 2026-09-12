@@ -8,6 +8,8 @@ const snapshotDirectory=process.argv[2];
 if(!snapshotDirectory) throw new Error('Provide the directory containing the pre-update workflow snapshots.');
 const read=name=>readFile(new URL('../n8n/commercial/'+name,import.meta.url),'utf8');
 const [context,persist,prompt,schema,normalize]=await Promise.all(['context.sql','persist.sql','prompt.txt','schema.json','normalize.js'].map(read));
+const information=await read('information.js');
+const bundledNormalize=information.replace('export function','function')+'\n'+normalize.replace(/^import .*information.js';\n/m,'').replace('export function','function');
 const set=(nodeName,path,value)=>({type:'setNodeParameter',nodeName,path,value});
 const add=(name,type,typeVersion,parameters,position)=>({type:'addNode',node:{name,type,typeVersion,parameters,position}});
 const connect=(source,target,sourceIndex=0)=>({type:'addConnection',source,target,sourceIndex,targetIndex:0});
@@ -39,7 +41,7 @@ const patches=[
    {type:'renameNode',oldName:'GPT-5.4 Mini · bajo costo',newName:'GPT-5 Mini · bajo costo'},
    set('Contrato de respuesta','inputSchema',schema),
    set('Contrato de respuesta','autoFix',false),
-   set('Normalizar decisión','jsCode',normalize.replace('export function','function')+"\nreturn {json:normalizeDecision($('Cargar contexto comercial').item.json,$json)};\n"),
+   set('Normalizar decisión','jsCode',bundledNormalize+"\nreturn {json:normalizeDecision($('Cargar contexto comercial').item.json,$json)};\n"),
    {type:'removeConnection',source:'Cargar contexto comercial',target:'Asistente comercial controlado',sourceIndex:0,targetIndex:0},
    add('¿Respuesta ya calculada?','n8n-nodes-base.if',2.3,ifParams('cached-decision','={{ $json.cached_response !== null && $json.cached_response !== undefined }}'),[650,-100]),
    add('Reutilizar decisión guardada','n8n-nodes-base.code',2,{mode:'runOnceForEachItem',jsCode:'return {json:{...$json,ai:$json.cached_response}};'},[1000,-200]),

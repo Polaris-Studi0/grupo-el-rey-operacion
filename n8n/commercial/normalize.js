@@ -1,3 +1,4 @@
+import {resolveStoreInformation} from './information.js';
 // Shared by local scenario tests and the existing n8n Code node.
 export function normalizeDecision(context, output) {
   const text = value => String(value ?? '').trim();
@@ -6,6 +7,9 @@ export function normalizeDecision(context, output) {
   let raw = output?.output ?? output;
   if (typeof raw === 'string') { try { raw = JSON.parse(raw); } catch { raw = {}; } }
   raw = object(raw?.output ?? raw);
+  context={...context,model_status:raw.error || !raw.action ? 'unavailable_or_invalid' : 'ok'};
+  const information=resolveStoreInformation(context,raw);
+  if (information) return {...context,ai:information};
   const previous = object(context.sales_state);
   const proposed = object(raw.sales_state);
   // Tolerate control fields placed inside sales_state by the model. These are
