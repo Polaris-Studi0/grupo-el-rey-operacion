@@ -1,6 +1,6 @@
 import {resolveStoreInformation} from './information.js';
 // Shared by local scenario tests and the existing n8n Code node.
-export function normalizeDecision(context, output) {
+export function normalizeDecision(context, output, {agentMode=false}={}) {
   const text = value => String(value ?? '').trim();
   const fold = value => text(value).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
   const object = value => value && typeof value === 'object' && !Array.isArray(value) ? value : {};
@@ -29,7 +29,7 @@ export function normalizeDecision(context, output) {
   const branchLabel=fold(proposedBranch?.name);
   const branchLastWord=branchLabel.split(/\s+/).at(-1)||'';
   const messageWords=customerText.split(/[^\p{L}\p{N}]+/u);
-  const explicitInitialBranch=Boolean(proposedBranch && (customerText.includes(branchLabel)
+  const explicitInitialBranch=Boolean(proposedBranch && ((agentMode && raw.branch_change_confirmed===true) || customerText.includes(branchLabel)
     || (branchLastWord.length>3 && /^[a-z]+$/.test(branchLastWord) && messageWords.includes(branchLastWord)
       && branches.filter(b=>fold(b.name).split(/\s+/).includes(branchLastWord)).length===1)));
   // Suggesting a branch in the generated reply is not a customer selection.
@@ -95,7 +95,7 @@ export function normalizeDecision(context, output) {
     }
     return earlyReply(reply,{...previous},{intent:'order_tracking'});
   }
-  if (!internal && pureGreeting) {
+  if (!agentMode && !internal && pureGreeting) {
     return earlyReply(context.service_open===false
       ? '¡Hola'+(name?' '+name:'')+'! Volvemos a las 9:00 a. m. ¿Qué te gustaría consultar?'
       : '¡Hola'+(name?' '+name:'')+'! ¿Qué producto u oferta te gustaría consultar?', {...previous},
@@ -168,7 +168,7 @@ export function normalizeDecision(context, output) {
   const shortFollowup=!internal && (raw.turn_kind==='followup' || /^(porfa|por favor|si|si porfa|si por favor|claro|cuales tienes|cuales tienen|que opciones hay|que tienes|muestrame|muestrame las opciones|ver opciones)$/.test(simpleTurn(customerText)));
   const historicalInterest=shortFollowup ? purchaseMessages.filter(m=>m.sender_type==='customer').map(m=>interestFromMessage(m.body)).filter(Boolean).at(-1)||'' : '';
   const interest=productQuery ? text(proposed.product_interest)||directInterest : text(previous.product_interest)||(raw.turn_kind==='followup'?text(proposed.product_interest):'')||historicalInterest;
-  const interestTurn=!informationalTurn && Boolean(interest) && (productQuery || (shortFollowup && !previous.items?.length) || resolvedSelection || (!storedBranch && branch));
+  const interestTurn=!agentMode && !informationalTurn && Boolean(interest) && (productQuery || (shortFollowup && !previous.items?.length) || resolvedSelection || (!storedBranch && branch));
   const state = {...previous};
   state.product_interest=interest.slice(0,240);
   for (const field of ['stage','fulfillment_type','delivery_zone','recipient_name','payment_reference','customer_notes','credit_document','credit_phone','credit_installments','credit_code']) {
@@ -338,7 +338,7 @@ export function normalizeDecision(context, output) {
   // model forgets its action or places the flag inside sales_state.
   const legacyCheckoutQuestion=/todo esta correcto|confirmas (?:este|el) pedido|resumen/i.test(fold(lastAssistant))
     && amounts(lastAssistant).includes(total) && (state.fulfillment_type==='pickup' || simpleTurn(lastAssistant).includes(simpleTurn(state.delivery_address)));
-  const offerAccepted=previous.checkout_offer_snapshot===offerSnapshot && !internal && (yesAnswer.test(simpleTurn(customerText)) || qrChoice || /^(transferencia|addi|sistecredito)$/.test(simpleTurn(customerText)));
+  const offerAccepted=previous.checkout_offer_snapshot===offerSnapshot && !internal && ((agentMode && raw.checkout_confirmed===true) || yesAnswer.test(simpleTurn(customerText)) || qrChoice || /^(transferencia|addi|sistecredito)$/.test(simpleTurn(customerText)));
   const confirmationQuestion=previous.checkout_snapshot===checkoutSnapshot || legacyCheckoutQuestion;
   const explicitCheckout=/\bconfirmo (el pedido|la compra)\b/.test(customerText) || (/^(si|si confirmo|confirmo|de acuerdo|adelante|correcto|todo correcto|todo esta correcto|esta bien)[.! ]*$/.test(customerText) && confirmationQuestion);
   const historicalCheckout=!materialChange && state.payment_status==='verified' && purchaseMessages.some((m,index)=>{
@@ -361,12 +361,13 @@ export function normalizeDecision(context, output) {
   }
   const offerQuery = /ofertas?|promociones?|descuentos?|temporada/.test(customerText);
   const promotions = (context.knowledge||[]).filter(k => k.category==='promotion');
-  if (offerQuery && promotions.length===0 && !inventory.some(i=>i.promotion_active) && !action.startsWith('human_')) {
+  if (!agentMode && offerQuery && promotions.length===0 && !inventory.some(i=>i.promotion_active) && !action.startsWith('human_')) {
     respond('Aún no tengo ofertas de temporada confirmadas para compartirte. Puedo ayudarte a consultar un producto con la sede. ¿Qué estás buscando?');
   }
   if (branchChange) {
     state.items_verified=!contextBranchChanged && state.items.length>0 && !unverifiedItems;state.delivery_fee=null;state.delivery_quote_verified=false;state.payment_status='pending';state.checkout_confirmed=false;delete state.payment_verified_task_id;
-    if (state.items.length && !state.items_verified) {action='human_product_lookup';reply='Revisaré estos productos y sus precios en '+branches.find(b=>b.id===branch).name+' para continuar con tu compra allí.';}
+    if (agentMode) { /* Invalidate evidence, but let the agent choose the next action. */ }
+    else if (state.items.length && !state.items_verified) {action='human_product_lookup';reply='Revisaré estos productos y sus precios en '+branches.find(b=>b.id===branch).name+' para continuar con tu compra allí.';}
     else if (state.items.length) respond('Listo, continuamos con '+branches.find(b=>b.id===branch).name+'. '+state.items.map(x=>x.qty+' × '+x.name+' a $'+x.unit_price.toLocaleString('es-CO')).join(', ')+'. ¿Prefieres recoger en esta sede o recibir a domicilio?');
     else respond('Listo, continuamos con '+branches.find(b=>b.id===branch).name+'. ¿Qué producto u oferta te gustaría consultar?');
   }
@@ -378,13 +379,15 @@ export function normalizeDecision(context, output) {
   const priorCustomerClaims=purchaseMessages.filter(m=>m.sender_type==='customer' && /\bpague\b|\bya pago\b/.test(fold(m.body)) && !/\bno (?:he )?pag(?:ue|ado)\b/.test(fold(m.body)));
   state.store_purchase_reported=previous.store_purchase_reported===true || storePurchase || priorCustomerClaims.some(m=>/efectivo|local|tienda|sede/.test(fold(m.body)));
   state.payment_reported=previous.payment_reported===true || claimsPayment || priorCustomerClaims.length>0;
-  const scheduling=/agend|program|salida|despach|franja|prepar|salga a entrega|coordinamos la entrega|pedido (?:creado|registrado|confirmado)/.test(fold([raw.intent,raw.reply,raw.task_title].join(' ')));
+  const scheduling=(agentMode
+    ? /(?:pedido|entrega|domicilio).{0,25}(?:agendado|programado|despachado|en preparacion)|coordinamos la entrega|pedido (?:creado|registrado|confirmado)/
+    : /agend|program|salida|despach|franja|prepar|salga a entrega|coordinamos la entrega|pedido (?:creado|registrado|confirmado)/).test(fold([raw.intent,raw.reply,raw.task_title].join(' ')));
   const statusQuestion=/\bya\b|seguro|confirmacion|estado|novedad/.test(customerText);
   // Claiming an action in prose never sends it. Advance a complete delivery quote
   // through the real task action, including after a recipient correction.
   const repeatsRecipient=state.recipient_name && /a nombre de quien|nombre del destinatario|nombre de quien recibe/.test(fold(reply));
-  if (['reply','ask_branch'].includes(action) && addressReady && !state.delivery_quote_verified && !state.payment_reported && (repeatsRecipient || /domicilio|envio|cotiz/.test(fold([reply,raw.intent,lastAssistant].join(' '))))) action='human_delivery_quote';
-  else if (repeatsRecipient && action==='reply') respond('El destinatario queda registrado como '+state.recipient_name+'. ¿Qué otro dato deseas consultar o corregir?');
+  if (!agentMode && ['reply','ask_branch'].includes(action) && addressReady && !state.delivery_quote_verified && !state.payment_reported && (repeatsRecipient || /domicilio|envio|cotiz/.test(fold([reply,raw.intent,lastAssistant].join(' '))))) action='human_delivery_quote';
+  else if (!agentMode && repeatsRecipient && action==='reply') respond('El destinatario queda registrado como '+state.recipient_name+'. ¿Qué otro dato deseas consultar o corregir?');
   if (['finalize_order','human_delivery_quote','human_payment_verification','human_credit_application'].includes(action) && !state.items_verified) {
     if (action==='human_payment_verification' && state.payment_reported) { /* Verify an existing purchase even if its cart isn't in our catalog. */ }
     else if (state.items.length && branch) {action='human_product_lookup';reply='Voy a confirmar con la sede el precio y la disponibilidad de los productos para darte una cotización correcta.';}
@@ -419,7 +422,7 @@ export function normalizeDecision(context, output) {
   }
   const ready = Boolean(name && branch && state.items_verified && ['pickup','delivery'].includes(state.fulfillment_type) && (state.fulfillment_type==='pickup' || (state.delivery_address && state.delivery_zone && state.recipient_name && state.delivery_quote_verified && state.delivery_fee!==null)));
   const paymentReady = ['verified','approved','pay_at_store'].includes(state.payment_status);
-  if (!context.latest_order && !state.store_purchase_reported && ready && paymentReady && state.checkout_confirmed && ['reply','finalize_order','human_payment_verification','human_credit_application'].includes(action)) action='finalize_order';
+  if ((!agentMode || action==='finalize_order') && !context.latest_order && !state.store_purchase_reported && ready && paymentReady && state.checkout_confirmed && ['reply','finalize_order','human_payment_verification','human_credit_application'].includes(action)) action='finalize_order';
   if (action==='finalize_order') {
     if (context.latest_order) respond('Tu pedido '+context.latest_order.order_number+' ya está registrado. ¿Qué necesitas consultar sobre él?');
     else if (!name) respond('¿A nombre de quién registramos el pedido?');
@@ -469,7 +472,7 @@ export function normalizeDecision(context, output) {
   if(selectedOffer && !selectionQty && state.items.length===0) respond('¿Cuántas unidades de '+selectedOffer.name+' quieres?');
   // Checkout has an explicit order. The model can phrase discovery naturally,
   // but it cannot skip prerequisites or collect them again after taking payment.
-  const checkoutFlow=!informationalTurn && state.items.length>0 && !context.latest_order && !state.store_purchase_reported && action!=='stop'
+  const checkoutFlow=!agentMode && !informationalTurn && state.items.length>0 && !context.latest_order && !state.store_purchase_reported && action!=='stop'
     && (nameAnswer || confirmedRecipientAsBuyer || recoveredBuyerName || offerAccepted || qrChoice || paymentAttachment || explicitCheckout || itemsChanged || deliveryChanged
       || (internal && ['product_lookup','delivery_quote','payment_verification','credit_application'].includes(payload.task_type))
       || ['human_delivery_quote','human_payment_verification','human_credit_application','finalize_order'].includes(action)
@@ -478,6 +481,16 @@ export function normalizeDecision(context, output) {
     +'. '+(branches.find(b=>b.id===branch)?.name||context.branch_name||'')+'. A nombre de '+name+'. '
     +(state.fulfillment_type==='delivery'?'Domicilio: '+state.delivery_address+', '+state.delivery_zone+'; recibe '+state.recipient_name+'. Envío: $'+state.delivery_fee.toLocaleString('es-CO')+'. ':'Recogida en sede. ')
     +'Total: $'+total.toLocaleString('es-CO')+'.';
+  // In agent mode a quote is an explicit operation, not an automatic next step.
+  // Saving its exact snapshot lets a later semantic acceptance refer to real data.
+  if (agentMode && raw.action==='present_quote') {
+    if (context.latest_order) respond('Tu pedido '+context.latest_order.order_number+' ya está registrado. ¿Qué necesitas consultar sobre él?');
+    else if (!ready) respond('Todavía faltan datos o una cotización verificada para presentar el total de esta compra.');
+    else {
+      state.checkout_offer_snapshot=offerSnapshot;state.checkout_snapshot=checkoutSnapshot;state.stage='awaiting_checkout_confirmation';
+      respond(checkoutSummary()+' Para confirmar y pagar, elige QR, Addi o Sistecrédito. También puedes corregir algún dato.');
+    }
+  }
   if (qrChoice) state.qr_requested=true;
   if (checkoutFlow) {
     if (paymentAttachment && !paymentReady) {
@@ -523,7 +536,7 @@ export function normalizeDecision(context, output) {
   if (context.delivery_open===false && (action==='human_delivery_quote' || (action==='finalize_order' && state.fulfillment_type==='delivery'))) respond('Los domicilios se gestionan hasta las 7:00 p. m. Podemos continuar al abrir a las 9:00 a. m. o revisar recogida en sede.');
   const authorizedPendingQr=previous.qr_requested===true && state.checkout_confirmed && !previous.awaiting_payment_proof;
   let sendQr = (!interestTurn || checkoutFlow) && (raw.request_qr===true || qrChoice || authorizedPendingQr) && Boolean(context.payment_qr?.available) && !contextBranchChanged && state.payment_method==='transfer' && !['verified','approved'].includes(state.payment_status) && action!=='stop';
-  if (sendQr && !/(\bqr\b|transferencia|codigo)/.test(customerText) && !instruction && !authorizedPendingQr) sendQr=false;
+  if (!agentMode && sendQr && !/(\bqr\b|transferencia|codigo)/.test(customerText) && !instruction && !authorizedPendingQr) sendQr=false;
   if (state.items.length && (!ready || !state.checkout_confirmed)) sendQr=false;
   if (sendQr) {state.awaiting_payment_proof=true;state.qr_requested=false;}
   if (sendQr) {reply='Te comparto el QR de '+context.branch_name+'. Cuando hagas la transferencia, envíame el comprobante para que el equipo lo verifique.';}
