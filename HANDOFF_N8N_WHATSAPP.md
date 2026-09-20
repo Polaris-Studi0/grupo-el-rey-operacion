@@ -1,5 +1,7 @@
 # Traspaso de contexto — Grupo Almacenes El Rey
 
+**19 de septiembre: BOT COMERCIAL PAUSADO por solicitud urgente del usuario.** Solo está activo el aviso temporal de atención humana en 01; 03 no ejecuta IA y 05 está despublicado. No reactivar automáticamente. Leer `n8n/MANTENIMIENTO_20260919.md`. El trabajo experimental con herramientas queda aplazado.
+
 Actualizado: 8 de septiembre de 2026 (America/Bogota)
 
 ## Última revisión del bot
