@@ -24,13 +24,13 @@ do $backup$
 declare table_name text;
 begin
   foreach table_name in array array['whatsapp_contacts','whatsapp_conversations','privacy_consents',
-    'whatsapp_messages','whatsapp_attachments','whatsapp_message_status_events','conversation_events',
+    'whatsapp_messages','whatsapp_shared_media','whatsapp_bot_jobs','whatsapp_attachments','whatsapp_message_status_events','conversation_events',
     'ai_runs','human_tasks','whatsapp_webhook_inbox','automation_outbox','orders','order_events',
     'inventory_reservations','inventory_movements'] loop
     execute format('insert into elrey_test_backups.whatsapp_20260909(table_name,row_data) select %L,to_jsonb(t) from public.%I t',table_name,table_name);
   end loop;
 end $backup$;
-truncate table public.whatsapp_attachments,public.whatsapp_message_status_events,public.conversation_events,
+truncate table public.whatsapp_shared_media,public.whatsapp_bot_jobs,public.whatsapp_attachments,public.whatsapp_message_status_events,public.conversation_events,
   public.ai_runs,public.privacy_consents,public.human_tasks,public.automation_outbox,
   public.whatsapp_webhook_inbox,public.inventory_movements,public.inventory_reservations,
   public.order_events,public.orders,public.whatsapp_messages,public.whatsapp_conversations,public.whatsapp_contacts;

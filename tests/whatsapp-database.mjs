@@ -4,7 +4,7 @@ import {normalizeDecision} from '../n8n/commercial/normalize.js';
 import {fileURLToPath} from 'node:url';
 import {readFile,readdir} from 'node:fs/promises';
 const root=fileURLToPath(new URL('..',import.meta.url)).replace(/\/$/,'');
-process.on('uncaughtException',error=>{console.error(error.message, error.where||'');process.exit(1);});
+process.on('uncaughtException',error=>{console.error(error.stack, error.where||'');process.exit(1);});
 const db=new PGlite();
 await db.exec(`create role anon; create role authenticated; create role service_role; create schema auth; create schema storage;
 create table auth.users(id uuid primary key,email text,raw_user_meta_data jsonb);
@@ -28,7 +28,7 @@ async function fixture(){
  const n=++serial;
  const contact=(await db.query("insert into whatsapp_contacts(phone_e164,whatsapp_id,preferred_name) values($1,$1,'Cliente de prueba') returning id",['+57000000'+String(n).padStart(4,'0')])).rows[0];
  const c=(await db.query("insert into whatsapp_conversations(contact_id,branch_id,consent_status,consent_version,consented_at) values($1,'b1','granted','local-test',now()) returning id",[contact.id])).rows[0];
- const m=(await db.query("insert into whatsapp_messages(conversation_id,direction,sender_type,message_type,body) values($1,'inbound','customer','text','Confirmo') returning id",[c.id])).rows[0];
+ const m=(await db.query("insert into whatsapp_messages(conversation_id,direction,sender_type,message_type,body,created_at) values($1,'inbound','customer','text','Confirmo',now()-interval '1 second') returning id",[c.id])).rows[0];
  return {c:c.id,m:m.id};
 }
 const persist=async(f,ai)=>(await db.query('select public.persist_whatsapp_commercial_response($1,$2,$3,$4) as r',[f.m,f.c,JSON.stringify(ai),'[]'])).rows[0].r;
@@ -205,7 +205,7 @@ console.log('PASS cancelled selection clears checkout, cancels tasks, filters hi
 const cleanup=await readFile(root+'/scripts/reset-whatsapp-test-history.sql','utf8');
 await assert.rejects(db.exec(cleanup),/datos ajenos/);await db.exec('rollback');
 assert.ok((await db.query('select count(*)::int as n from orders')).rows[0].n>0);
-await db.exec(`truncate whatsapp_attachments,whatsapp_message_status_events,conversation_events,ai_runs,privacy_consents,
+await db.exec(`truncate whatsapp_shared_media,whatsapp_bot_jobs,whatsapp_attachments,whatsapp_message_status_events,conversation_events,ai_runs,privacy_consents,
  human_tasks,automation_outbox,whatsapp_webhook_inbox,inventory_movements,inventory_reservations,order_events,orders,
  whatsapp_messages,whatsapp_conversations,whatsapp_contacts;`);
 await db.query("insert into whatsapp_contacts(phone_e164) values('+573127378289')");
@@ -242,5 +242,6 @@ assert.equal(selectedOption.sales_state.items[0].qty,1);assert.equal(selectedOpt
 await persist({c:optionFlow.c,m:nextMessage.id},selectedOption);
 assert.equal((await db.query("select count(*)::int as n from human_tasks where conversation_id=$1 and status='pending'",[optionFlow.c])).rows[0].n,0);
 console.log('PASS verified options persist across messages and natural selection advances without creating another stock task');
+await (await import('./whatsapp-v2-database.mjs')).runV2Scenarios(db);
 await db.close();
 console.log('All database scenarios passed in isolated PostgreSQL; no network or live messages.');
