@@ -4,6 +4,9 @@ const HEALTH_PATH = "/api/whatsapp/health";
 const AUTOMATION_WAKE_PATH = "/api/automation/wake";
 const OPERATOR_ACTION_PATH = "/api/operator/conversation";
 const OPERATOR_MEDIA_PATH = "/api/operator/media";
+const PQRS_PATH = "/api/pqrs";
+const PQRS_STATUS_PATH = "/api/pqrs/status";
+const PQRS_ADMIN_PATH = "/api/pqrs/admin";
 const PRIVACY_PATH = "/privacidad";
 const DATA_DELETION_PATH = "/eliminacion-de-datos";
 
@@ -13,6 +16,27 @@ function response(body, status = 200, headers = {}){
 
 function json(body, status = 200){
   return new Response(JSON.stringify(body), { status, headers: { "content-type":"application/json; charset=utf-8", "cache-control":"no-store" } });
+}
+
+const PQRS_PUBLIC_ORIGINS=new Set([
+  "https://almaceneselrey.co",
+  "https://www.almaceneselrey.co",
+  "http://localhost:8080",
+  "http://127.0.0.1:8080"
+]);
+
+function pqrsCorsHeaders(request){
+  const origin=request.headers.get("origin")||"";
+  return {
+    ...(PQRS_PUBLIC_ORIGINS.has(origin)?{"access-control-allow-origin":origin,"vary":"origin"}:{}),
+    "access-control-allow-methods":"POST,PATCH,OPTIONS",
+    "access-control-allow-headers":"content-type,authorization",
+    "access-control-max-age":"86400"
+  };
+}
+
+function pqrsJson(request,body,status=200){
+  return new Response(JSON.stringify(body),{status,headers:{"content-type":"application/json; charset=utf-8","cache-control":"no-store",...pqrsCorsHeaders(request)}});
 }
 
 function legalPage(title,description,content){
@@ -489,6 +513,162 @@ async function operatorMediaAction(request,env){
   }catch(error){return json({error:error.message||"No fue posible recuperar el archivo"},502);}
 }
 
+function cleanPqrsText(value,maxLength){
+  return String(value||"").split(String.fromCharCode(0)).join("").trim().slice(0,maxLength);
+}
+
+function validPqrsEmail(value){
+  return /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/i.test(value)&&value.length<=254;
+}
+
+function escapeEmailHtml(value){
+  return String(value||"").replace(/[&<>"']/g,character=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"})[character]);
+}
+
+async function pqrsRest(path,options,env){
+  const result=await fetch(`${env.SUPABASE_URL}/rest/v1/${path}`,{...options,headers:supabaseHeaders(env,options?.headers||{})});
+  const payload=await result.json().catch(()=>null);
+  if(!result.ok)throw new Error(payload?.message||payload?.error||`Supabase respondió ${result.status}`);
+  return payload;
+}
+
+async function logPqrsEmail(caseId,recipient,template,status,providerMessageId,error,env){
+  try{
+    await pqrsRest("pqrs_email_log",{method:"POST",headers:{prefer:"return=minimal"},body:JSON.stringify({case_id:caseId,recipient,template,status,provider_message_id:providerMessageId||null,error:error||null})},env);
+  }catch(logError){console.error("PQRS email log failed",logError.message);}
+}
+
+async function sendPqrsEmail({caseId,to,subject,html,template,replyTo},env){
+  if(!env.RESEND_API_KEY||!env.PQRS_FROM_EMAIL){
+    await logPqrsEmail(caseId,to,template,"skipped",null,"Resend no está configurado",env);
+    return {sent:false,skipped:true};
+  }
+  try{
+    const result=await fetch("https://api.resend.com/emails",{
+      method:"POST",
+      headers:{authorization:`Bearer ${env.RESEND_API_KEY}`,"content-type":"application/json"},
+      body:JSON.stringify({from:env.PQRS_FROM_EMAIL,to:[to],subject,html,...(replyTo?{reply_to:replyTo}:{})})
+    });
+    const payload=await result.json().catch(()=>({}));
+    if(!result.ok)throw new Error(payload?.message||`Resend respondió ${result.status}`);
+    await logPqrsEmail(caseId,to,template,"sent",payload.id,null,env);
+    return {sent:true,id:payload.id};
+  }catch(error){
+    await logPqrsEmail(caseId,to,template,"failed",null,error.message,env);
+    console.error("PQRS email failed",error.message);
+    return {sent:false,error:error.message};
+  }
+}
+
+function pqrsEmailLayout(title,body){
+  return `<!doctype html><html lang="es"><body style="margin:0;background:#f5f2e9;font-family:Arial,sans-serif;color:#171715"><div style="max-width:650px;margin:0 auto;padding:36px 18px"><div style="background:#111;padding:24px;border-radius:18px 18px 0 0;color:#fbbb2e;font-size:22px;font-weight:800">Almacenes El Rey</div><div style="background:#fff;padding:30px;border-radius:0 0 18px 18px;border:1px solid #e5dfd0"><h1 style="font-size:25px;margin:0 0 18px">${escapeEmailHtml(title)}</h1>${body}<p style="margin-top:28px;color:#777;font-size:13px">Este mensaje fue generado por el sistema de PQRS de Grupo Almacenes El Rey.</p></div></div></body></html>`;
+}
+
+async function uploadPqrsAttachments(caseRecord,files,env){
+  const allowed=new Set(["image/jpeg","image/png","image/webp","application/pdf"]);
+  const uploaded=[];
+  for(const file of files.slice(0,3)){
+    if(!(file instanceof File)||file.size<1)continue;
+    const mimeType=String(file.type||"").toLowerCase();
+    if(!allowed.has(mimeType)||file.size>5*1024*1024)throw new Error("Cada archivo debe ser JPG, PNG, WEBP o PDF y pesar máximo 5 MB.");
+    const extension=({"image/jpeg":"jpg","image/png":"png","image/webp":"webp","application/pdf":"pdf"})[mimeType];
+    const storagePath=`${caseRecord.id}/${crypto.randomUUID()}.${extension}`;
+    const upload=await fetch(`${env.SUPABASE_URL}/storage/v1/object/pqrs-files/${storagePath.split("/").map(encodeURIComponent).join("/")}`,{method:"POST",headers:supabaseHeaders(env,{"content-type":mimeType,"x-upsert":"false"}),body:await file.arrayBuffer()});
+    if(!upload.ok)throw new Error(`No fue posible guardar ${file.name}.`);
+    await pqrsRest("pqrs_attachments",{method:"POST",headers:{prefer:"return=minimal"},body:JSON.stringify({case_id:caseRecord.id,storage_path:storagePath,original_name:cleanPqrsText(file.name,255)||`archivo.${extension}`,mime_type:mimeType,size_bytes:file.size,uploaded_by_customer:true})},env);
+    uploaded.push(storagePath);
+  }
+  return uploaded;
+}
+
+async function createPqrs(request,env){
+  if(!env.SUPABASE_URL||!supabaseKey(env))return pqrsJson(request,{error:"El servicio de PQRS no está disponible temporalmente."},503);
+  let form;
+  try{form=await request.formData();}catch{return pqrsJson(request,{error:"No fue posible leer el formulario."},400);}
+  if(cleanPqrsText(form.get("company"),100))return pqrsJson(request,{error:"Solicitud inválida."},400);
+  const type=cleanPqrsText(form.get("type"),30);
+  const customerName=cleanPqrsText(form.get("customer_name"),150);
+  const customerEmail=cleanPqrsText(form.get("customer_email"),254).toLowerCase();
+  const subject=cleanPqrsText(form.get("subject"),180);
+  const description=cleanPqrsText(form.get("description"),5000);
+  const allowedTypes=new Set(["peticion","queja","reclamo","sugerencia","felicitacion"]);
+  if(!allowedTypes.has(type)||customerName.length<2||!validPqrsEmail(customerEmail)||subject.length<4||description.length<10||form.get("privacy_accepted")!=="true"){
+    return pqrsJson(request,{error:"Revisa los campos obligatorios y acepta el tratamiento de datos."},422);
+  }
+  const branchId=cleanPqrsText(form.get("branch_id"),10)||null;
+  if(branchId&&!/^b(?:10|[1-9])$/.test(branchId))return pqrsJson(request,{error:"La sede seleccionada no es válida."},422);
+  const tokenBytes=crypto.getRandomValues(new Uint8Array(24));
+  const accessToken=bytesToHex(tokenBytes);
+  const tokenHash=await sha256(new TextEncoder().encode(accessToken));
+  let created;
+  try{
+    const rows=await pqrsRest("pqrs_cases",{method:"POST",headers:{prefer:"return=representation"},body:JSON.stringify({
+      case_number:"",type,status:"received",customer_name:customerName,document_number:cleanPqrsText(form.get("document_number"),40)||null,
+      customer_email:customerEmail,customer_phone:cleanPqrsText(form.get("customer_phone"),40)||null,branch_id:branchId,
+      subject,description,consultation_token_hash:tokenHash,privacy_accepted_at:new Date().toISOString()
+    })},env);
+    created=rows?.[0];
+    if(!created)throw new Error("No se generó el radicado.");
+    const files=form.getAll("attachments").filter(item=>item instanceof File&&item.size>0);
+    await uploadPqrsAttachments(created,files,env);
+  }catch(error){
+    console.error("PQRS creation failed",error.message);
+    return pqrsJson(request,{error:error.message||"No fue posible radicar la solicitud."},500);
+  }
+  const publicUrl=`https://almaceneselrey.co/?pqrs=consultar&radicado=${encodeURIComponent(created.case_number)}`;
+  const customerBody=`<p>Hola <strong>${escapeEmailHtml(created.customer_name)}</strong>, recibimos tu ${escapeEmailHtml(created.type)}.</p><p style="font-size:18px">Tu número de radicado es <strong>${escapeEmailHtml(created.case_number)}</strong>.</p><p>Conserva este número y tu correo para consultar el estado.</p><p><a href="${publicUrl}" style="display:inline-block;background:#fbbb2e;color:#111;padding:13px 18px;border-radius:8px;text-decoration:none;font-weight:800">Consultar estado</a></p>`;
+  const internalBody=`<p>Se recibió una nueva PQRS.</p><p><strong>Radicado:</strong> ${escapeEmailHtml(created.case_number)}<br><strong>Tipo:</strong> ${escapeEmailHtml(created.type)}<br><strong>Cliente:</strong> ${escapeEmailHtml(created.customer_name)}<br><strong>Asunto:</strong> ${escapeEmailHtml(created.subject)}</p><p>Ingresa a la intranet para revisarla y responderla.</p>`;
+  const customerDelivery=await sendPqrsEmail({caseId:created.id,to:created.customer_email,subject:`Recibimos tu PQRS ${created.case_number}`,html:pqrsEmailLayout("PQRS recibida",customerBody),template:"case_received",replyTo:env.PQRS_REPLY_TO_EMAIL||undefined},env);
+  if(env.PQRS_NOTIFICATION_EMAIL)await sendPqrsEmail({caseId:created.id,to:env.PQRS_NOTIFICATION_EMAIL,subject:`Nueva PQRS ${created.case_number}`,html:pqrsEmailLayout("Nueva PQRS",internalBody),template:"internal_notification"},env);
+  return pqrsJson(request,{ok:true,case_number:created.case_number,email_sent:Boolean(customerDelivery.sent)},201);
+}
+
+async function consultPqrs(request,env){
+  let body;
+  try{body=await request.json();}catch{return pqrsJson(request,{error:"Solicitud inválida."},400);}
+  const caseNumber=cleanPqrsText(body.case_number,30).toUpperCase();
+  const email=cleanPqrsText(body.email,254).toLowerCase();
+  if(!/^PQR-\d{4}-\d{6}$/.test(caseNumber)||!validPqrsEmail(email))return pqrsJson(request,{error:"Ingresa el radicado y el correo usados al crear la PQRS."},422);
+  try{
+    const cases=await pqrsRest(`pqrs_cases?case_number=eq.${encodeURIComponent(caseNumber)}&customer_email=eq.${encodeURIComponent(email)}&select=id,case_number,type,status,subject,latest_response,responded_at,created_at,updated_at`,{method:"GET"},env);
+    const found=cases?.[0];
+    if(!found)return pqrsJson(request,{error:"No encontramos una PQRS con esos datos."},404);
+    const events=await pqrsRest(`pqrs_events?case_id=eq.${encodeURIComponent(found.id)}&public_visible=eq.true&select=event_type,to_status,message,created_at&order=created_at.asc`,{method:"GET"},env);
+    return pqrsJson(request,{case:{...found,id:undefined},events});
+  }catch{return pqrsJson(request,{error:"No fue posible consultar el estado."},500);}
+}
+
+async function updatePqrs(request,env,caseId){
+  const operator=await authenticatedOperator(request,env);
+  if(!operator)return pqrsJson(request,{error:"Unauthorized"},401);
+  let body;
+  try{body=await request.json();}catch{return pqrsJson(request,{error:"Invalid JSON"},400);}
+  const statuses=new Set(["received","in_review","awaiting_information","completed","closed"]);
+  const nextStatus=cleanPqrsText(body.status,30);
+  const responseMessage=cleanPqrsText(body.response_message,5000);
+  const internalNotes=cleanPqrsText(body.internal_notes,5000);
+  if(!statuses.has(nextStatus))return pqrsJson(request,{error:"Estado inválido."},422);
+  try{
+    const current=(await pqrsRest(`pqrs_cases?id=eq.${encodeURIComponent(caseId)}&select=*`,{method:"GET"},env))?.[0];
+    if(!current)return pqrsJson(request,{error:"PQRS no encontrada."},404);
+    const now=new Date().toISOString();
+    const update={status:nextStatus,internal_notes:internalNotes||null,assigned_to:operator.id,updated_at:now};
+    if(responseMessage){update.latest_response=responseMessage;update.responded_at=now;}
+    if(nextStatus==="completed"&&!current.completed_at)update.completed_at=now;
+    if(nextStatus==="closed"&&!current.closed_at)update.closed_at=now;
+    const saved=(await pqrsRest(`pqrs_cases?id=eq.${encodeURIComponent(caseId)}`,{method:"PATCH",headers:{prefer:"return=representation"},body:JSON.stringify(update)},env))?.[0];
+    const profile=(await pqrsRest(`profiles?id=eq.${encodeURIComponent(operator.id)}&select=full_name`,{method:"GET"},env))?.[0];
+    await pqrsRest("pqrs_events",{method:"POST",headers:{prefer:"return=minimal"},body:JSON.stringify({case_id:caseId,event_type:responseMessage?"response":"status_changed",from_status:current.status,to_status:nextStatus,message:responseMessage||`Estado actualizado a ${nextStatus}.`,public_visible:Boolean(responseMessage)||current.status!==nextStatus,actor_id:operator.id,actor_name:profile?.full_name||"Equipo El Rey"})},env);
+    let emailSent=false;
+    if(responseMessage){
+      const bodyHtml=`<p>Hola <strong>${escapeEmailHtml(current.customer_name)}</strong>,</p><p>Tenemos una actualización para tu PQRS <strong>${escapeEmailHtml(current.case_number)}</strong>:</p><div style="padding:18px;background:#f8f5ec;border-left:4px solid #fbbb2e;white-space:pre-line">${escapeEmailHtml(responseMessage)}</div><p><strong>Estado:</strong> ${escapeEmailHtml(nextStatus)}</p>`;
+      const delivery=await sendPqrsEmail({caseId,to:current.customer_email,subject:`Respuesta a tu PQRS ${current.case_number}`,html:pqrsEmailLayout("Actualización de tu PQRS",bodyHtml),template:"case_response",replyTo:env.PQRS_REPLY_TO_EMAIL||undefined},env);
+      emailSent=Boolean(delivery.sent);
+    }
+    return pqrsJson(request,{ok:true,case:saved,email_sent:emailSent});
+  }catch(error){console.error("PQRS update failed",error.message);return pqrsJson(request,{error:error.message||"No fue posible actualizar la PQRS."},500);}
+}
+
 function health(env){
   return json({ok:true,webhookVerification:Boolean(env.WHATSAPP_VERIFY_TOKEN),signatureVerification:Boolean(env.WHATSAPP_APP_SECRET),inbox:Boolean(env.SUPABASE_URL&&supabaseKey(env)),automation:Boolean(env.N8N_WEBHOOK_URL&&env.N8N_WEBHOOK_SECRET),automationWake:Boolean(env.N8N_AUTOMATION_URL&&env.N8N_WEBHOOK_SECRET),outboundMessaging:Boolean(env.WHATSAPP_ACCESS_TOKEN&&env.WHATSAPP_PHONE_NUMBER_ID&&env.N8N_GATEWAY_SECRET)});
 }
@@ -499,6 +679,14 @@ export default {
   },
   async fetch(request,env,context){
     const url = new URL(request.url);
+    if((url.pathname===PQRS_PATH||url.pathname===PQRS_STATUS_PATH||url.pathname.startsWith(`${PQRS_ADMIN_PATH}/`))&&request.method==="OPTIONS")return new Response(null,{status:204,headers:pqrsCorsHeaders(request)});
+    if(url.pathname===PQRS_PATH&&request.method==="POST")return createPqrs(request,env);
+    if(url.pathname===PQRS_STATUS_PATH&&request.method==="POST")return consultPqrs(request,env);
+    if(url.pathname.startsWith(`${PQRS_ADMIN_PATH}/`)&&request.method==="PATCH"){
+      const caseId=url.pathname.slice(`${PQRS_ADMIN_PATH}/`.length);
+      if(!/^[0-9a-f-]{36}$/i.test(caseId))return pqrsJson(request,{error:"Identificador inválido."},400);
+      return updatePqrs(request,env,caseId);
+    }
     if(url.pathname===WEBHOOK_PATH&&request.method==="GET")return verifySubscription(request,env);
     if(url.pathname===WEBHOOK_PATH&&request.method==="POST")return receiveWebhook(request,env,context);
     if(url.pathname===SEND_PATH&&request.method==="POST")return sendWhatsApp(request,env);

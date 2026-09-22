@@ -196,3 +196,44 @@ export function subscribeToChatbot(onChange){
   channel.subscribe();
   return ()=>supabase.removeChannel(channel);
 }
+
+export async function listPqrsCases(){
+  if(isDemoMode) return [];
+  const {data,error}=await supabase.from("pqrs_cases").select("*, branch:branches(id,name), attachments:pqrs_attachments(*)").order("created_at",{ascending:false});
+  if(error)throw error;
+  return data;
+}
+
+export async function listPqrsEvents(caseId){
+  if(isDemoMode)return [];
+  const {data,error}=await supabase.from("pqrs_events").select("*").eq("case_id",caseId).order("created_at",{ascending:true});
+  if(error)throw error;
+  return data;
+}
+
+export async function updatePqrsCase(caseId,values){
+  if(isDemoMode)throw new Error("La gestión de PQRS requiere conexión con Supabase.");
+  const {data:sessionData}=await supabase.auth.getSession();
+  const accessToken=sessionData.session?.access_token;
+  const response=await fetch(`/api/pqrs/admin/${encodeURIComponent(caseId)}`,{
+    method:"PATCH",
+    headers:{"content-type":"application/json",...(accessToken?{authorization:`Bearer ${accessToken}`}:{})},
+    body:JSON.stringify(values)
+  });
+  const result=await response.json().catch(()=>({}));
+  if(!response.ok)throw new Error(result.error||"No fue posible actualizar la PQRS.");
+  return result;
+}
+
+export async function getPqrsAttachmentUrl(path){
+  if(isDemoMode)return "";
+  const {data,error}=await supabase.storage.from("pqrs-files").createSignedUrl(path,300);
+  if(error)throw error;
+  return data.signedUrl;
+}
+
+export function subscribeToPqrs(onChange){
+  if(isDemoMode)return()=>{};
+  const channel=supabase.channel(`pqrs-live-${crypto.randomUUID()}`).on("postgres_changes",{event:"*",schema:"public",table:"pqrs_cases"},onChange).subscribe();
+  return()=>supabase.removeChannel(channel);
+}

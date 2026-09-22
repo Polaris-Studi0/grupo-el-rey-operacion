@@ -7,7 +7,10 @@
   "keep_vars": true,
   "triggers": { "crons": ["* * * * *"] },
   "vars": {
-    "N8N_AUTOMATION_URL": "https://almaceneselrey.app.n8n.cloud/webhook/el-rey-whatsapp-automation"
+    "N8N_AUTOMATION_URL": "https://almaceneselrey.app.n8n.cloud/webhook/el-rey-whatsapp-automation",
+    "PQRS_NOTIFICATION_EMAIL": "elrey@polaris-studio.tech",
+    "PQRS_FROM_EMAIL": "PQRS Almacenes El Rey <pqrs@almaceneselrey.co>",
+    "PQRS_REPLY_TO_EMAIL": "elrey@polaris-studio.tech"
   },
   "assets": {
     "directory": "./dist",
