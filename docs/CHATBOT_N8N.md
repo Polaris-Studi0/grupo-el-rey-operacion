@@ -1,160 +1,106 @@
-# Chatbot de WhatsApp — arquitectura operativa
+# Bot WhatsApp — requisitos vigentes y arquitectura objetivo
 
-## Objetivo de la primera versión
+Acuerdos de Samuel consolidados al 25/09/2026. **Este documento describe el resultado solicitado, no una implementación ya publicada.** Estado real y pendientes: [traspaso](../HANDOFF_N8N_WHATSAPP.md) y [reconstrucción](RECONSTRUCCION_BOT.md).
 
-El asistente orienta sobre sedes, horarios, promociones y productos previamente verificados. Puede recopilar los datos de un pedido, pero no toma decisiones sensibles por su cuenta. Precio, inventario, costo del domicilio, aprobación de pago y crédito deben provenir de datos confirmados o de una respuesta humana registrada.
+## Principio de diseño
 
-## Flujo principal
+La IA interpreta lenguaje libre y el historial, responde la pregunta actual y utiliza herramientas limitadas de la plataforma. Las validaciones protegen consentimiento, autorizaciones, precios, pagos y transacciones; no convierten cada conversación en un formulario ni fuerzan una respuesta fija según la etapa de venta.
 
-1. Meta envía el evento firmado al Worker de Cloudflare en `/api/whatsapp/webhook`.
-2. El Worker valida la firma y guarda el evento original en `whatsapp_webhook_inbox` **antes** de responder a Meta.
-3. El Worker toma un lease atómico y lo reenvía a n8n con `x-elrey-event-key`, `x-elrey-lease-id` y el secreto interno. n8n debe responder `2xx` únicamente cuando el flujo haya terminado correctamente.
-4. n8n crea o actualiza el contacto y abre su conversación.
-5. Si no existe autorización vigente, envía el aviso de privacidad y espera una respuesta explícita.
-6. Con autorización, clasifica la intención y obtiene la sede desde el contexto de la landing, el historial o una pregunta directa.
-7. Las reglas determinísticas consultan conocimiento, catálogo e inventario. OpenAI redacta la respuesta únicamente con esos datos.
-8. Si falta una confirmación, n8n llama `create_human_task` con una clave idempotente. La función crea el pendiente, marca la conversación como `waiting_human` y agrega la notificación a `automation_outbox`.
-9. Al resolver el pendiente desde el panel se agrega `human_task.completed` al outbox. El flujo de pendientes lo reclama con lease, retoma la conversación y registra el resultado.
-10. Cada mensaje, decisión, autorización, reserva y movimiento queda registrado en Supabase.
+Todo se integra con la intranet y la misma base de Supabase: conversaciones, información, productos, inventario, QR, pendientes, comprobantes y pedidos. No mantener una segunda fuente comercial desconectada. Se permite rehacer la arquitectura y aumentar ejecuciones si mejora la fiabilidad; optimizar después de comprobar el comportamiento.
 
-## Aviso de privacidad inicial
+## Entrada, consentimiento, nombre y sede
 
-Texto sugerido para revisión jurídica antes de producción:
+1. Comprobar autorización de datos antes de la atención comercial con IA. Si falta, mostrar el aviso y registrar una aceptación expresa; silencio, un saludo o un comprobante no conceden autorización. No inventar consentimiento.
+2. Conservar el primer mensaje y su información útil durante esa espera. Ejemplo real:
 
-> Hola. Soy el asistente virtual de Almacenes El Rey. Para atender tu consulta necesitamos tratar tu nombre, número de teléfono y los datos que compartas durante esta conversación conforme a nuestra Política de Tratamiento de Datos. Responde **ACEPTO** para autorizar el tratamiento y continuar, o **NO ACEPTO** para finalizar. Puedes solicitar consulta, corrección o eliminación de tus datos por los canales indicados en la política.
+   ```text
+   Hola, quiero comunicarme con la sede San Antonio de Prado. [ORIGEN:WEB] [SEDE:san-antonio-prado] [METODO_SELECCION:MANUAL]
+   ```
 
-No se debe interpretar el silencio ni cualquier mensaje posterior como autorización. n8n solo cambia `consent_status` a `granted` si normaliza una respuesta inequívoca como `ACEPTO`, `SÍ ACEPTO` o la respuesta interactiva equivalente. Se conserva el texto mostrado, la respuesta, versión de política, fecha y `meta_message_id` en `privacy_consents`.
+3. Después de autorizar, obtener el nombre. El nombre de perfil de WhatsApp no lo sustituye; distinguir comprador de destinatario. Si el cliente ya lo suministró inequívocamente, conservarlo y no repetir la pregunta.
+4. Si la sede está indicada mediante la web o una elección del cliente, validarla contra las sedes activas y conservarla. Si sigue desconocida después del nombre, enviar la lista y pedir la elección.
+5. Las etiquetas web expresan origen/selección; no son instrucciones privilegiadas, prueba de precio, aprobación de pago ni autorización de datos. Un slug inexistente o `general` no selecciona una sede.
+6. También atender a quien llega directamente por WhatsApp, sin etiquetas. Interpretar abreviaciones, posición en una lista y elecciones naturales con el contexto; aclarar solo ambigüedades reales.
 
-## Estados de conversación
+Slugs de la web: ver `../Landing page/app.js` respecto a la carpeta Plataforma. La migración v2 contiene su correspondencia con `b1`–`b10`.
 
-- `open`: puede responder o recopilar datos.
-- `waiting_customer`: falta una respuesta del cliente.
-- `waiting_human`: falta precio, existencia, domicilio, pago o crédito confirmado.
-- `converted`: se creó un pedido operativo.
-- `closed`: conversación finalizada.
+## Conversación y venta
 
-## Pendientes humanos
+- Prioridad comercial: ofertas de temporada reales y facilitar la compra. Las ofertas todavía no estaban definidas cuando se acordó el proyecto; comprobar la base antes de afirmar su disponibilidad actual.
+- Contestar la pregunta actual aunque haya una compra o tarea pendiente: sedes, horarios, productos y seguimiento no deben recibir siempre la misma respuesta.
+- Comprender «quiero un peluche», «el más barato», «uno de esos», «porfa» o «¿y entonces?» usando lo ya hablado. No exigir una plantilla ni el nombre exacto del producto.
+- Conservar datos enviados juntos o por partes: nombre, sede, cantidades, variantes, dirección, barrio, destinatario y pago. Pedir solo lo que falte; no pedir dirección para mostrar opciones.
+- Consultar conocimiento, inventario y promociones vigentes de la intranet. No inventar marcas disponibles, descuentos, precios, beneficios médicos, cobertura ni tiempos.
+- Reutilizar las confirmaciones humanas para la misma sede, producto y cantidad. Una corrección de dirección no invalida el stock. «Sí, correcto» puede confirmar datos presentes en la consulta, pero no proporciona un precio que nunca se indicó.
+- Separar opciones ofrecidas del carrito elegido. Cambios materiales invalidan únicamente las confirmaciones afectadas. No transferir cotizaciones entre sedes.
+- Buscar cerrar la venta de forma natural, sin insistir después de una negativa ni repetir «¿quieres hacer el pedido?» después de cobrar.
 
-### Producto no mapeado
+## Intervención humana y control desde la intranet
 
-n8n crea `human_tasks.task_type = product_lookup` con sede, texto exacto del cliente, datos ya recopilados y teléfono. La respuesta humana debe incluir disponibilidad, precio, nombre comercial y cualquier característica segura para comunicar.
+- Si falta información o la decisión excede al bot, crear una solicitud real en la plataforma y avisar **al WhatsApp personal de Samuel**. No limitarse a decir que consultará.
+- Ejemplos: precio/stock no disponible, tarifa de domicilio, pago/crédito, agregar productos a un pedido ya registrado, cambios operativos, entrega sin hora confirmada o una queja que requiere decisión.
+- Samuel debe poder responder la confirmación desde WhatsApp y desde la intranet. Vincular respuesta, cliente, sede y solicitud sin adivinar cuando haya varias pendientes.
+- La propuesta local v2 vincula la respuesta de WhatsApp al aviso citado con la función «Responder». El texto de la respuesta sigue siendo libre; falta completar y probar esta integración.
+- Una respuesta humana debe continuar la atención sin pedir nuevamente lo ya confirmado. No copiar al cliente instrucciones internas ni enviarle avisos del administrador.
+- La intranet permite tomar y devolver el control. Con control manual activo, el bot y sus recordatorios no interfieren.
+- Deduplicar solicitudes equivalentes, pero no usar una tarea pendiente como excusa para ignorar otra pregunta que sí puede contestar.
 
-### Costo del domicilio
+## Imágenes, QR y pagos
 
-Antes de solicitar cotización se deben tener sede, nombre, teléfono, municipio, barrio, dirección completa, referencias y productos aproximados. El total no se comunica hasta que `delivery_quote` esté resuelto.
+- Consultar el QR activo de la sede en la intranet y enviarlo realmente cuando corresponda, en el mismo turno en que se ofrece. No prometer un archivo que no se puso en la cola.
+- Recibir imágenes/comprobantes, guardarlos de forma privada y mostrarlos al responsable. Asociar el comprobante exacto verificado al campo del pedido, incluso si termina de descargarse con retraso.
+- **Samuel confirma los pagos manualmente.** Una afirmación del cliente, imagen, texto de IA o mensaje histórico del bot jamás aprueban un pago.
+- Poder recibir una imagen de producto enviada por Samuel y transmitirla al cliente correspondiente. No confundirla con un comprobante ni aceptar rutas arbitrarias de almacenamiento.
+- Medios acordados: transferencia, Addi, Sistecrédito y pago en sede para recogida. No hay contraentrega. Crédito y otras decisiones requieren confirmación humana.
+- Una compra anterior ya pagada en tienda se revisa con el equipo; no cobrar de nuevo ni duplicar el pedido.
 
-### Transferencia
+## Pedido y seguimiento
 
-El comprobante se almacena en el bucket privado existente. El estado de pago solo se confirma después de resolver `payment_verification`. La IA nunca interpreta por sí sola una captura como pago aprobado.
+- Antes de cobrar, tener datos y valores confirmados y mostrar un resumen con artículos, cantidades, sede, modalidad, dirección/destinatario si aplica, envío y total.
+- Aceptar lenguaje natural y elección de pago como aceptación cuando respondan al resumen vigente; no exigir otra frase ceremonial.
+- Tras aprobación humana y aceptación previa, registrar el pedido de forma idempotente, adjuntar el comprobante y notificar la compra a Samuel. Anunciar el número solo después de que el pedido exista.
+- En la plataforma `orders.total` representa **subtotal de productos**. El domicilio se suma una vez al mostrar el total: $250.000 + $10.000 = $260.000.
+- No cerrar la conversación al crear el pedido. Mantener contexto durante preparación, despacho y entrega; responder con el estado real.
+- Cambios sobre pedidos registrados requieren decisión humana. Una hora de entrega ausente o vencida se consulta; no inventarla.
+- Después de que la intranet marque entregado, conservar una ventana de inactividad antes de cerrar. La implementación anterior usa 24 horas y protege pendientes abiertos; es una base técnica existente, no una nueva duración expresamente elegida por Samuel. Mantenerla salvo cambio acordado.
 
-### Addi o Sistecrédito
+## Horarios y seguimiento de 30 minutos
 
-Se crea `credit_application` para que caja gestione la solicitud. No se afirma que el cliente tiene cupo ni que la compra está aprobada hasta recibir el resultado humano.
+Zona horaria: **America/Bogota**.
 
-## Inventario
+- Atención: 09:00–20:00.
+- Domicilios: hasta las 19:00. No prometer un despacho fuera de esa ventana; coordinar la siguiente cuando corresponda.
+- Fuera de atención: enviar el aviso de horario y consentimiento si falta, conservar la consulta y retomar a las 09:00 de la siguiente apertura. No excluir mensajes que llegan durante la madrugada.
+- Un único recordatorio después de 30 minutos sin respuesta, cuando realmente se espera al cliente y dentro del horario de atención.
+- No recordar mientras se espera al equipo, hay control humano, el cliente rechazó la atención o la compra está completada.
+- Cancelar o revalidar trabajos programados si el cliente responde, cambia el estado o interviene una persona. Reintentar sin duplicar mensajes.
+- Antes de activar recontactos/notificaciones, verificar la ventana y las plantillas efectivamente disponibles en Meta. No dar por aprobada una plantilla de ejemplo.
 
-- `available_qty` representa unidades físicas confirmadas.
-- `reserved_qty` impide ofrecer dos veces la misma unidad.
-- `reserve_chat_inventory` exige una clave idempotente, crea una sola reserva con expiración y registra el movimiento auditable.
-- Al confirmar la compra, el flujo debe convertir la reserva en venta, disminuir `available_qty` y liberar `reserved_qty` en una sola transacción.
-- Si el cliente abandona o vence la reserva, se libera automáticamente.
-- Excel o CSV se usa solamente como formato de carga; Supabase es la fuente real durante la conversación.
+## Arquitectura objetivo
 
-## División recomendada en n8n
+```text
+WhatsApp / Meta → Worker: firma, recepción durable y adjuntos
+               → Supabase: contacto, mensaje, autorización y estado
+               → n8n: agente que interpreta y usa herramientas de la intranet
+               → validación de operaciones y persistencia transaccional
+               → cola saliente → Worker → WhatsApp
 
-Mantener varios flujos pequeños facilita pruebas y evita que un fallo afecte todo:
-
-1. `EL REY · WhatsApp · Entrada`: valida el secreto, normaliza Meta, deduplica y persiste el mensaje.
-2. `EL REY · WhatsApp · Consentimiento`: administra aviso, respuesta expresa y bloqueo por rechazo.
-3. `EL REY · WhatsApp · Orquestador`: identifica sede/intención, consulta datos y decide responder o escalar.
-4. `EL REY · WhatsApp · Pendientes`: notifica al administrador y retoma conversaciones resueltas.
-5. `EL REY · WhatsApp · Estados`: procesa `sent`, `delivered`, `read` y `failed`.
-6. `EL REY · Inventario · Vencimientos`: ejecución programada que libera reservas expiradas.
-7. `EL REY · WhatsApp · Errores`: registra errores y alerta solo cuando requieren acción.
-
-Los flujos de recuperación usan `claim_pending_whatsapp_events` y `claim_automation_events`. Al terminar llaman `complete_whatsapp_event` o `complete_automation_event` con el mismo `lease_id`. Un lease vencido se puede reclamar; después de diez fallos el evento pasa a revisión manual en vez de repetirse indefinidamente.
-
-## Modelo de IA
-
-Usar `gpt-5.4-nano` para intención, extracción de campos y elección de la siguiente acción. Usar `gpt-5.4-mini` solo cuando se necesite una respuesta conversacional más compleja. En ambos casos:
-
-- Responses API con `store: false`.
-- Salida estructurada JSON para intención y extracción.
-- Temperatura conservadora cuando esté disponible.
-- Enviar únicamente el resumen y los últimos mensajes necesarios, no el historial completo.
-- Nunca incluir llaves, tokens ni comprobantes en el prompt.
-- Registrar cada ejecución con `run_key` único en `ai_runs` para no pagar ni responder dos veces ante un reintento.
-
-Salida mínima esperada del clasificador:
-
-```json
-{
-  "intent": "product_question",
-  "branch_id": "b1",
-  "needs_human": false,
-  "missing_fields": [],
-  "customer_name": "Valentina",
-  "requested_products": [{ "name": "freidora de aire", "quantity": 1 }]
-}
+Intranet / respuesta de Samuel → solicitud humana vinculada → continuación
+Trabajos diferidos → apertura / recordatorio, con revalidación antes del envío
 ```
 
-## Variables secretas de Cloudflare
+No es obligatorio conservar el número ni la forma exacta de los flujos anteriores. Sí conservar aislamiento por cliente/sede, idempotencia, trazabilidad y autorización humana. La IA no debe ejecutar SQL arbitrario ni recibir secretos.
 
-Configurar como secretos, nunca como variables `VITE_` ni dentro de Git:
+## Casos mínimos de aceptación
 
-- `WHATSAPP_VERIFY_TOKEN`: ya se usa para verificar la suscripción de Meta.
-- `WHATSAPP_APP_SECRET`: secreto de la aplicación Meta; valida `X-Hub-Signature-256`.
-- `WHATSAPP_ACCESS_TOKEN`: token permanente de usuario del sistema, no el token temporal de prueba.
-- `WHATSAPP_PHONE_NUMBER_ID`: ID del número de producción.
-- `SUPABASE_URL`: URL del proyecto.
-- `SUPABASE_SECRET_KEY`: llave moderna `sb_secret_*`, exclusiva del backend y creada específicamente para el Worker.
-- `SUPABASE_SERVICE_ROLE_KEY`: compatibilidad temporal con la llave JWT heredada; no configurarla si existe `SUPABASE_SECRET_KEY`.
-- `N8N_WEBHOOK_URL`: URL de producción del flujo de entrada.
-- `N8N_WEBHOOK_SECRET`: secreto que n8n compara al recibir eventos.
-- `N8N_GATEWAY_SECRET`: secreto que n8n envía al endpoint `/api/whatsapp/send`.
-- `META_GRAPH_VERSION`: opcional; por defecto `v26.0`.
+- Consentimiento aceptado/rechazado, llegada desde web con información útil y llegada sin sede.
+- Nombre y datos compuestos, pregunta de sedes intercalada, cambio de sede y pregunta de horarios durante un pedido.
+- Ofertas ausentes; opciones humanas y selección «quiero uno» sin segunda consulta de stock.
+- Dirección fragmentada, tarifa humana, resumen de $260.000 y QR efectivo.
+- Comprobante con/sin texto, rechazo y aprobación humana; un solo pedido, importe correcto, adjunto visible y notificación al dueño.
+- Respuesta humana libre e imagen de producto desde WhatsApp; dos clientes con pendientes simultáneos sin cruce de datos.
+- Seguimiento tras comprar, cambio solicitado, entrega confirmada y cierre posterior por inactividad.
+- Horarios de frontera, madrugada, recordatorio único y suspensión por control humano.
+- Reintentos, mensajes consecutivos, fallo de modelo/Meta y agotamiento de credenciales sin silencio ni falsas confirmaciones.
 
-El endpoint `/api/whatsapp/health` solo devuelve si cada grupo está configurado; nunca devuelve los valores.
-
-## Contrato de salida hacia WhatsApp
-
-n8n no envía teléfonos ni texto libre directamente al Worker. Primero llama `queue_outbound_whatsapp_message` con una clave idempotente y el contenido; Supabase devuelve el `message_id`. Después hace `POST /api/whatsapp/send` con `x-elrey-gateway-secret`:
-
-```json
-{ "message_id": "UUID_DEVUELTO_POR_SUPABASE" }
-```
-
-El Worker reclama ese mensaje, obtiene el destinatario desde la conversación, lo envía a Meta y guarda el `meta_message_id` antes de responder. Si el resultado de red es incierto, bloquea el reenvío automático para evitar mensajes duplicados y lo deja para revisión humana.
-
-Para texto, `queue_outbound_whatsapp_message.p_body` contiene el mensaje y `p_payload` puede ser `{}`. Para una plantilla aprobada, `p_message_type` es `template` y el payload tiene esta forma:
-
-```json
-{
-  "template": {
-    "name": "pedido_actualizacion",
-    "language": { "code": "es_CO" },
-    "components": []
-  }
-}
-```
-
-## Antes de activar producción
-
-1. Revisar el aviso y publicar la política de datos con un profesional competente.
-2. Regenerar cualquier token que haya sido compartido por chat o captura.
-3. Aplicar, en orden, `202609050003_whatsapp_commerce.sql` y `202609050004_whatsapp_hardening.sql` en Supabase.
-4. Crear un token permanente de usuario del sistema en Meta.
-5. Configurar secretos de Cloudflare y credenciales de Supabase/OpenAI en n8n.
-6. Crear y aprobar plantillas de utilidad: consentimiento, pendiente recibido, pago validado, pedido confirmado y domiciliario en camino.
-7. Probar duplicados, rechazo de consentimiento, falta de sede, producto inexistente, inventario agotado, pago rechazado y caída de OpenAI.
-8. Publicar los flujos solo después de completar las pruebas con el número de prueba.
-
-## Reglas de operación obligatorias en n8n
-
-- Si `ingest_whatsapp_message` devuelve `created=false`, finalizar ese evento sin volver a responder.
-- Cada estado de Meta usa una `p_status_event_key` única: `event_key + índice del estado`.
-- Cada pendiente, reserva, ejecución de IA y mensaje saliente usa su propia clave idempotente estable.
-- Los productos creados desde WhatsApp deben quedar en `orders.items` con `product_id`, `qty`, `name` y `unit_price`; de lo contrario no se permite confirmar el descuento de inventario.
-- El comprobante se descarga desde Meta y se guarda en el bucket privado `whatsapp-media`; en OpenAI solo se envían metadatos mínimos, nunca el archivo.
-- La información de landing debe llegar firmada y con vencimiento. La sede recibida por un parámetro libre nunca se considera confiable sin validar la firma.
-- Definir con asesoría jurídica los plazos de retención y eliminación. Como configuración técnica inicial, separar el payload crudo del historial operativo para poder depurarlo sin borrar consentimientos, movimientos ni eventos auditables.
+Las pruebas deben verificar efectos en la base y entregas reales controladas, además del texto del bot. No afirmar «todo funciona» solo porque una función local o un flujo aislado no falló.

@@ -1,3 +1,5 @@
+> HISTÓRICO: candidato anterior a la pausa. No está aceptado para producción. El trabajo vigente y sus límites están en [../docs/RECONSTRUCCION_BOT.md](../docs/RECONSTRUCCION_BOT.md).
+
 # Agente comercial con herramientas
 
 Revisión del 18 de septiembre de 2026. Candidato en evaluación; no confundir el borrador con la versión publicada.

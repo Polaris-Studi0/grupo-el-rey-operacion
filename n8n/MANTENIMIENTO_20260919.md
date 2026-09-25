@@ -1,6 +1,6 @@
 # Modo temporal de atención humana
 
-Activado por solicitud urgente del usuario el 19 de septiembre de 2026. No reactivar el bot comercial sin una nueva solicitud.
+Activado por solicitud urgente del usuario el 19 de septiembre de 2026. La reconstrucción posterior ya fue autorizada; mantener este aviso mientras se termina y prueba la nueva versión. No restaurar automáticamente el bot anterior.
 
 Mensaje publicado:
 
@@ -14,7 +14,7 @@ Déjanos tu consulta por aquí. Un asistente humano podrá leer tu mensaje y res
 
 Versiones publicadas: 01 `63dcfc1c-c6a6-474d-8b39-5fe296d0f47f`; 03 `64a36633-3b25-4223-8f12-4a3ed64c1884`.
 
-Para una futura restauración autorizada: 01 debe volver a conectar `Solo mensajes nuevos` con `Consentimiento vigente`; su versión previa era `b62c9170-ad48-4ebe-88e7-e1da03215350`. Restaurar también el filtro anterior de 03 y revisar qué versión comercial se publica; no publicar el candidato experimental automáticamente. Parámetros anteriores del filtro:
+**Referencia de rollback histórico, no procedimiento para publicar v2:** 01 debe volver a conectar `Solo mensajes nuevos` con `Consentimiento vigente`; su versión previa era `b62c9170-ad48-4ebe-88e7-e1da03215350`. Restaurar también el filtro anterior de 03 y revisar qué versión comercial se publica; no publicar el candidato experimental automáticamente. Parámetros anteriores del filtro:
 
 ```json
 {

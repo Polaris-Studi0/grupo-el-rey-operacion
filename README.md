@@ -1,5 +1,7 @@
 # Plataforma de operación — Grupo Almacenes El Rey
 
+**Para continuar en un chat nuevo:** leer [HANDOFF_N8N_WHATSAPP.md](HANDOFF_N8N_WHATSAPP.md), actualizado el 25/09/2026. Contiene el estado del bot en mantenimiento, accesos y requisitos de la reconstrucción pendiente.
+
 Aplicación web de pedidos con dos perfiles:
 
 - **Caja:** consulta únicamente los pedidos de su sede, confirma que están listos y registra la entrega al domiciliario o al cliente que recoge.
@@ -63,13 +65,13 @@ supabase/migrations/202609050003_whatsapp_commerce.sql
 supabase/migrations/202609050004_whatsapp_hardening.sql
 ```
 
-Ejecuta los archivos en ese orden. La tercera migración prepara el comercio conversacional; la cuarta agrega recepción durable, reintentos con lease, adjuntos privados, estados de Meta inmutables e inventario idempotente. Ninguna borra pedidos existentes.
+Estos son los archivos iniciales; existen ampliaciones posteriores. En una base existente, comprobar cuáles están aplicadas antes de ejecutar cualquier migración. La tercera migración prepara el comercio conversacional; la cuarta agrega recepción durable, reintentos con lease, adjuntos privados, estados de Meta inmutables e inventario idempotente. Ninguna borra pedidos existentes.
 
 Los datos opcionales para pruebas están en `supabase/demo_seed.sql`. No deben ejecutarse en producción.
 
 ## Publicación
 
-Las instrucciones completas para Supabase Free, Cloudflare Pages, GoDaddy y los usuarios por sede están en [docs/DESPLIEGUE.md](docs/DESPLIEGUE.md).
+La configuración existente de Supabase y Cloudflare Worker está en [docs/DESPLIEGUE.md](docs/DESPLIEGUE.md).
 
 La arquitectura y puesta en marcha del chatbot con n8n están en [docs/CHATBOT_N8N.md](docs/CHATBOT_N8N.md).
 
