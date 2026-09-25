@@ -13,10 +13,21 @@ Actualizado: 25/09/2026. Inventario de referencias conocidas; **no contiene secr
 | Sitio público | https://almaceneselrey.co |
 | Intranet | https://intranet.almaceneselrey.co |
 | Worker | https://grupo-el-rey-operacion.throbbing-salad-55e3.workers.dev |
-| n8n | https://almaceneselrey.app.n8n.cloud |
+| n8n nuevo — construcción desde cero | https://intranetelrey.app.n8n.cloud |
+| n8n anterior — referencia, no restaurar | https://almaceneselrey.app.n8n.cloud |
 | Supabase | https://supabase.com/dashboard/project/xmfltwhgvoaleejatxtg |
 
 ## n8n
+
+### Cuenta nueva vigente
+
+- URL: `https://intranetelrey.app.n8n.cloud`.
+- MCP: `https://intranetelrey.app.n8n.cloud/mcp-server/http`, configurado como `n8n` en Codex; autenticación completada.
+- El 25/09 se comprobó acceso mediante `mcp__n8n__search_workflows`: 0 workflows. `mcp__n8n__list_credentials`: 0 credenciales accesibles; cobertura de Gateway disponible según el MCP, sin verificar saldo/modelos.
+- No reutilizar los IDs de proyecto, carpeta, workflows o credenciales antiguos en esta cuenta. No se han configurado aún las conexiones de intranet en ella.
+- Diseño vigente: [ARQUITECTURA_BOT_NUEVO.md](ARQUITECTURA_BOT_NUEVO.md).
+
+### Cuenta anterior — referencias históricas
 
 - Proyecto conocido: `My project`, ID `3NR51Xmtie3lqXUU`.
 - Carpeta EL REY: `GepTwb36yydYZ922`.
@@ -46,6 +57,8 @@ Las pruebas aisladas también usaron Gateway credits de n8n con una credencial a
 - Los fundamentos v2 del 20/09 se probaron localmente; no hay constancia en este trabajo de aplicación en producción.
 
 ## Cloudflare y dominios
+
+- El 25/09 el endpoint `/api/whatsapp/health` de la intranet respondió `ok:true` y todos sus indicadores de configuración en `true`. Solo comprueba presencia de variables, no validez de credenciales ni estado de entrega. El destino remoto de n8n no se inspeccionó. `wrangler.jsonc` local aún contiene la URL de automatización de la cuenta anterior.
 
 - Worker: `grupo-el-rey-operacion`; configuración en `wrangler.jsonc`, entrada `src/worker.js`, assets compilados en `dist`.
 - Cuenta conocida: `f5f40fe15b916c77d5eb9d5f08d413ff`.

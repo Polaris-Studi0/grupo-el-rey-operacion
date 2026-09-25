@@ -2,6 +2,8 @@
 
 Fecha del traspaso: 25/09/2026. Requisitos: [CHATBOT_N8N.md](CHATBOT_N8N.md). Accesos: [ACCESOS.md](ACCESOS.md).
 
+**Actualización de dirección:** Samuel decidió empezar de cero en la cuenta `intranetelrey.app.n8n.cloud`. Seguir [ARQUITECTURA_BOT_NUEVO.md](ARQUITECTURA_BOT_NUEVO.md). Este documento conserva el inventario del trabajo anterior y sus riesgos; su lista de pendientes no implica restaurar ni completar automáticamente la arquitectura v2. Las tablas y funciones existentes se revisarán como componentes candidatos, preservando los datos.
+
 ## Qué está guardado y qué no está desplegado
 
 Los fundamentos v2 están en el commit `4389834` (`new`). Antes de esta actualización documental, HEAD era `edd3788` (`pqrs`) y el árbol estaba limpio. No son cambios locales pendientes de commit como al comienzo del trabajo anterior.

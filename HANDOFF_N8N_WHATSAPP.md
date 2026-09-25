@@ -4,6 +4,21 @@ Actualizado el **25 de septiembre de 2026**, hora de Colombia. Este es el punto 
 
 ## Situación al cambiar de chat
 
+### Cambio de cuenta y dirección vigente — 25/09/2026
+
+Samuel decidió **empezar de cero en una nueva cuenta de n8n**, conservando los requisitos y las conexiones con la intranet. La continuación de los flujos anteriores ya no es el plan vigente.
+
+- Nueva cuenta: `https://intranetelrey.app.n8n.cloud`; MCP: `https://intranetelrey.app.n8n.cloud/mcp-server/http`.
+- Autenticación completada. MCP nativo `mcp__n8n__*` comprobado: 0 workflows y 0 credenciales listadas. Hay cobertura de Gateway informada por el MCP, sin comprobar saldo/modelo.
+- Arquitectura nueva: [ARQUITECTURA_BOT_NUEVO.md](docs/ARQUITECTURA_BOT_NUEVO.md). Incluye responsabilidades, integración, herramientas, control humano, promociones y secuencia de pruebas.
+- Samuel confirmó que el stock de promociones se actualizará manualmente en la intranet por sede. Diseñar confirmación de existencias, protección de reservas y descuento de compras del bot sin asumir sincronización con cajas.
+- Borrador de instrucciones y casos de aceptación: `n8n/rebuild/`. **Son diseño y especificaciones, no un agente instalado ni pruebas aprobadas.**
+- El endpoint de salud público del Worker respondió con configuración presente; no prueba entrega ni que sus rutas apunten a la cuenta nueva. En el archivo local `wrangler.jsonc` la automatización todavía apunta a la cuenta antigua.
+- No se han creado/publicado workflows, desplegado código, aplicado migraciones ni cambiado rutas de producción durante este diseño. Mantener el criterio de piloto y mantenimiento antes de activar la atención nueva.
+- Al empezar el diseño, HEAD local era `26ad42b` y el árbol estaba limpio. Los nuevos documentos quedan pendientes del commit manual de Samuel.
+
+El resto de este documento conserva el estado de la infraestructura anterior como referencia. Sus IDs **no pertenecen a la cuenta nueva**.
+
 Samuel solicitó actualizar documentación y accesos para continuar en otro chat. Esta actualización es documental: no activa flujos, no despliega código y no borra información.
 
 **Último estado remoto verificado: bot comercial en mantenimiento.** El flujo 01 registra los mensajes y envía el aviso temporal; 03 está bloqueado y 05 despublicado. La reconstrucción está autorizada, pero **no está terminada ni validada de extremo a extremo**. No confundir código guardado, commit, migración aplicada y versión publicada.
@@ -14,7 +29,7 @@ El 25/09 se intentó consultar 01 mediante `mcp__codex_apps__n8n_get_workflow_de
 
 1. [Accesos e identificadores, sin secretos](docs/ACCESOS.md).
 2. [Requisitos acordados y arquitectura objetivo](docs/CHATBOT_N8N.md).
-3. [Trabajo existente, pendientes y pruebas](docs/RECONSTRUCCION_BOT.md).
+3. [Arquitectura de la cuenta nueva](docs/ARQUITECTURA_BOT_NUEVO.md); luego [inventario de trabajo anterior](docs/RECONSTRUCCION_BOT.md) solo para evaluar componentes reutilizables.
 4. [Mantenimiento publicado](n8n/MANTENIMIENTO_20260919.md).
 5. [Despliegue de la plataforma existente](docs/DESPLIEGUE.md), solo cuando corresponda publicar.
 
@@ -53,10 +68,10 @@ Un workflow marcado `active=true` no demuestra que la IA atienda: 03 está publi
 ## Mensaje para pegar en un chat nuevo
 
 ```text
-Vamos a continuar la reconstrucción del bot de WhatsApp de Grupo Almacenes El Rey.
+Vamos a construir desde cero el bot de WhatsApp de Grupo Almacenes El Rey en la cuenta nueva de n8n.
 Lee primero /Users/samuel/Desktop/Cowork for Grupo El Rey/Plataforma/HANDOFF_N8N_WHATSAPP.md y los documentos vigentes que enlaza.
 La carpeta /Users/samuel/Documents/ChatGPT/Grupo El Rey es la carpeta del chat, no la aplicación real.
-Revisa el estado actual de la plataforma y n8n; usa MCP preferentemente. El último estado verificado del bot era mantenimiento y la v2 está incompleta. No reactives el bot anterior, no borres datos ni reviertas PQRS.
+Lee docs/ARQUITECTURA_BOT_NUEVO.md. La cuenta nueva es intranetelrey.app.n8n.cloud; MCP nativo verificado con 0 workflows y 0 credenciales al diseñar la arquitectura. Los IDs antiguos pertenecen a otra cuenta. Revisa el estado actual; usa MCP preferentemente. No reactives el bot anterior, no borres datos ni reviertas PQRS.
 Implementa y prueba una IA con herramientas conectadas a la intranet que cumpla los requisitos documentados: autorización, nombre y sede; lenguaje natural; información real; asistencia y aprobación manual por WhatsApp; imágenes, QR y comprobantes; pedidos, seguimiento, horarios y recordatorio único de 30 minutos.
-Retoma los pendientes de docs/RECONSTRUCCION_BOT.md. Distingue lo probado localmente de lo realmente desplegado y no declares terminado el bot hasta verificar el recorrido completo. Deja un título descriptivo de commit para usar en GitHub Desktop.
+Sigue las etapas de la arquitectura nueva, empezando por canal y control manual. n8n/rebuild contiene un borrador de instrucciones y escenarios todavía no ejecutados. Los componentes anteriores se pueden reutilizar solo tras revisarlos y probarlos. Distingue lo probado localmente de lo realmente desplegado y no declares terminado el bot hasta verificar el recorrido completo. Deja un título descriptivo de commit para usar en GitHub Desktop.
 ```

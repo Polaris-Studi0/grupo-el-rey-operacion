@@ -2,6 +2,8 @@
 
 Acuerdos de Samuel consolidados al 25/09/2026. **Este documento describe el resultado solicitado, no una implementación ya publicada.** Estado real y pendientes: [traspaso](../HANDOFF_N8N_WHATSAPP.md) y [reconstrucción](RECONSTRUCCION_BOT.md).
 
+Samuel eligió construir desde cero en una nueva cuenta de n8n conservando estos requisitos. Diseño y secuencia de implementación vigentes: [ARQUITECTURA_BOT_NUEVO.md](ARQUITECTURA_BOT_NUEVO.md). Una consulta informativa debe poder resolverse por sí misma o evolucionar a compra sin perder contexto.
+
 ## Principio de diseño
 
 La IA interpreta lenguaje libre y el historial, responde la pregunta actual y utiliza herramientas limitadas de la plataforma. Las validaciones protegen consentimiento, autorizaciones, precios, pagos y transacciones; no convierten cada conversación en un formulario ni fuerzan una respuesta fija según la etapa de venta.
@@ -31,6 +33,7 @@ Slugs de la web: ver `../Landing page/app.js` respecto a la carpeta Plataforma. 
 - Comprender «quiero un peluche», «el más barato», «uno de esos», «porfa» o «¿y entonces?» usando lo ya hablado. No exigir una plantilla ni el nombre exacto del producto.
 - Conservar datos enviados juntos o por partes: nombre, sede, cantidades, variantes, dirección, barrio, destinatario y pago. Pedir solo lo que falte; no pedir dirección para mostrar opciones.
 - Consultar conocimiento, inventario y promociones vigentes de la intranet. No inventar marcas disponibles, descuentos, precios, beneficios médicos, cobertura ni tiempos.
+- Samuel confirmó el 25/09 que el stock de promociones se actualizará manualmente en la intranet, por sede. Guardar responsable/fecha de confirmación, proteger reservas y revalidar antes de cobrar. Las ventas registradas por el bot descuentan stock transaccionalmente; las ventas de local y reposiciones se reflejan mediante ajuste manual. No suponer una integración con el sistema de caja.
 - Reutilizar las confirmaciones humanas para la misma sede, producto y cantidad. Una corrección de dirección no invalida el stock. «Sí, correcto» puede confirmar datos presentes en la consulta, pero no proporciona un precio que nunca se indicó.
 - Separar opciones ofrecidas del carrito elegido. Cambios materiales invalidan únicamente las confirmaciones afectadas. No transferir cotizaciones entre sedes.
 - Buscar cerrar la venta de forma natural, sin insistir después de una negativa ni repetir «¿quieres hacer el pedido?» después de cobrar.

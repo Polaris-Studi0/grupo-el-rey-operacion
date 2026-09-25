@@ -2,6 +2,8 @@
 
 Leer primero `HANDOFF_N8N_WHATSAPP.md`, actualizado el 25/09/2026, y sus enlaces vigentes a accesos, requisitos y pendientes.
 
+- Dirección vigente: construir desde cero en la cuenta nueva `intranetelrey.app.n8n.cloud`, según `docs/ARQUITECTURA_BOT_NUEVO.md`. Los IDs de flujos/credenciales anteriores corresponden a otra cuenta. `n8n/rebuild/` contiene diseño y escenarios aún no ejecutados, no un agente desplegado.
+
 - Aplicación real: esta carpeta Plataforma. La carpeta de chat en Documents es otro repositorio.
 - Último estado remoto comprobado del bot: mantenimiento. V2 incompleta, no validada de extremo a extremo. Revisar producción antes de actuar; no reactivar la versión comercial anterior por seguir una guía histórica.
 - Samuel autorizó reconstruir la arquitectura, integrar intranet y usar MCP de n8n preferentemente; la interfaz del PC es una alternativa autorizada. No volver a pedir autorización para trabajo rutinario dentro de ese alcance.
