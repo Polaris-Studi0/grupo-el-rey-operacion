@@ -1,6 +1,6 @@
 # Accesos e identificadores
 
-Actualizado: 25/09/2026. Inventario de referencias conocidas; **no contiene secretos**. Salvo indicación expresa, los servicios no fueron autenticados ni verificados nuevamente ese día. No pedir al usuario claves que ya están configuradas sin antes revisar las conexiones existentes.
+Actualizado: 26/09/2026. Inventario de referencias conocidas; **no contiene secretos**. Las verificaciones de conexión de la cuenta nueva se detallan abajo; no equivalen a una prueba de atención comercial. No pedir al usuario claves que ya están configuradas sin antes revisar las conexiones existentes.
 
 ## Aplicaciones y repositorios
 
@@ -23,9 +23,28 @@ Actualizado: 25/09/2026. Inventario de referencias conocidas; **no contiene secr
 
 - URL: `https://intranetelrey.app.n8n.cloud`.
 - MCP: `https://intranetelrey.app.n8n.cloud/mcp-server/http`, configurado como `n8n` en Codex; autenticación completada.
-- El 25/09 se comprobó acceso mediante `mcp__n8n__search_workflows`: 0 workflows. `mcp__n8n__list_credentials`: 0 credenciales accesibles; cobertura de Gateway disponible según el MCP, sin verificar saldo/modelos.
-- No reutilizar los IDs de proyecto, carpeta, workflows o credenciales antiguos en esta cuenta. No se han configurado aún las conexiones de intranet en ella.
+- El 26/09 se verificaron por MCP las dos credenciales nuevas y se creó/publicó un workflow de diagnóstico. La prueba real Cloudflare → n8n → intranet pasó a las 10:12 Colombia. Cobertura de Gateway de IA informada previamente, sin verificar saldo/modelos.
+- Proyecto personal nuevo: `jajq9MlwnXJjmBRQ`. No reutilizar IDs de la cuenta antigua.
+- Workflow [EL REY · Diagnóstico de conexión](https://intranetelrey.app.n8n.cloud/workflow/9rR5rLK8oW5FLnF0): `9rR5rLK8oW5FLnF0`, publicado en versión `04d9bd27-8bcc-4a28-8c06-a7e402c9c54c`, coincidente con el borrador. No es el asistente comercial.
 - Diseño vigente: [ARQUITECTURA_BOT_NUEVO.md](ARQUITECTURA_BOT_NUEVO.md).
+
+Credenciales guardadas por Samuel y comprobadas el 26/09:
+
+| Nombre en n8n | Tipo / cabecera | Valor privado que debe coincidir | Estado |
+|---|---|---|---|
+| `EL REY · n8n → Intranet` | Header Auth: `x-elrey-gateway-secret` | `N8N_REBUILD_GATEWAY_SECRET` | ID `mE0LulIzVpRFckRy`; autenticación real aprobada; dominio configurado por Samuel: `intranet.almaceneselrey.co` |
+| `EL REY · Intranet → n8n` | Header Auth: `x-elrey-webhook-secret` | `N8N_REBUILD_WEBHOOK_SECRET` | ID `WJMZ9eXLCg3akSvc`; autenticación real aprobada; uso saliente HTTP configurado en `None` |
+
+- El MCP permite listar credenciales, pero su alta se hizo en la interfaz. Las dos claves se comprobaron sin mostrar sus valores. El diagnóstico no conserva datos de ejecuciones, para evitar almacenar las cabeceras entrantes.
+- `.env.local` contiene únicamente `VITE_SUPABASE_URL` y `VITE_SUPABASE_ANON_KEY`; no se encontraron allí los secretos de integración. Samuel indicó que probablemente no conserva los valores originales.
+- Cloudflare no vuelve a mostrar valores de secretos ya definidos. Se generaron dos secretos independientes de 32 bytes aleatorios, almacenados fuera del repositorio en `/Users/samuel/.config/grupo-el-rey/n8n-rebuild-secrets.json` (archivo `0600`, directorio `0700`). No copiar sus valores al chat, documentos o Git.
+- **Cloudflare actualizado:** `wrangler secret bulk` confirmó la creación de `N8N_REBUILD_GATEWAY_SECRET` y `N8N_REBUILD_WEBHOOK_SECRET`. El listado posterior confirmó ambos nuevos y los siete secretos anteriores. La operación creó una revisión de configuración `39e09f96-0820-470b-8e57-059d5b6a49fb` a las 22:16 del 25/09, Colombia; no se desplegó código del checkout. La versión anterior era `746b03b7-a354-4cb5-92a5-7fcec1711ba3`.
+- **Implementado el 26/09:** `GET /api/bot/connection` comprueba la clave nueva de gateway y un identificador de prueba. `POST /api/bot/connection/probe` inicia una prueba contra el webhook fijo `el-rey-rebuild-connection-v1` de la nueva cuenta, usando la clave nueva de webhook. Ninguna ruta accede a clientes, pedidos o Meta. El envío comercial mantiene las claves y URLs antiguas; las herramientas del agente aún están pendientes.
+- Worker activo para este avance: `0b81162c-9f63-47fe-8e3c-58c3d0f17945`. Evidencia y comprobación reproducible en [n8n/rebuild/README.md](../n8n/rebuild/README.md).
+- La comprobación de salud posterior conservó todos los indicadores en `true`. No demuestra autenticación con las claves nuevas ni entrega de WhatsApp.
+- Las credenciales de Meta y Supabase siguen administradas en Cloudflare. La arquitectura nueva no requiere copiar la credencial administrativa de Postgres a n8n para acceder a las herramientas limitadas.
+- `list_n8n_gateway_services` devolvió `available:true` para nodos de modelos de chat. No se ha elegido modelo, probado una llamada ni comprobado saldo; no hay que crear una clave de OpenAI por defecto para esta etapa.
+- Referencias: [Header Auth de n8n](https://docs.n8n.io/integrations/builtin/credentials/httprequest/), [secretos de Cloudflare](https://developers.cloudflare.com/workers/configuration/secrets/).
 
 ### Cuenta anterior — referencias históricas
 
@@ -59,6 +78,9 @@ Las pruebas aisladas también usaron Gateway credits de n8n con una credencial a
 ## Cloudflare y dominios
 
 - El 25/09 el endpoint `/api/whatsapp/health` de la intranet respondió `ok:true` y todos sus indicadores de configuración en `true`. Solo comprueba presencia de variables, no validez de credenciales ni estado de entrega. El destino remoto de n8n no se inspeccionó. `wrangler.jsonc` local aún contiene la URL de automatización de la cuenta anterior.
+
+- Más tarde se inspeccionó Settings del Worker en la sesión autenticada de Safari: `N8N_WEBHOOK_URL` apunta a `https://almaceneselrey.app.n8n.cloud/webhook/el-rey-whatsapp-inbound` y `N8N_AUTOMATION_URL` a `https://almaceneselrey.app.n8n.cloud/webhook/el-rey-whatsapp-automation`. Ambos secretos antiguos aparecen como `Value encrypted`. Las URLs se conservaron.
+- Acceso administrativo de Wrangler verificado para la cuenta conocida. Cloudflare Builds está conectado a `Polaris-Studi0/grupo-el-rey-operacion`, rama de producción `main`, build `npm run build`, deploy `npx wrangler deploy`. **Un push puede activar un despliegue** aunque no exista un workflow de GitHub Actions.
 
 - Worker: `grupo-el-rey-operacion`; configuración en `wrangler.jsonc`, entrada `src/worker.js`, assets compilados en `dist`.
 - Cuenta conocida: `f5f40fe15b916c77d5eb9d5f08d413ff`.

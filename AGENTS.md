@@ -1,6 +1,8 @@
 # Instrucciones para continuar Grupo El Rey
 
-Leer primero `HANDOFF_N8N_WHATSAPP.md`, actualizado el 25/09/2026, y sus enlaces vigentes a accesos, requisitos y pendientes.
+Leer primero `HANDOFF_N8N_WHATSAPP.md`, actualizado el 26/09/2026, y sus enlaces vigentes a accesos, requisitos y pendientes.
+
+- La cuenta nueva ya tiene dos credenciales comprobadas y un workflow de diagnóstico publicado. Estado y prueba reproducible en `n8n/rebuild/README.md`. El asistente comercial sigue pendiente; no confundir diagnóstico con atención activada.
 
 - Dirección vigente: construir desde cero en la cuenta nueva `intranetelrey.app.n8n.cloud`, según `docs/ARQUITECTURA_BOT_NUEVO.md`. Los IDs de flujos/credenciales anteriores corresponden a otra cuenta. `n8n/rebuild/` contiene diseño y escenarios aún no ejecutados, no un agente desplegado.
 

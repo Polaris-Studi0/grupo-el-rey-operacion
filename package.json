@@ -11,6 +11,8 @@
     "build": "vite build",
     "preview": "vite preview",
     "check": "eslint .",
+    "test:bot-connection": "node --test tests/bot-connection.test.mjs",
+    "check:bot-connection": "node scripts/check-bot-connection.mjs",
     "setup:users": "node scripts/create-users.mjs",
     "reset:admin": "node scripts/reset-admin-password.mjs",
     "fix:auth": "node scripts/fix-auth-config.mjs",

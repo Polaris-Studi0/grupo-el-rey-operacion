@@ -1,3 +1,5 @@
+import { handleBotConnection } from "./bot-connection.js";
+
 const WEBHOOK_PATH = "/api/whatsapp/webhook";
 const SEND_PATH = "/api/whatsapp/send";
 const HEALTH_PATH = "/api/whatsapp/health";
@@ -679,6 +681,7 @@ export default {
   },
   async fetch(request,env,context){
     const url = new URL(request.url);
+    if(url.pathname==="/api/bot/connection"||url.pathname==="/api/bot/connection/probe")return handleBotConnection(request,env);
     if((url.pathname===PQRS_PATH||url.pathname===PQRS_STATUS_PATH||url.pathname.startsWith(`${PQRS_ADMIN_PATH}/`))&&request.method==="OPTIONS")return new Response(null,{status:204,headers:pqrsCorsHeaders(request)});
     if(url.pathname===PQRS_PATH&&request.method==="POST")return createPqrs(request,env);
     if(url.pathname===PQRS_STATUS_PATH&&request.method==="POST")return consultPqrs(request,env);

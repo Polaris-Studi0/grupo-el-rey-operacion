@@ -1,0 +1,37 @@
+{
+  "checked_at": "2026-09-26T15:12:55.885Z",
+  "workflow_id": "9rR5rLK8oW5FLnF0",
+  "scope": "connection_only",
+  "results": [
+    {
+      "name": "gateway_rejects_missing_key",
+      "passed": true,
+      "status": 401
+    },
+    {
+      "name": "gateway_rejects_wrong_key",
+      "passed": true,
+      "status": 401
+    },
+    {
+      "name": "gateway_authenticates_new_key",
+      "passed": true,
+      "status": 200
+    },
+    {
+      "name": "webhook_rejects_missing_key",
+      "passed": true,
+      "status": 403
+    },
+    {
+      "name": "webhook_rejects_wrong_key",
+      "passed": true,
+      "status": 403
+    },
+    {
+      "name": "cloudflare_n8n_cloudflare_round_trip",
+      "passed": true,
+      "status": 200
+    }
+  ]
+}
