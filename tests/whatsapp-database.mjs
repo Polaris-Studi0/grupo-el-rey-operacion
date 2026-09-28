@@ -205,14 +205,15 @@ console.log('PASS cancelled selection clears checkout, cancels tasks, filters hi
 const cleanup=await readFile(root+'/scripts/reset-whatsapp-test-history.sql','utf8');
 await assert.rejects(db.exec(cleanup),/datos ajenos/);await db.exec('rollback');
 assert.ok((await db.query('select count(*)::int as n from orders')).rows[0].n>0);
-await db.exec(`truncate whatsapp_shared_media,whatsapp_bot_jobs,whatsapp_attachments,whatsapp_message_status_events,conversation_events,ai_runs,privacy_consents,
+await db.exec(`truncate whatsapp_operator_actions,whatsapp_shared_media,whatsapp_bot_jobs,whatsapp_attachments,whatsapp_message_status_events,conversation_events,ai_runs,privacy_consents,
  human_tasks,automation_outbox,whatsapp_webhook_inbox,inventory_movements,inventory_reservations,order_events,orders,
  whatsapp_messages,whatsapp_conversations,whatsapp_contacts;`);
 await db.query("insert into whatsapp_contacts(phone_e164) values('+573127378289')");
-await db.exec(cleanup);
-assert.equal((await db.query('select count(*)::int as n from whatsapp_contacts')).rows[0].n,0);
-assert.equal((await db.query("select count(*)::int as n from elrey_test_backups.whatsapp_20260909 where table_name='whatsapp_contacts'")).rows[0].n,1);
-console.log('PASS test cleanup rejects other data and retains a private backup before clearing');
+// The historical cleanup must not silently discard new operator evidence.
+await assert.rejects(db.exec(cleanup),/cannot truncate a table referenced/);
+await db.exec('rollback');
+assert.equal((await db.query('select count(*)::int as n from whatsapp_contacts')).rows[0].n,1);
+console.log('PASS historical cleanup refuses the new schema and preserves data');
 console.log('DEPLOYMENT_FUNCTION_HASH', (await db.query("select md5(pg_get_functiondef('public.persist_whatsapp_commercial_response(uuid,uuid,jsonb,jsonb)'::regprocedure)) as hash")).rows[0].hash);
 
 await db.query(`insert into whatsapp_webhook_inbox(event_key,event_type,payload,processed_at,processing_started_at,next_attempt_at) values

@@ -265,12 +265,12 @@ async function authenticatedOperator(request,env){
   if(!userResponse.ok)return null;
   const user=await userResponse.json();
   if(!user?.id)return null;
-  const profileResponse=await fetch(`${env.SUPABASE_URL}/rest/v1/profiles?id=eq.${encodeURIComponent(user.id)}&active=eq.true&select=id`,{
+  const profileResponse=await fetch(`${env.SUPABASE_URL}/rest/v1/profiles?id=eq.${encodeURIComponent(user.id)}&active=eq.true&select=id,role,branch_id`,{
     headers:supabaseHeaders(env)
   });
   if(!profileResponse.ok)return null;
   const profiles=await profileResponse.json();
-  return profiles?.[0]?user:null;
+  return profiles?.[0]?{...user,...profiles[0]}:null;
 }
 
 async function wakeAutomation(request,env){
@@ -280,6 +280,12 @@ async function wakeAutomation(request,env){
   let body;
   try{body=await request.json();}catch{return json({error:"Invalid JSON"},400);}
   if(!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(body.task_id||""))return json({error:"A task_id is required"},400);
+  const taskResponse=await fetch(`${env.SUPABASE_URL}/rest/v1/human_tasks?id=eq.${encodeURIComponent(body.task_id)}&select=conversation_id&limit=1`,{headers:supabaseHeaders(env)});
+  if(!taskResponse.ok)return json({error:"No fue posible consultar el pendiente"},502);
+  const task=(await taskResponse.json())?.[0];
+  const conversation=task&&await operatorConversationScope(task.conversation_id,operator,env);
+  if(!conversation)return json({error:"No tienes acceso a este pendiente"},403);
+  if(conversation.automation_paused)return json({ok:true,deferred:true,reason:"manual_control",task_id:body.task_id});
   let lastError;
   for(let attempt=0;attempt<3;attempt+=1){
     try{
@@ -461,40 +467,39 @@ async function operatorConversationAction(request,env){
   if(!operator)return json({error:"Unauthorized"},401);
   let body;
   try{body=await request.json();}catch{return json({error:"Invalid JSON"},400);}
-  const conversationId=String(body.conversation_id||"");
-  if(!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(conversationId))return json({error:"A conversation_id is required"},400);
-
-  if(body.action==="takeover"){
-    const result=await supabaseRpc("set_whatsapp_automation_paused",{
-      p_conversation_id:conversationId,p_paused:Boolean(body.paused),p_operator_id:operator.id
-    },env);
-    return json(result||{ok:true});
+  const uuid=/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+  if(!uuid.test(body.conversation_id||"")||!uuid.test(body.request_id||"")||!["takeover","message","instruction"].includes(body.action)
+    ||!Number.isInteger(body.expected_version)||body.expected_version<0
+    ||(body.action==="takeover"?typeof body.paused!=="boolean":typeof body.text!=="string"||!body.text.trim()||body.text.trim().length>4096)){
+    return json({error:"Acción inválida. Actualiza la intranet e inténtalo de nuevo."},400);
   }
-
-  const textBody=String(body.text||"").trim();
-  const requestKey=String(body.request_id||"").trim();
-  if(!textBody||requestKey.length<8)return json({error:"Text and request_id are required"},400);
-
-  if(body.action==="message"){
-    const queued=await supabaseRpc("queue_operator_whatsapp_message",{
-      p_conversation_id:conversationId,p_body:textBody,p_request_key:requestKey,p_operator_id:operator.id
-    },env);
-    const messageId=queued?.message_id;
-    return deliverQueuedWhatsAppMessage(messageId,env);
-  }
-
-  if(body.action==="instruction"){
-    if(!env.N8N_AUTOMATION_URL||!env.N8N_WEBHOOK_SECRET)return json({error:"Automation webhook is not configured"},503);
-    const result=await fetch(env.N8N_AUTOMATION_URL,{
-      method:"POST",
-      headers:{"content-type":"application/json","x-elrey-webhook-secret":env.N8N_WEBHOOK_SECRET},
-      body:JSON.stringify({trigger:"operator_instruction",conversation_id:conversationId,instruction:textBody,request_id:requestKey,operator_id:operator.id})
+  // Authorization, control changes and the idempotent action are one transaction.
+  // Internal instructions remain durable during maintenance; they never call the old AI.
+  try{
+    const result=await fetch(`${env.SUPABASE_URL}/rest/v1/rpc/apply_whatsapp_operator_action`,{
+      method:"POST",headers:supabaseHeaders(env),body:JSON.stringify({
+        p_conversation_id:body.conversation_id,p_operator_id:operator.id,p_request_id:body.request_id,p_action:body.action,
+        p_text:body.action==="takeover"?null:body.text.trim(),p_paused:body.action==="takeover"?body.paused:null,p_expected_version:body.expected_version
+      })
     });
-    if(!result.ok)return json({error:`n8n respondió ${result.status}`},502);
-    return json({ok:true,conversation_id:conversationId});
-  }
+    const data=await result.json().catch(()=>({}));
+    if(!result.ok){
+      const status=data.code==="42501"?403:data.code==="40001"?409:data.code==="22023"?422:503;
+      return json({error:status===503?"No se pudo confirmar la acción. Reintenta con la misma solicitud.":data.message,code:data.code},status);
+    }
+    if(body.action!=="message")return json(data);
+    const delivered=await deliverQueuedWhatsAppMessage(data.message_id,env);
+    const delivery=await delivered.json();
+    if(!delivered.ok)return json({...delivery,error:delivery.state==="blocked_uncertain"?"El envío ya se inició y su entrega está por verificar. No se enviará otra copia.":delivery.error},delivered.status);
+    return json({...data,delivery});
+  }catch{return json({error:"No se pudo confirmar la acción. Reintenta con la misma solicitud."},503);}
+}
 
-  return json({error:"Unsupported action"},400);
+async function operatorConversationScope(conversationId,operator,env){
+  const result=await fetch(`${env.SUPABASE_URL}/rest/v1/whatsapp_conversations?id=eq.${encodeURIComponent(conversationId)}&select=id,branch_id,automation_paused&limit=1`,{headers:supabaseHeaders(env)});
+  if(!result.ok)return null;
+  const conversation=(await result.json())?.[0];
+  return conversation&&(operator.role==="admin"||operator.branch_id&&operator.branch_id===conversation.branch_id)?conversation:null;
 }
 
 async function operatorMediaAction(request,env){
@@ -504,10 +509,11 @@ async function operatorMediaAction(request,env){
   try{body=await request.json();}catch{return json({error:"Invalid JSON"},400);}
   const messageId=String(body.message_id||"");
   if(!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(messageId))return json({error:"A message_id is required"},400);
-  const messageResponse=await fetch(`${env.SUPABASE_URL}/rest/v1/whatsapp_messages?id=eq.${encodeURIComponent(messageId)}&direction=eq.inbound&select=id,meta_message_id,message_type,media_id,raw_payload&limit=1`,{headers:supabaseHeaders(env)});
+  const messageResponse=await fetch(`${env.SUPABASE_URL}/rest/v1/whatsapp_messages?id=eq.${encodeURIComponent(messageId)}&direction=eq.inbound&select=id,conversation_id,meta_message_id,message_type,media_id,raw_payload&limit=1`,{headers:supabaseHeaders(env)});
   if(!messageResponse.ok)return json({error:"No fue posible consultar el mensaje"},502);
   const message=(await messageResponse.json())?.[0];
   if(!message?.meta_message_id||!message?.media_id)return json({error:"El mensaje no contiene un archivo recuperable"},404);
+  if(!await operatorConversationScope(message.conversation_id,operator,env))return json({error:"No tienes acceso a esta conversación"},403);
   const media=message.raw_payload?.message?.[message.message_type]||{};
   try{
     const storagePath=await persistOneInboundMedia({metaMessageId:message.meta_message_id,mediaId:message.media_id,messageType:message.message_type,originalName:media.filename||null},env);

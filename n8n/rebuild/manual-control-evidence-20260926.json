@@ -1,0 +1,56 @@
+{
+  "checked_at": "2026-09-27T04:33:47.233Z",
+  "worker_version": "139bc643-e1fd-45a8-9e4c-307027843e16",
+  "migration": "202609260001_whatsapp_manual_control.sql",
+  "remote_function_hashes": {
+    "action_hash": "9b673d7645d1058adbe47fbfe068ee87",
+    "claim_hash": "23d935a4d270b5f9ed62f76c0eb69419"
+  },
+  "browser_can_mutate_rpc": false,
+  "bindings_preserved": true,
+  "checks": [
+    {
+      "path": "/",
+      "status": 200,
+      "content_type": "text/html"
+    },
+    {
+      "path": "/api/whatsapp/health",
+      "status": 200,
+      "content_type": "application/json; charset=utf-8"
+    },
+    {
+      "path": "/privacidad",
+      "status": 200,
+      "content_type": "text/html; charset=utf-8"
+    },
+    {
+      "path": "/eliminacion-de-datos",
+      "status": 200,
+      "content_type": "text/html; charset=utf-8"
+    },
+    {
+      "path": "/assets/index-C-bfaxIp.js",
+      "status": 200,
+      "content_type": "text/javascript"
+    },
+    {
+      "path": "/assets/favicon-DARwiDmU.png",
+      "status": 200,
+      "content_type": "image/png"
+    },
+    {
+      "path": "/api/operator/conversation",
+      "without_credentials": 401
+    },
+    {
+      "path": "/api/operator/media",
+      "without_credentials": 401
+    }
+  ],
+  "limits": [
+    "No se enviaron mensajes a clientes ni se crearon pedidos de prueba",
+    "Falta prueba visual autenticada del panel después de publicar",
+    "El agente comercial y el consumidor de instrucciones pendientes no están conectados"
+  ]
+}

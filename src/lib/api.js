@@ -1,5 +1,6 @@
 import { isDemoMode, supabase } from "./supabase.js";
 import { demoStore } from "./demoStore.js";
+import { fetchConversationPage, mergeHistory, HISTORY_PAGE_SIZE } from "./chat-history.js";
 
 const orderSelect = "*, branch:branches(id,name), courier:couriers(id,name,plate,phone,provider,active)";
 
@@ -93,19 +94,42 @@ export async function saveCourier(values){
 }
 export async function listChatbotData(){
   if(isDemoMode) return demoStore.listChatbotData();
-  const [contacts,conversations,messages,attachments,tasks,knowledge,inventory,paymentQrs]=await Promise.all([
+  const [contacts,conversations,tasks,knowledge,inventory,paymentQrs]=await Promise.all([
     supabase.from("whatsapp_contacts").select("*").order("last_seen_at",{ascending:false}),
     supabase.from("whatsapp_conversations").select("*, contact:whatsapp_contacts(*), branch:branches(id,name)").order("last_message_at",{ascending:false}),
-    supabase.from("whatsapp_messages").select("*").order("created_at",{ascending:false}).limit(2000),
-    supabase.from("whatsapp_attachments").select("*").order("created_at",{ascending:false}).limit(500),
     supabase.from("human_tasks").select("*, branch:branches(id,name), conversation:whatsapp_conversations(id,contact:whatsapp_contacts(phone_e164,display_name,preferred_name))").order("created_at",{ascending:false}),
     supabase.from("branch_knowledge").select("*, branch:branches(id,name)").order("active",{ascending:false}).order("updated_at",{ascending:false}),
     supabase.from("branch_inventory").select("*, branch:branches(id,name), product:products(*)").order("updated_at",{ascending:false}),
     supabase.from("branch_payment_qrs").select("*, branch:branches(id,name)").order("branch_id")
   ]);
-  for(const result of [contacts,conversations,messages,attachments,tasks,knowledge,inventory,paymentQrs])if(result.error)throw result.error;
-  return {contacts:contacts.data,conversations:conversations.data,messages:messages.data,attachments:attachments.data,tasks:tasks.data,knowledge:knowledge.data,inventory:inventory.data,paymentQrs:paymentQrs.data};
+  for(const result of [contacts,conversations,tasks,knowledge,inventory,paymentQrs])if(result.error)throw result.error;
+  // Task evidence is linked to its exact message, never to the last receipt.
+  const ids=[...new Set(tasks.data.filter(task=>["pending","in_progress"].includes(task.status)).map(task=>task.context?.inbound_message_id).filter(Boolean))];
+  const messages=[],attachments=[];
+  for(let offset=0;offset<ids.length;offset+=50){
+    const batch=ids.slice(offset,offset+50);
+    const [m,a]=await Promise.all([supabase.from("whatsapp_messages").select("id,conversation_id,media_id,direction").in("id",batch),supabase.from("whatsapp_attachments").select("*").in("message_id",batch)]);
+    if(m.error||a.error)throw m.error||a.error;
+    messages.push(...m.data);attachments.push(...a.data);
+  }
+  return {contacts:contacts.data,conversations:conversations.data,messages,attachments,tasks:tasks.data,knowledge:knowledge.data,inventory:inventory.data,paymentQrs:paymentQrs.data};
 }
+export async function listConversationPage(conversationId,options={}){
+  if(!isDemoMode)return fetchConversationPage(supabase,conversationId,options);
+  const data=await demoStore.listChatbotData();
+  let rows=mergeHistory([],data.messages.filter(m=>m.conversation_id===conversationId));
+  const cursor=options.before||options.after;
+  if(cursor)rows=rows.filter(m=>options.after?m.created_at>cursor.created_at||m.created_at===cursor.created_at&&m.id>cursor.id:m.created_at<cursor.created_at||m.created_at===cursor.created_at&&m.id<cursor.id);
+  if(!options.after)rows.reverse();
+  const messages=rows.slice(0,HISTORY_PAGE_SIZE),edge=messages.at(-1);
+  return {messages,attachments:data.attachments.filter(a=>messages.some(m=>m.id===a.message_id)),hasMore:rows.length>HISTORY_PAGE_SIZE,cursor:edge?{id:edge.id,created_at:edge.created_at}:null};
+}
+export async function listOperatorInstructions(conversationId){
+  if(isDemoMode)return [];
+  const {data,error}=await supabase.from("whatsapp_operator_actions").select("request_id,payload,status,created_at").eq("conversation_id",conversationId).eq("action","instruction").order("created_at",{ascending:false}).limit(50);
+  if(error)throw error;return data;
+}
+
 export async function getChatAttachmentUrl(path){
   if(isDemoMode) return demoStore.getChatAttachmentUrl(path);
   const {data,error}=await supabase.storage.from("whatsapp-media").createSignedUrl(path,300);if(error)throw error;return data.signedUrl;
@@ -169,17 +193,17 @@ export async function resolveHumanTask(taskId,status,resolution){
   if(!wake.ok)throw new Error("La respuesta quedó guardada, pero no fue posible reanudar el chat automáticamente.");
   return data;
 }
-export async function operateWhatsappConversation(conversationId,action,values={}){
+export async function operateWhatsappConversation(body){
   if(isDemoMode) throw new Error("El control del chat requiere conexión con Supabase.");
   const {data:sessionData}=await supabase.auth.getSession();
   const accessToken=sessionData.session?.access_token;
   const response=await fetch("/api/operator/conversation",{
     method:"POST",
     headers:{"content-type":"application/json",...(accessToken?{authorization:`Bearer ${accessToken}`}:{})},
-    body:JSON.stringify({conversation_id:conversationId,action,request_id:crypto.randomUUID(),...values})
+    body:JSON.stringify(body)
   });
   const result=await response.json().catch(()=>({}));
-  if(!response.ok)throw new Error(result.error||"No fue posible ejecutar la acción en WhatsApp.");
+  if(!response.ok){const error=new Error(result.error||"No fue posible ejecutar la acción en WhatsApp.");error.status=response.status;error.code=result.code;throw error;}
   return result;
 }
 export function subscribeToOrders(onChange){
