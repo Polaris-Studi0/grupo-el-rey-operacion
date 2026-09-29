@@ -8,7 +8,7 @@ Leer primero `HANDOFF_N8N_WHATSAPP.md`, actualizado el 29/09/2026, y `n8n/rebuil
 - Piloto nuevo publicado para el contacto terminado en 8289 desde el 29/09. El resto mantiene la ruta anterior de mantenimiento. No reactivar la IA anterior ni ampliar el piloto automáticamente.
 - El bot comercial completo sigue incompleto. Piloto: información, respuestas y consultas humanas con avisos personales y aclaraciones en intranet; compras, reservas, cobros y QR de pago automáticos siguen pendientes.
 - Estado, versiones, evidencia y límites en el traspaso; comprobar el remoto antes de editar. Los workflows antiguos son de otra cuenta.
-- No borrar conversaciones ni pedidos; conservar PQRS y cambios posteriores.
+- Excepción autorizada el 29/09: Samuel pidió vaciar historial de WhatsApp, pedidos/domicilios y PQRS con respaldo. Eligió ejecutar personalmente el SQL en Supabase; entregar `scripts/reset-operational-data-20260929.sql`, no ejecutarlo por CLI. Hasta confirmar su ejecución, los datos siguen presentes. Conservar usuarios, sedes, catálogo, inventario, QR y código/configuración de PQRS.
 - No copiar secretos al chat ni al repositorio. Referencias en `docs/ACCESOS.md`.
 - Distinguir tests locales, modelo real con datos sintéticos, versión desplegada y entrega real por WhatsApp.
 - Samuel prefiere commit/push manual desde GitHub Desktop. Dejar título descriptivo; no crear commit/push salvo petición.
