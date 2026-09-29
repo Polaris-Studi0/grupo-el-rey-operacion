@@ -44,5 +44,9 @@
   "local_pilot_tests": 14,
   "local_preview_and_contract_tests": 19,
   "core_http_regression_checks": 7,
-  "new_style_real_whatsapp_delivery_verified": false
+  "new_style_real_whatsapp_delivery_verified": false,
+  "deployed": true,
+  "production_percentage": 100,
+  "production_health_verified": true,
+  "bindings_and_runtime_preserved": true
 }
