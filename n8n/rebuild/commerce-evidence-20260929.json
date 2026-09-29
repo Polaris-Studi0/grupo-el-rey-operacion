@@ -1,0 +1,152 @@
+{
+  "checked_at": "2026-09-29T20:32:48.970Z",
+  "scope": "published_engine_synthetic_data_no_customer_effects",
+  "results": [
+    {
+      "name": "carrito_y_datos_compuestos",
+      "passed": true,
+      "status": 200,
+      "decision_status": "decision_ready",
+      "decision": {
+        "intent": "quote",
+        "reply_text": "Perfecto, Ana. Preparé una cotización para 2 ramos (Ramo de prueba) para entrega a Calle 10 #20-30, barrio Floresta, a nombre de Carlos, teléfono 3001112233. ¿Cómo prefieres pagar? (transfer, Addi, Sistecrédito o pago en sede al recoger)",
+        "offered_product_ids": [
+          "TEST-RAMO"
+        ],
+        "quote": {
+          "items": [
+            {
+              "product_id": "TEST-RAMO",
+              "name": "Ramo de prueba",
+              "quantity": 2,
+              "unit_price_cop": 50000,
+              "line_total_cop": 100000
+            }
+          ],
+          "subtotal_cop": 100000,
+          "delivery_included": false,
+          "reserved": false,
+          "order_created": false
+        },
+        "actions": [
+          {
+            "type": "propose_quote",
+            "items": [
+              {
+                "product_id": "TEST-RAMO",
+                "quantity": 2
+              }
+            ]
+          }
+        ],
+        "checkout": {
+          "customer_name": "Ana Pérez",
+          "recipient_name": "Carlos",
+          "recipient_phone": "3001112233",
+          "fulfillment_type": "delivery",
+          "delivery_address": "Calle 10 #20-30",
+          "delivery_zone": "Floresta",
+          "payment_method": ""
+        },
+        "accept_summary": false,
+        "cancel_cart": false
+      }
+    },
+    {
+      "name": "eleccion_pago_acepta_resumen",
+      "passed": true,
+      "status": 200,
+      "decision_status": "decision_ready",
+      "decision": {
+        "intent": "checkout",
+        "reply_text": "Perfecto, quedó aceptado el resumen y eliges transferencia. Tu compra: 2 ramos para recoger en Sede de prueba a nombre de Ana. Registraré el método de pago para que el equipo prepare las instrucciones de pago por este chat.",
+        "offered_product_ids": [],
+        "quote": null,
+        "actions": [],
+        "checkout": {
+          "customer_name": "Ana",
+          "recipient_name": "",
+          "recipient_phone": "",
+          "fulfillment_type": "pickup",
+          "delivery_address": "",
+          "delivery_zone": "",
+          "payment_method": "transfer"
+        },
+        "accept_summary": true,
+        "cancel_cart": false
+      }
+    },
+    {
+      "name": "correccion_no_acepta_resumen",
+      "passed": true,
+      "status": 200,
+      "decision_status": "decision_ready",
+      "decision": {
+        "intent": "checkout",
+        "reply_text": "Tomé la dirección que indicaste: Carrera 8 #15-20, barrio Prado. Para completar el resumen necesito el teléfono del destinatario.",
+        "offered_product_ids": [],
+        "quote": null,
+        "actions": [],
+        "checkout": {
+          "customer_name": "",
+          "recipient_name": "",
+          "recipient_phone": "",
+          "fulfillment_type": "",
+          "delivery_address": "Carrera 8 #15-20",
+          "delivery_zone": "Prado",
+          "payment_method": ""
+        },
+        "accept_summary": false,
+        "cancel_cart": false
+      }
+    },
+    {
+      "name": "estado_pedido_espanol",
+      "passed": true,
+      "status": 200,
+      "decision_status": "decision_ready",
+      "decision": {
+        "intent": "order_status",
+        "reply_text": "Pedido REY-0042. Estado: en camino. Total: 260000 COP. No hay hora de entrega vigente confirmada.",
+        "offered_product_ids": [],
+        "quote": null,
+        "actions": [],
+        "checkout": {
+          "customer_name": "",
+          "recipient_name": "",
+          "recipient_phone": "",
+          "fulfillment_type": "",
+          "delivery_address": "",
+          "delivery_zone": "",
+          "payment_method": ""
+        },
+        "accept_summary": false,
+        "cancel_cart": false
+      }
+    },
+    {
+      "name": "pregunta_pago_sin_formulario",
+      "passed": true,
+      "status": 200,
+      "decision_status": "decision_ready",
+      "decision": {
+        "intent": "information",
+        "reply_text": "Los medios de pago disponibles en tu sede son: transferencia por QR de la sede, Addi, Sistecrédito y pago en la sede al momento de recoger. No ofrecemos contraentrega.",
+        "offered_product_ids": [],
+        "quote": null,
+        "actions": [],
+        "checkout": {
+          "customer_name": "",
+          "recipient_name": "",
+          "recipient_phone": "",
+          "fulfillment_type": "",
+          "delivery_address": "",
+          "delivery_zone": "",
+          "payment_method": ""
+        },
+        "accept_summary": false,
+        "cancel_cart": false
+      }
+    }
+  ]
+}

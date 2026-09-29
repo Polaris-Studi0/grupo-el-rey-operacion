@@ -1,3 +1,4 @@
+import {orderedBranches,stockClosingTime} from './bot-branches.js';
 // Operator-requested preview only. This module never writes to Supabase or Meta.
 const CORE_URL = 'https://intranetelrey.app.n8n.cloud/webhook/el-rey-assistant-turn-v1';
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -40,18 +41,15 @@ function eligible(conversation) {
 function validAt(record, now) {
   return (!record.valid_from || Date.parse(record.valid_from) <= now) && (!record.valid_until || Date.parse(record.valid_until) > now);
 }
-function productSnapshot(row, branchId, env, now) {
+function productSnapshot(row, branchId, now, ownQuantity = 0) {
   const product = row.product;
   if (row.branch_id !== branchId || !product?.active || !row.active || !UUID.test(product.id || '')) return null;
   const discountActive = row.promotional_price != null && (!row.promotion_from || Date.parse(row.promotion_from) <= now) && (!row.promotion_until || Date.parse(row.promotion_until) > now);
   const price = Number(discountActive ? row.promotional_price : row.price);
-  const quantity = Number(row.available_qty) - Number(row.reserved_qty);
+  const quantity = Number(row.available_qty) - Number(row.reserved_qty) + ownQuantity;
   if (!Number.isSafeInteger(price) || price < 0 || !Number.isSafeInteger(quantity) || quantity < 0) throw fail('El inventario tiene un dato que requiere revisión.');
-  // Never treat generic updated_at as a physical stock count. Until the explicit
-  // stock-confirmation field and freshness policy exist, ask the human team.
-  const minutes = Number(env.BOT_STOCK_MAX_AGE_MINUTES || 0);
   const confirmed = Date.parse(row.stock_confirmed_at);
-  const validUntil = Number.isFinite(confirmed) && minutes > 0 && minutes <= 1440 ? confirmed + minutes * 60000 : 0;
+  const validUntil = stockClosingTime(row.stock_confirmed_at);
   return {id: product.id, branch_id: branchId, name: text(product.name, 160),
     description: text(`${product.description || ''}${discountActive ? ' Precio promocional vigente.' : ' Precio regular; no representa un descuento.'}`, 600),
     price_cop: price, available_quantity: quantity, active: true,
@@ -66,16 +64,18 @@ export async function loadPreviewContext(env, operator, conversationId, expected
   eligible(conversation);
   if (conversation.automation_control_version !== expectedVersion) throw fail('El control de la conversación cambió. Actualiza e inténtalo de nuevo.', 409);
   const branchId = conversation.branch_id;
-  const [branches, contacts, messages, knowledge, inventory, qrs, instructions, orders, answers] = await Promise.all([
+  const [branches, contacts, messages, knowledge, inventory, qrs, instructions, orders, answers, reservations, allBranches] = await Promise.all([
     read(env, 'branches', {id: `eq.${branchId}`, active: 'eq.true', select: 'id,name', limit: '1'}),
     read(env, 'whatsapp_contacts', {id: `eq.${conversation.contact_id}`, select: 'preferred_name,display_name', limit: '1'}),
     read(env, 'whatsapp_messages', {conversation_id: `eq.${conversationId}`, select: 'id,direction,sender_type,message_type,body,delivery_status,created_at,raw_payload', or: '(and(direction.eq.inbound,sender_type.eq.customer),and(direction.eq.outbound,delivery_status.in.(sent,delivered,read)))', order: 'created_at.desc,id.desc', limit: '60'}),
     read(env, 'branch_knowledge', {active: 'eq.true', or: `(branch_id.eq.${branchId},branch_id.is.null)`, select: 'id,branch_id,category,title,content,valid_from,valid_until,updated_at', order: 'updated_at.desc,id.asc', limit: '100'}),
     read(env, 'branch_inventory', {branch_id: `eq.${branchId}`, active: 'eq.true', select: '*,product:products(id,name,description,active,seasonal)', order: 'product_id.asc', limit: '101'}),
-    read(env, 'branch_payment_qrs', {branch_id: `eq.${branchId}`, active: 'eq.true', select: 'branch_id,storage_path,updated_at', limit: '2'}),
+    read(env, 'branch_payment_qrs', {branch_id: `eq.${branchId}`, active: 'eq.true', select: 'branch_id,storage_path,updated_at,mime_type', limit: '2'}),
     read(env, 'whatsapp_operator_actions', {conversation_id: `eq.${conversationId}`, action: 'eq.instruction', status: 'eq.pending_bot', select: 'request_id,payload,created_at', order: 'created_at.desc,request_id.desc', limit: '10'}),
-    UUID.test(conversation.linked_order_id || '') ? read(env, 'orders', {id: `eq.${conversation.linked_order_id}`, whatsapp_conversation_id: `eq.${conversationId}`, branch_id: `eq.${branchId}`, select: 'id,order_number,status,updated_at', limit: '1'}) : Promise.resolve([]),
-    read(env, 'human_tasks', {conversation_id: `eq.${conversationId}`, branch_id: `eq.${branchId}`, status: 'in.(resolved,rejected)', 'context->>pilot_engine': 'eq.new-whatsapp-v1', select: 'id,question,resolution,resolved_at', order: 'resolved_at.desc,id.desc', limit: '10'})
+    read(env, 'rpc/bot_customer_orders', {p_conversation_id:conversationId}),
+    read(env, 'human_tasks', {conversation_id: `eq.${conversationId}`, branch_id: `eq.${branchId}`, status: 'in.(resolved,rejected)', 'context->>pilot_engine': 'eq.new-whatsapp-v1', select: 'id,question,resolution,resolved_at', order: 'resolved_at.desc,id.desc', limit: '10'}),
+    read(env, 'inventory_reservations', {conversation_id:`eq.${conversationId}`,status:'eq.active',select:'id,product_id,quantity,expires_at',limit:'50'}),
+    read(env, 'branches', {active:'eq.true',select:'id,name',limit:'20'})
   ]);
   if (!branches[0]) throw fail('La sede no está disponible.', 409);
   const publicMessages = messages.filter(m => m.raw_payload?.internal_notification !== true && (m.direction === 'inbound' && m.sender_type === 'customer' || m.direction === 'outbound' && ['sent','delivered','read'].includes(m.delivery_status)));
@@ -83,25 +83,35 @@ export async function loadPreviewContext(env, operator, conversationId, expected
   if (!latest) throw fail('Todavía no hay un mensaje del cliente para probar.', 409);
   const attachments = await read(env, 'whatsapp_attachments', {conversation_id: `eq.${conversationId}`, message_id: `eq.${latest.id}`, select: 'id,message_id,storage_path,mime_type', order: 'id.asc', limit: '1'});
   const file = attachments.find(a => a.message_id === latest.id && a.storage_path);
-  const products = inventory.slice(0,100).map(row => productSnapshot(row, branchId, env, now)).filter(Boolean);
+  const commerce = conversation.sales_state?.pilot_commerce || {};
+  const ownQuantity = productId => reservations.filter(r=>r.product_id===productId && (commerce.reservations||[]).includes(r.id) && Date.parse(r.expires_at)>now).reduce((n,r)=>n+r.quantity,0);
+  const products = inventory.slice(0,100).map(row => productSnapshot(row, branchId, now, ownQuantity(row.product_id))).filter(Boolean);
+  const offeredDelivered = publicMessages.some(m=>m.id===commerce.offered_message_id);
+  const summaryDelivered = publicMessages.some(m=>m.id===commerce.summary_message_id);
+  const requestedNumber = /\bREY[- ]?(\d+)\b/i.exec(latest.body||'');
+  const order = requestedNumber ? orders.find(o=>o.order_number.toUpperCase()===`REY-${requestedNumber[1]}`) : orders.find(o=>o.id===commerce.order_id) || (orders.length===1 ? orders[0] : null);
+  const labels = {preparing:'en preparación',ready:order?.fulfillment_type==='pickup'?'listo para recoger':'listo para despacho',dispatched:'en camino',delivered:'entregado',cancelled:'cancelado'};
   const sourceVersion = Math.max(Date.parse(conversation.updated_at) || 0, Date.parse(conversation.last_message_at) || 0);
   const state = {
     control: {manual_paused: conversation.automation_paused === true, closed: false, consent: 'granted', allow_ai: true},
-    branch: branches[0], customer: {name: text(contacts[0]?.preferred_name || contacts[0]?.display_name, 100)},
+    branch: branches[0], customer: {name: text(contacts[0]?.preferred_name, 100)},
     message: {id: latest.id, text: text(latest.body, 4000) || `El cliente envió un archivo de tipo ${text(latest.message_type,30)}. No se ha interpretado su contenido.`, kind: latest.message_type,
       ...(file ? {attachment: {id: file.id, message_id: latest.id, persisted: true}} : {})},
     history: [...publicMessages].reverse().filter(m => m.id !== latest.id).map(m => ({role: m.direction === 'inbound' ? 'customer' : m.sender_type === 'human' ? 'operator' : 'assistant', text: text(m.body,2000) || `[Archivo de tipo ${text(m.message_type,30)}]`})),
-    information: [...answers.filter(answer=>answer.resolution?.answer).map(answer=>({id:answer.id,topic:'Respuesta del equipo para esta conversación',text:text(`Consulta: ${answer.question}. Respuesta registrada el ${answer.resolved_at}: ${answer.resolution.answer}`,2000)})),...knowledge.filter(record => validAt(record,now)).map(record => ({id: record.id, topic: text(`${record.category}: ${record.title}`,100), text: text(record.content,2000)}))].slice(0,40),
-    products, qr_assets: await Promise.all(qrs.filter(qr => qr.branch_id === branchId && qr.storage_path).map(async qr => ({id: `qr:${branchId}:${(await digest([qr.storage_path,qr.updated_at])).slice(0,32)}`, branch_id: branchId, label: 'QR vigente de la sede', active: true}))),
+    information: [{id:'verified-active-branches',topic:'Nuestras sedes',text:'Sedes activas de Almacenes El Rey: '+orderedBranches(allBranches).map(b=>b.name).join('; ')+'. Puedes pedir cambiar de sede antes de iniciar la compra.'},...answers.filter(answer=>answer.resolution?.answer).map(answer=>({id:answer.id,topic:'Respuesta del equipo para esta conversación',text:text(`Consulta: ${answer.question}. Respuesta registrada el ${answer.resolved_at}: ${answer.resolution.answer}`,2000)})),...knowledge.filter(record => validAt(record,now)).map(record => ({id: record.id, topic: text(`${record.category}: ${record.title}`,100), text: text(record.content,2000)}))].slice(0,40),
+    products, qr_assets: await Promise.all(qrs.filter(qr => qr.branch_id === branchId && qr.storage_path && ['image/jpeg','image/png'].includes(qr.mime_type)).map(async qr => ({id: `qr:${branchId}:${(await digest([qr.storage_path,qr.updated_at])).slice(0,32)}`, branch_id: branchId, label: 'QR vigente de la sede', active: true}))),
     operator_instructions: [...instructions].reverse().map(note => ({id: note.request_id, text: text(note.payload?.text,1000)})),
     // Legacy sale-state objects are not trusted as the new engine's accepted
     // quotation or ordered offers. The new durable consumer will own these.
-    last_options: [], cart: [], payment: {ready_for_qr: false, quote_id: ''},
-    order: orders[0] ? {id: orders[0].id, status: orders[0].status, summary: `Pedido ${orders[0].order_number}. Estado registrado: ${orders[0].status}.`} : null
+    last_options: offeredDelivered ? (commerce.offered_ids||[]).filter(id=>products.some(p=>p.id===id)) : [],
+    cart: (commerce.stage==='ordered'?[]:commerce.cart||[]).filter(i=>products.some(p=>p.id===i.product_id)).map(i=>({product_id:i.product_id,quantity:i.qty})),
+    checkout: {...commerce,summary_delivered:summaryDelivered},
+    payment: {ready_for_qr: commerce.payment_method==='transfer' && commerce.accepted_quote_id===commerce.quote_id && !!commerce.quote_id && Date.parse(commerce.reservation_until)>now,quote_id:commerce.quote_id||''},
+    order: order ? {id: order.id, status: order.status, summary: `Tu pedido ${order.order_number} de ${order.branch_name||branches[0].name} está ${labels[order.status]||'pendiente de revisión'}. Total: ${new Intl.NumberFormat('es-CO',{style:'currency',currency:'COP',maximumFractionDigits:0}).format(Number(order.total)+Number(order.delivery_fee))}. ${order.promised_at && Date.parse(order.promised_at)>now ? `Hora estimada confirmada: ${new Date(order.promised_at).toLocaleString('es-CO',{timeZone:'America/Bogota'})}.` : 'No hay hora de entrega vigente confirmada.'}`} : null
   };
   const fingerprint = await digest({state, sourceVersion, controlVersion: expectedVersion, latestMessage: publicMessages[0]?.id});
   return {contract: 'el-rey.bot.turn.v1', mode: 'preview', conversation_id: conversationId, control_version: expectedVersion,
-    context_version: sourceVersion, context_fingerprint: fingerprint,
+    context_version: sourceVersion, commerce_version:commerce.version||0, context_fingerprint: fingerprint,
     snapshot: {source: 'intranet', issued_at: new Date(now).toISOString(), expires_at: new Date(now+240000).toISOString(), ...state},
     latest_message_id: publicMessages[0]?.id,
     warnings: [...(products.some(p=>!p.stock_verified) ? ['Las existencias todavía requieren confirmación del equipo; esta prueba no reserva productos.'] : []), ...(inventory.length>100 ? ['Se consultaron los primeros 100 productos; el catálogo no está completo.'] : [])]};

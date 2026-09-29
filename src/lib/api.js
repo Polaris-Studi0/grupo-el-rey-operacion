@@ -151,19 +151,18 @@ export async function saveKnowledge(values){
 }
 export async function saveCatalogItem(values){
   if(isDemoMode) return demoStore.saveCatalogItem(values);
-  const {data,error}=await supabase.rpc("adjust_branch_inventory",{
-    p_branch_id:values.branch_id,p_product_id:values.product_id||null,p_sku:values.sku?.trim()||null,
-    p_name:values.name.trim(),p_description:values.description?.trim()||null,p_price:Number(values.price||0),
-    p_available_qty:Number(values.available_qty||0),p_low_stock_threshold:Number(values.low_stock_threshold||0),
-    p_seasonal:Boolean(values.seasonal),p_active:Boolean(values.active),p_reason:"Ajuste desde el panel administrador"
-  });
+  const {data,error}=await supabase.rpc("save_bot_catalog_item",{p_values:{...values,
+    promotional_price:values.promotional_price===""?null:Number(values.promotional_price),
+    promotion_from:values.promotion_from?new Date(`${values.promotion_from}-05:00`).toISOString():null,
+    promotion_until:values.promotion_until?new Date(`${values.promotion_until}-05:00`).toISOString():null
+  }});
   if(error)throw error;return data;
 }
 export async function uploadBranchPaymentQr(branchId,file){
   if(isDemoMode)throw new Error("La carga de QR requiere conexión con Supabase.");
   if(!branchId||!file)throw new Error("Selecciona una sede y una imagen.");
   if(file.size>5*1024*1024)throw new Error("La imagen debe pesar máximo 5 MB.");
-  if(!["image/jpeg","image/png","image/webp"].includes(file.type))throw new Error("Usa una imagen JPG, PNG o WEBP.");
+  if(!["image/jpeg","image/png"].includes(file.type))throw new Error("Usa una imagen JPG o PNG para enviar el QR por WhatsApp.");
   const {data:previous}=await supabase.from("branch_payment_qrs").select("storage_path").eq("branch_id",branchId).maybeSingle();
   const extension=(file.name.split(".").pop()||"png").replace(/[^a-z0-9]/gi,"").toLowerCase();
   const path=`${branchId}/${crypto.randomUUID()}.${extension}`;
@@ -179,9 +178,9 @@ export async function getBranchPaymentQrUrl(path){
   const {data,error}=await supabase.storage.from("payment-qrs").createSignedUrl(path,300);
   if(error)throw error;return data.signedUrl;
 }
-export async function resolveHumanTask(taskId,status,resolution){
+export async function resolveHumanTask(taskId,status,resolution,commerce=false){
   if(isDemoMode) return demoStore.resolveHumanTask(taskId,status,resolution);
-  const {data,error}=await supabase.rpc("resolve_human_task",{p_task_id:taskId,p_status:status,p_resolution:resolution});
+  const {data,error}=await supabase.rpc(commerce?"resolve_bot_commerce_task":"resolve_human_task",{p_task_id:taskId,p_status:status,p_resolution:resolution});
   if(error)throw error;
   const {data:sessionData}=await supabase.auth.getSession();
   const accessToken=sessionData.session?.access_token;
@@ -272,4 +271,10 @@ export function subscribeToPqrs(onChange){
   if(isDemoMode)return()=>{};
   const channel=supabase.channel(`pqrs-live-${crypto.randomUUID()}`).on("postgres_changes",{event:"*",schema:"public",table:"pqrs_cases"},onChange).subscribe();
   return()=>supabase.removeChannel(channel);
+}
+
+export async function confirmBotStock(branchId,productId,quantity){
+  if(isDemoMode)throw new Error("La confirmación de stock requiere conexión con Supabase.");
+  const {data,error}=await supabase.rpc("confirm_bot_stock",{p_branch_id:branchId,p_product_id:productId,p_available_qty:quantity});
+  if(error)throw error;return data;
 }

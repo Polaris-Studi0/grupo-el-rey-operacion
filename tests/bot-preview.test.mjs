@@ -13,8 +13,8 @@ function database(){
     whatsapp_messages:[{id:mid,conversation_id:cid,direction:'inbound',sender_type:'customer',message_type:'text',body:'¿A qué hora cierran?',created_at:'2026-09-28T12:00:00Z',delivery_status:'received'}],
     branch_knowledge:[{id:pid,title:'Horario',category:'schedule',content:'Cierre a las 20:00',active:true}],
     branch_inventory:[{branch_id:'b1',product_id:pid,price:90000,promotional_price:50000,promotion_from:'2026-09-01T00:00:00Z',promotion_until:'2026-10-01T00:00:00Z',available_qty:5,reserved_qty:2,active:true,updated_at:new Date().toISOString(),product:{id:pid,name:'Producto de prueba',active:true,seasonal:true}}],
-    branch_payment_qrs:[{branch_id:'b1',storage_path:'b1/private-qr.png',updated_at:'2026-09-01T00:00:00Z'}],
-    whatsapp_operator_actions:[{request_id:pid,payload:{text:'Pregunta interna para el equipo'}}],whatsapp_attachments:[],orders:[],human_tasks:[]
+    branch_payment_qrs:[{branch_id:'b1',storage_path:'b1/private-qr.png',mime_type:'image/png',updated_at:'2026-09-01T00:00:00Z'}],
+    whatsapp_operator_actions:[{request_id:pid,payload:{text:'Pregunta interna para el equipo'}}],whatsapp_attachments:[],orders:[],inventory_reservations:[],human_tasks:[]
   };
 }
 async function harness(options={},run){
@@ -33,7 +33,7 @@ async function harness(options={},run){
     }
     if(url.hostname==='supabase.invalid'&&url.pathname.startsWith('/rest/v1/')){
       assert.equal(init.method||'GET','GET','preview must not mutate Supabase');
-      const table=url.pathname.split('/').at(-1);if(!(table in db))throw Error('Unexpected table '+table);
+      const table=url.pathname.endsWith('/rpc/bot_customer_orders')?'orders':url.pathname.split('/').at(-1);if(!(table in db))throw Error('Unexpected table '+table);
       if(options.unavailableTable===table)return Response.json({}, {status:503});
       return Response.json(db[table]);
     }

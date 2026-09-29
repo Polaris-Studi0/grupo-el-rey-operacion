@@ -13,7 +13,7 @@ async function scenario(options={},run){
   const now=new Date().toISOString(),trace=[],sent=[],events=[],tasks=[];
   const db={whatsapp_conversations:[{id:cid,contact_id:uid,branch_id:'b1',status:'open',consent_status:'granted',consented_at:now,consent_version:'v1',automation_paused:false,automation_control_version:2,updated_at:now,last_message_at:now,sales_state:{legacy:'preserved'}}],
     whatsapp_contacts:[{id:uid,phone_e164:'+'+env.BOT_PILOT_PHONE,preferred_name:'Ana'}],branches:[{id:'b1',name:'Sede real de prueba'}],whatsapp_messages:[{id:mid,direction:'inbound',sender_type:'customer',message_type:'text',body:'¿A qué hora cierran?',created_at:now}],
-    branch_knowledge:[{id:tid,category:'schedule',title:'Horario',content:'Cierra a las 20:00.'}],branch_inventory:[],branch_payment_qrs:[],whatsapp_attachments:[],whatsapp_operator_actions:[],orders:[],human_tasks:[],ai_runs:[],privacy_consents:[{granted:true}]};
+    branch_knowledge:[{id:tid,category:'schedule',title:'Horario',content:'Cierra a las 20:00.'}],branch_inventory:[],branch_payment_qrs:[],whatsapp_attachments:[],whatsapp_operator_actions:[],orders:[],inventory_reservations:[],human_tasks:[],ai_runs:[],privacy_consents:[{granted:true}]};
   options.setup?.(db);const original=globalThis.fetch;
   globalThis.fetch=async (url,init={})=>{
     const u=new URL(String(url));
@@ -24,7 +24,7 @@ async function scenario(options={},run){
       return Response.json({contract:'el-rey.bot.decision.v1',status:'decision_ready',mode:'pilot',source:'intranet',turn_id:p.turn_id,conversation_id:cid,expected_control_version:2,expected_context_version:p.context_version,expected_context_fingerprint:p.context_fingerprint,expires_at:p.snapshot.expires_at,send_allowed:false,mutations_executed:[],decision:options.decision||{intent:'information',reply_text:p.snapshot.human_resolution?'En esta sede no tenemos cargadores para carros eléctricos.':'Cerramos a las 20:00.',actions:[]}});
     }
     assert.equal(u.hostname,'db.invalid');assert.equal(init.headers.authorization,undefined,'modern secret must not be used as a bearer JWT');
-    const table=u.pathname.split('/').at(-1);assert.ok(table in db,table);
+    const table=u.pathname.endsWith('/rpc/bot_customer_orders')?'orders':u.pathname.split('/').at(-1);assert.ok(table in db,table);
     if(table==='privacy_consents')for(const item of (u.searchParams.get('order')||'').split(',').filter(Boolean))assert.ok(consentColumns.has(item.split('.')[0]),`Unknown privacy_consents column: ${item}`);
     if(init.method==='PATCH'){const body=JSON.parse(init.body);Object.assign(db[table][0],body);trace.push('patch');return Response.json(db[table]);}
     if(table==='whatsapp_messages'&&u.searchParams.get('idempotency_key')?.startsWith('eq.human-task-response:'))return Response.json(options.cachedResolution?[{id:tid,raw_payload:{control_version:1,inbound_message_id:mid}}]:[]);
@@ -35,7 +35,11 @@ async function scenario(options={},run){
   const rpc=async(name,body)=>{
     trace.push(name);events.push({name,body});
     if(name==='ingest_whatsapp_message')return {created:!options.duplicate,conversation_id:cid,message_id:mid};
-    if(name==='persist_whatsapp_commercial_response'){assert.equal(body.p_proposed_output.action,'reply');assert.equal(body.p_proposed_output.send_qr,false);assert.deepEqual(body.p_proposed_output.sales_state,{legacy:'preserved'});return {outbound_message_id:tid,ai_output:body.p_proposed_output};}
+    if(name==='commit_bot_commerce_turn'){
+      assert.equal(body.p_control_version,2);assert.equal(body.p_commerce_version,0);const human=body.p_decision.actions?.find(a=>a.type==='propose_human_task');
+      if(human)tasks.push({id:tid,question:human.question,context:{inbound_message_id:mid}});
+      return {message_ids:[tid],task_ids:human?[tid]:[],control_version:2,inbound_message_id:mid};
+    }
     if(name==='create_human_task'){const t={id:tid,question:body.p_question,context:body.p_context};tasks.push(t);return [t];}
     if(name==='claim_automation_event')return [{id:tid,lease_id:uid}];
     if(name==='prepare_whatsapp_automation_message')return {message_id:uid};
@@ -58,7 +62,7 @@ test('mixed webhook batches route only the allowlisted phone to the new engine',
 });
 test('pilot persists inbound and media first, checks context and uses durable reply queue',async()=>scenario({},async s=>{
   await processPilotWebhook(payload(),env,s.dependencies);assert.ok(s.trace.indexOf('ingest_whatsapp_message')<s.trace.indexOf('media'));assert.ok(s.trace.indexOf('media')<s.trace.indexOf('model'));
-  assert.ok(s.trace.indexOf('persist_whatsapp_commercial_response')<s.trace.indexOf('deliver'));assert.equal(s.sent.length,1);assert.equal(s.sent[0].expected.inbound_message_id,mid);
+  assert.ok(s.trace.indexOf('commit_bot_commerce_turn')<s.trace.indexOf('deliver'));assert.equal(s.sent.length,1);assert.equal(s.sent[0].expected.inbound_message_id,mid);
 }));
 test('manual takeover blocks AI and an ordinary message cannot release it',async()=>scenario({setup:db=>db.whatsapp_conversations[0].automation_paused=true},async s=>{
   await processPilotWebhook(payload(),env,s.dependencies);assert.equal(s.trace.includes('model'),false);assert.equal(s.sent.length,0);assert.equal(s.trace.includes('patch'),false);
@@ -71,12 +75,12 @@ test('explicit owner start releases only this test chat; a retry cannot release 
 });
 test('manual control or a new customer message during generation prevents commit',async()=>{
   for(const duringModel of [db=>db.whatsapp_conversations[0].automation_paused=true,db=>db.whatsapp_messages[0].body='Nueva pregunta'])await scenario({duringModel},async s=>{
-    await processPilotWebhook(payload(),env,s.dependencies).catch(()=>{});assert.equal(s.trace.includes('persist_whatsapp_commercial_response'),false);assert.equal(s.sent.length,0);
+    await processPilotWebhook(payload(),env,s.dependencies).catch(()=>{});assert.equal(s.trace.includes('commit_bot_commerce_turn'),false);assert.equal(s.sent.length,0);
   });
 });
 test('missing information creates an exact task and separately notifies the configured owner',async()=>scenario({decision:{intent:'handoff',reply_text:'El equipo debe confirmar ese dato.',actions:[{type:'propose_human_task',reason:'missing_information',question:'Confirmar si venden el producto consultado.'}]}},async s=>{
   await processPilotWebhook(payload(),env,s.dependencies);assert.equal(s.tasks.length,1);assert.equal(s.tasks[0].context.inbound_message_id,mid);
-  assert.equal(s.events.find(e=>e.name==='create_human_task').body.p_assigned_to_phone,'+'+env.BOT_PILOT_PHONE);
+  assert.equal(s.events.find(e=>e.name==='commit_bot_commerce_turn').body.p_owner_phone,'+'+env.BOT_PILOT_PHONE);
   assert.equal(s.events.find(e=>e.name==='prepare_whatsapp_automation_message').body.p_admin_phone,'+'+env.BOT_PILOT_PHONE);
   assert.equal(s.sent.length,2);assert.equal(s.events.find(e=>e.name==='complete_automation_event').body.p_error,null);
 }));

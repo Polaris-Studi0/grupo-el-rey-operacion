@@ -1,5 +1,5 @@
 {
-  "checked_at": "2026-09-29T14:15:21.330Z",
+  "checked_at": "2026-09-29T20:38:26.040Z",
   "scope": "published_n8n_synthetic_clarifications_no_customer_effects",
   "results": [
     {
@@ -19,7 +19,7 @@
       "status": 200,
       "decision_status": "decision_ready",
       "passed": true,
-      "reply": "En la Sede de prueba sí envuelven regalos: solo de lunes a viernes. El servicio cuesta $5.000 por paquete y no incluye caja.",
+      "reply": "En la Sede de prueba pueden envolver regalos solo de lunes a viernes; cuesta $5.000 por paquete y no incluye caja.",
       "evidence": {
         "tools_used": [
           "consultar_informacion"
@@ -31,22 +31,12 @@
       "status": 200,
       "decision_status": "decision_ready",
       "passed": true,
-      "reply": "En la Sede de prueba no está confirmado que el parqueadero sea gratis; no podemos prometerlo.",
+      "reply": "No está confirmado que el parqueadero sea gratis en la Sede de prueba; no podemos prometerlo. Te recomiendo preguntar directamente en la sede al llegar o en caja para confirmar tarifas.",
       "evidence": {
         "tools_used": [
           "consultar_informacion"
         ]
       }
     }
-  ],
-  "workflow_version": "5f3fbc3f-9180-4b5a-b291-1332916472a2",
-  "worker_version": "b4ec81dc-6818-4237-bbf6-6b565aca9409",
-  "local_pilot_tests": 14,
-  "local_preview_and_contract_tests": 19,
-  "core_http_regression_checks": 7,
-  "new_style_real_whatsapp_delivery_verified": false,
-  "deployed": true,
-  "production_percentage": 100,
-  "production_health_verified": true,
-  "bindings_and_runtime_preserved": true
+  ]
 }
