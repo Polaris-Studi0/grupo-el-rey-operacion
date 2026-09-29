@@ -1,4 +1,6 @@
 import { handleBotConnection } from "./bot-connection.js";
+import { handleBotPreview } from "./bot-preview.js";
+import { handlePilotStatus, partitionPilotWebhook, processPilotWebhook, pilotDeliveryEligible, resumePilotTask, recoverPilotTasks } from "./bot-pilot.js";
 
 const WEBHOOK_PATH = "/api/whatsapp/webhook";
 const SEND_PATH = "/api/whatsapp/send";
@@ -286,6 +288,10 @@ async function wakeAutomation(request,env){
   const conversation=task&&await operatorConversationScope(task.conversation_id,operator,env);
   if(!conversation)return json({error:"No tienes acceso a este pendiente"},403);
   if(conversation.automation_paused)return json({ok:true,deferred:true,reason:"manual_control",task_id:body.task_id});
+  if(env.BOT_PILOT_ENABLED==="true"){
+    const pilotResult=await resumePilotTask(body.task_id,env,{rpc:supabaseRpc,deliver:deliverQueuedWhatsAppMessage});
+    if(pilotResult)return json(pilotResult,pilotResult.ok?200:502);
+  }
   let lastError;
   for(let attempt=0;attempt<3;attempt+=1){
     try{
@@ -359,10 +365,13 @@ async function processClaimedWebhook(payload,eventKey,eventType,inbox,env){
     if(hasMessages){
       // Meta may batch delivery statuses and customer messages in one event.
       // Statuses are already persisted here; only messages need an n8n run.
-      const messagePayload={...payload,entry:payload.entry.map(entry=>({...entry,changes:(entry.changes||[]).map(change=>({...change,value:{...change.value,statuses:[]}}))}))};
+      const {pilot,legacy:messagePayload}=partitionPilotWebhook(payload,env);
+      if(pilot.entry.length)await processPilotWebhook(pilot,env,{rpc:supabaseRpc,persistMedia:persistInboundMedia,deliver:deliverQueuedWhatsAppMessage});
       let automationError;
-      try{await forwardToN8n(messagePayload,eventKey,eventType,inbox.lease_id,env);}catch(error){automationError=error;}
-      await persistInboundMedia(payload,env);
+      if(messagePayload.entry.length){
+        try{await forwardToN8n(messagePayload,eventKey,eventType,inbox.lease_id,env);}catch(error){automationError=error;}
+        await persistInboundMedia(messagePayload,env);
+      }
       if(automationError)throw automationError;
     }
     await supabaseRpc("complete_whatsapp_event",{p_event_key:eventKey,p_lease_id:inbox.lease_id,p_error:null},env);
@@ -402,7 +411,8 @@ function authorizedInternalRequest(request,env){
   return Boolean(expected&&received&&constantTimeEqual(expected,received));
 }
 
-async function deliverQueuedWhatsAppMessage(messageId,env){
+async function deliverQueuedWhatsAppMessage(messageId,env,pilotExpected=null){
+  if(pilotExpected&&!await pilotDeliveryEligible(env,pilotExpected))return json({ok:false,state:"pilot_context_changed"},409);
   if(!env.WHATSAPP_ACCESS_TOKEN||!env.WHATSAPP_PHONE_NUMBER_ID)return json({error:"WhatsApp production credentials are not configured"},503);
   if(!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(messageId||""))return json({error:"A queued message_id is required"},400);
   const leaseId=crypto.randomUUID();
@@ -684,10 +694,13 @@ function health(env){
 export default {
   async scheduled(_controller,env,context){
     context.waitUntil(recoverWebhookInbox(env));
+    context.waitUntil(recoverPilotTasks(env,{rpc:supabaseRpc,deliver:deliverQueuedWhatsAppMessage}).catch(error=>console.error("Pilot task recovery failed",error.message)));
   },
   async fetch(request,env,context){
     const url = new URL(request.url);
     if(url.pathname==="/api/bot/connection"||url.pathname==="/api/bot/connection/probe")return handleBotConnection(request,env);
+    if(url.pathname==="/api/operator/bot-preview")return handleBotPreview(request,env,authenticatedOperator);
+    if(url.pathname==="/api/bot/pilot/status")return handlePilotStatus(request,env);
     if((url.pathname===PQRS_PATH||url.pathname===PQRS_STATUS_PATH||url.pathname.startsWith(`${PQRS_ADMIN_PATH}/`))&&request.method==="OPTIONS")return new Response(null,{status:204,headers:pqrsCorsHeaders(request)});
     if(url.pathname===PQRS_PATH&&request.method==="POST")return createPqrs(request,env);
     if(url.pathname===PQRS_STATUS_PATH&&request.method==="POST")return consultPqrs(request,env);

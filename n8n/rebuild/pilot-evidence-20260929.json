@@ -1,0 +1,66 @@
+{
+  "date": "2026-09-29",
+  "workflow_id": "pGxqUgjYE6NCyiwZ",
+  "workflow_version": "39af7b13-65b1-45e0-b44b-50a0db3c9dfe",
+  "worker_version": "c613bd76-07c6-49b2-8325-9fc56f13a533",
+  "initial_worker_version": "2779f9b5-3acf-49ef-a780-b8406bbd704c",
+  "production_percentage": 100,
+  "pilot_phone_suffix": "8289",
+  "checks": {
+    "pilot_tests": 10,
+    "preview_contract_tests": 18,
+    "connection_tests": 11,
+    "manual_control_tests": 12,
+    "legacy_tests": 148,
+    "published_engine_synthetic": 7,
+    "local_workerd_to_n8n": true,
+    "production_meta_authenticated": true,
+    "production_schema_verified": true,
+    "production_consent_query_verified": true,
+    "bindings_preserved": true,
+    "runtime_preserved": true
+  },
+  "real_message_evidence": {
+    "ingress_confirmed": true,
+    "received_at": [
+      "2026-09-29T05:01:54.972179+00:00",
+      "2026-09-29T05:02:04.083243+00:00",
+      "2026-09-29T05:09:12.221924+00:00"
+    ],
+    "initial_delivery": false,
+    "blocking_error": "privacy_consents was queried with created_at; actual column is captured_at",
+    "fix_published": true,
+    "post_fix_delivery_verified": true,
+    "fresh_user_test_requested": false,
+    "historical_messages_replayed": false,
+    "successful_test": {
+      "received_at": "2026-09-29T14:00:26.622139+00:00",
+      "processed_at": "2026-09-29T14:00:39.967518+00:00",
+      "attempts": 1,
+      "inbound_id": "1f665c86-75b6-481c-a4d2-264d2fef140a",
+      "outbound_id": "0015664f-a9a7-43fb-96c7-e35170c8ff84",
+      "delivery_status": "read",
+      "failure_reason": null,
+      "verified_via": "Authenticated production diagnostics; Meta callback persisted delivery status"
+    },
+    "handoff_test": {
+      "received_at": "2026-09-29T14:02:15.80164+00:00",
+      "processed_at": "2026-09-29T14:02:29.452401+00:00",
+      "attempts": 1,
+      "inbound_id": "7b2e48c0-7f82-4d8a-89f9-8a9d6354861e",
+      "reply_status": "read",
+      "task_id": "f8a8dd2a-3c35-470a-87c6-b9076aeab71f",
+      "owner_notification_status": "read",
+      "owner_notification_id": "3e6f2c71-1bf3-4a41-baf7-71f75c0ebe07",
+      "human_answer_delivery_verified": true,
+      "human_answer_message_id": "7711310f-80fb-4bf5-b261-856566e97fc0",
+      "human_answer_created_at": "2026-09-29T14:03:32.949102+00:00",
+      "human_answer_delivery_status": "read"
+    }
+  },
+  "limits": [
+    "Owner-only pilot",
+    "Commercial checkout and payments pending",
+    "No active inventory at test branch"
+  ]
+}

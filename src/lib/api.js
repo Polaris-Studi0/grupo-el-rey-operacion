@@ -206,6 +206,18 @@ export async function operateWhatsappConversation(body){
   if(!response.ok){const error=new Error(result.error||"No fue posible ejecutar la acción en WhatsApp.");error.status=response.status;error.code=result.code;throw error;}
   return result;
 }
+export async function previewBotResponse(conversation){
+  if(isDemoMode) throw new Error("La prueba del bot requiere una conversación real de la intranet.");
+  const {data:sessionData}=await supabase.auth.getSession();
+  const accessToken=sessionData.session?.access_token;
+  const response=await fetch("/api/operator/bot-preview",{
+    method:"POST",headers:{"content-type":"application/json",...(accessToken?{authorization:`Bearer ${accessToken}`}:{})},
+    body:JSON.stringify({conversation_id:conversation.id,expected_version:conversation.automation_control_version})
+  });
+  const result=await response.json().catch(()=>({}));
+  if(!response.ok)throw new Error(result.error||"No fue posible probar el bot.");
+  return result;
+}
 export function subscribeToOrders(onChange){
   if(isDemoMode) return () => {};
   const channel = supabase.channel("orders-live").on("postgres_changes",{event:"*",schema:"public",table:"orders"},onChange).subscribe();

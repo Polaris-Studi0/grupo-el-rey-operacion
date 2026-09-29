@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { BRANCHES, formatDateTime } from './lib/constants.js';
-import { listConversationPage, listOperatorInstructions, operateWhatsappConversation } from './lib/api.js';
+import { listConversationPage, listOperatorInstructions, operateWhatsappConversation, previewBotResponse } from './lib/api.js';
 import { mergeHistory, prepareOperatorRequest } from './lib/chat-history.js';
 
 export default function ConversationDrawer({conversation,onClose,onOpenAttachment,onRecoverAttachment,onChanged}){
@@ -10,6 +10,7 @@ export default function ConversationDrawer({conversation,onClose,onOpenAttachmen
   const [busy,setBusy]=useState('');
   const [error,setError]=useState('');
   const [notice,setNotice]=useState('');
+  const [preview,setPreview]=useState(null);
   const [historyError,setHistoryError]=useState('');
   const [messages,setMessages]=useState([]);
   const [attachments,setAttachments]=useState([]);
@@ -95,6 +96,17 @@ export default function ConversationDrawer({conversation,onClose,onOpenAttachmen
       setError(e.message);
     }finally{requestBusy.current=false;setBusy('');}
   }
+  async function tryBot(){
+    if(requestBusy.current)return;
+    requestBusy.current=true;setBusy('preview');setError('');setPreview(null);
+    try{
+      const result=await previewBotResponse(conversation);
+      if(active.current)setPreview(result);
+    }catch(e){if(active.current)setError(e.message);}
+    finally{requestBusy.current=false;if(active.current)setBusy('');}
+  }
+  const latestPublicMessage=messages.filter(m=>m.direction==='inbound'||['sent','delivered','read'].includes(m.delivery_status)).at(-1);
+  const previewStale=preview&&(preview.control_version!==conversation.automation_control_version||preview.latest_message_id!==latestPublicMessage?.id);
   const branch=BRANCHES.find(b=>b.id===conversation.branch_id)?.name||'Sin sede';
   return <div className="overlay"><button className="backdrop" aria-label="Cerrar" onClick={onClose}/><aside className="drawer chat-drawer"><button className="close" onClick={onClose}>×</button>
     <p className="eyebrow">CONVERSACIÓN DE WHATSAPP</p><h2>{conversation.contact?.preferred_name||conversation.contact?.display_name||conversation.contact?.phone_e164}</h2>
@@ -112,6 +124,12 @@ export default function ConversationDrawer({conversation,onClose,onOpenAttachmen
       {error&&<p className="operator-error">{error}</p>}{notice&&<p role="status" className="operator-notice">{notice}</p>}
       {pending&&!busy?<button onClick={()=>act(pending.body.action)}>Comprobar / reintentar la acción pendiente</button>:<footer><button disabled={Boolean(busy)||!draft.trim()} onClick={()=>act('instruction',{text:draft})}>Guardar indicación</button><button className="primary" disabled={Boolean(busy)||!draft.trim()} onClick={()=>act('message',{text:draft})}>{busy==='message'?'Enviando…':'Enviar como equipo'}</button></footer>}
       <p className="operator-help">Enviar como equipo toma el control. Las indicaciones son internas y conservan el modo de atención. La IA nueva aún está en preparación.</p>
+      <section className="bot-preview" aria-label="Prueba del bot">
+        <div><b>Probar el bot con esta conversación</b><p>Lee el último mensaje y prepara una respuesta. La prueba no envía mensajes ni crea pedidos o avisos.</p></div>
+        <button disabled={Boolean(busy||pending)||loading||conversation.automation_paused||conversation.consent_status!=='granted'||conversation.status==='closed'||!conversation.branch_id} onClick={tryBot}>{busy==='preview'?'Preparando respuesta…':'Generar respuesta de prueba'}</button>
+        {conversation.automation_paused&&<p>El bot está detenido mientras tienes el control manual.</p>}
+        {preview&&<div role="status"><p className="bot-preview-reply">{preview.reply_text}</p>{preview.requires_human&&<p>Esta respuesta necesita intervención del equipo. La prueba no creó una solicitud.</p>}{preview.warnings?.map(warning=><p key={warning}>{warning}</p>)}{previewStale?<p>La conversación cambió. Genera una respuesta nueva antes de usarla.</p>:<button disabled={Boolean(busy||pending)} onClick={()=>{setDraft(preview.reply_text);setNotice('Respuesta copiada al borrador. Revísala antes de enviarla como equipo.');}}>Usar como borrador</button>}</div>}
+      </section>
       {instructions.length>0&&<details className="operator-instructions"><summary>Indicaciones guardadas ({instructions.length})</summary>{instructions.map(note=><article key={note.request_id}><small>{formatDateTime(note.created_at)} · {note.status==='pending_bot'?'Pendiente para el bot':'Procesada'}</small><p>{note.payload.text}</p></article>)}</details>}
     </section>
   </aside></div>;

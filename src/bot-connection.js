@@ -13,7 +13,7 @@ function reply(body, status = 200, headers = {}) {
   }});
 }
 
-async function authenticates(request, expected) {
+export async function authenticates(request, expected) {
   const received = request.headers.get("x-elrey-gateway-secret");
   if (!received || received.length > 4096) return false;
   const encoder = new TextEncoder();

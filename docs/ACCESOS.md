@@ -1,6 +1,14 @@
 # Accesos e identificadores
 
-Actualizado: 26/09/2026. Inventario de referencias conocidas; **no contiene secretos**. Las verificaciones de conexión de la cuenta nueva se detallan abajo; no equivalen a una prueba de atención comercial. No pedir al usuario claves que ya están configuradas sin antes revisar las conexiones existentes.
+Actualizado: 29/09/2026. Inventario de referencias conocidas; **no contiene secretos**. Las verificaciones de conexión de la cuenta nueva se detallan abajo; no equivalen a una prueba de atención comercial. No pedir al usuario claves que ya están configuradas sin antes revisar las conexiones existentes.
+
+## Estado vigente del piloto (29/09)
+
+- Motor nuevo: `pGxqUgjYE6NCyiwZ`, publicado en versión `5f3fbc3f-9180-4b5a-b291-1332916472a2`; modelo gpt-5-mini mediante Gateway, comprobado con llamadas reales.
+- Entrada privada: `/webhook/el-rey-assistant-turn-v1`. El Worker transforma mensajes de Meta a contexto del agente y despacha las respuestas autorizadas. Meta mantiene `/api/whatsapp/webhook` del Worker.
+- Worker activo: `b4ec81dc-6818-4237-bbf6-6b565aca9409`; piloto limitado al teléfono de Samuel terminado en 8289. La recepción de mensajes reales está confirmada; se corrigió una consulta de consentimiento que impedía responder. Respuesta posterior confirmada por Meta como `read` a las 09:00 Colombia.
+- Diagnóstico privado del piloto: `/api/bot/pilot/status?diagnostics=true`, cabecera `x-elrey-gateway-secret` con la clave nueva de gateway. Sin textos de clientes.
+- Las referencias del 25–26/09 que siguen describen instalación y diagnóstico anteriores, no el estado del motor actual. Estado completo en [traspaso](../HANDOFF_N8N_WHATSAPP.md).
 
 ## Aplicaciones y repositorios
 
@@ -40,10 +48,10 @@ Credenciales guardadas por Samuel y comprobadas el 26/09:
 - Cloudflare no vuelve a mostrar valores de secretos ya definidos. Se generaron dos secretos independientes de 32 bytes aleatorios, almacenados fuera del repositorio en `/Users/samuel/.config/grupo-el-rey/n8n-rebuild-secrets.json` (archivo `0600`, directorio `0700`). No copiar sus valores al chat, documentos o Git.
 - **Cloudflare actualizado:** `wrangler secret bulk` confirmó la creación de `N8N_REBUILD_GATEWAY_SECRET` y `N8N_REBUILD_WEBHOOK_SECRET`. El listado posterior confirmó ambos nuevos y los siete secretos anteriores. La operación creó una revisión de configuración `39e09f96-0820-470b-8e57-059d5b6a49fb` a las 22:16 del 25/09, Colombia; no se desplegó código del checkout. La versión anterior era `746b03b7-a354-4cb5-92a5-7fcec1711ba3`.
 - **Implementado el 26/09:** `GET /api/bot/connection` comprueba la clave nueva de gateway y un identificador de prueba. `POST /api/bot/connection/probe` inicia una prueba contra el webhook fijo `el-rey-rebuild-connection-v1` de la nueva cuenta, usando la clave nueva de webhook. Ninguna ruta accede a clientes, pedidos o Meta. El envío comercial mantiene las claves y URLs antiguas; las herramientas del agente aún están pendientes.
-- Worker activo para este avance: `0b81162c-9f63-47fe-8e3c-58c3d0f17945`. Evidencia y comprobación reproducible en [n8n/rebuild/README.md](../n8n/rebuild/README.md).
+- Worker del avance histórico del 26/09: `0b81162c-9f63-47fe-8e3c-58c3d0f17945`. Evidencia y comprobación reproducible en [n8n/rebuild/README.md](../n8n/rebuild/README.md).
 - La comprobación de salud posterior conservó todos los indicadores en `true`. No demuestra autenticación con las claves nuevas ni entrega de WhatsApp.
 - Las credenciales de Meta y Supabase siguen administradas en Cloudflare. La arquitectura nueva no requiere copiar la credencial administrativa de Postgres a n8n para acceder a las herramientas limitadas.
-- `list_n8n_gateway_services` devolvió `available:true` para nodos de modelos de chat. No se ha elegido modelo, probado una llamada ni comprobado saldo; no hay que crear una clave de OpenAI por defecto para esta etapa.
+- `list_n8n_gateway_services` devolvió `available:true` para nodos de modelos de chat. En ese momento no se había elegido modelo ni probado una llamada; el piloto del 29/09 usa gpt-5-mini. El saldo no está comprobado; no hay que crear una clave de OpenAI por defecto para esta etapa.
 - Referencias: [Header Auth de n8n](https://docs.n8n.io/integrations/builtin/credentials/httprequest/), [secretos de Cloudflare](https://developers.cloudflare.com/workers/configuration/secrets/).
 
 ### Cuenta anterior — referencias históricas

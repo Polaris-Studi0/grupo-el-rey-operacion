@@ -1,90 +1,78 @@
 # Traspaso vigente — Grupo Almacenes El Rey
 
-Actualizado el **26 de septiembre de 2026**, hora de Colombia. Este es el punto de entrada para un chat nuevo; reemplaza los estados contradictorios del traspaso anterior, conservado en [el archivo histórico](docs/archivo/HANDOFF_HISTORICO_HASTA_20260920.md).
+Actualizado el **29/09/2026**, Colombia.
 
-## Situación al cambiar de chat
+## Estado vigente
 
-### Conexión nueva comprobada — 26/09/2026, 10:12 Colombia
+Samuel pidió lanzar el nuevo bot a WhatsApp para probarlo con su número personal y confirmó que, si falta información, debe recibir un aviso para aclararla en la intranet. Se publicó un **piloto limitado**, no la versión comercial completa.
 
-- Samuel guardó y corrigió las dos credenciales Header Auth. IDs y cabeceras en `docs/ACCESOS.md`; **las dos pasaron la prueba real**.
-- Se creó/publicó [EL REY · Diagnóstico de conexión](https://intranetelrey.app.n8n.cloud/workflow/9rR5rLK8oW5FLnF0), ID `9rR5rLK8oW5FLnF0`, versión `04d9bd27-8bcc-4a28-8c06-a7e402c9c54c`. Solo verifica conexión; no atiende clientes ni usa IA.
-- Se añadieron las rutas autenticadas `/api/bot/connection` y `/api/bot/connection/probe` al Worker. Versión desplegada `0b81162c-9f63-47fe-8e3c-58c3d0f17945`; comprobación real de ida y vuelta y rechazo de credenciales ausentes/incorrectas: 6/6 aprobadas.
-- Se conservaron exactamente bindings, secretos, assets y configuración de ejecución. La base de `src/worker.js` se comparó con el bundle remoto antes de publicar. No se cambiaron las URLs comerciales, ni se aplicaron migraciones, ni se enviaron mensajes a clientes.
-- 11 pruebas nuevas de contrato y 9 de ingreso aprobadas; integración del diagnóstico en workerd aprobada. Una opción de redirección incompatible con workerd se corrigió antes de la comprobación final. Evidencia, exportación y límites en [n8n/rebuild/README.md](n8n/rebuild/README.md).
-- También pasaron lint, build y la batería `test:whatsapp` con PostgreSQL aislado. La compilación mantiene un aviso por tamaño de bundle; no se publicaron sus assets locales.
-- **Siguiente trabajo:** verificar esquema real de Supabase y completar etapa A (canal durable, historial por conversación y toma/devolución de control). Después implementar herramientas acotadas y el agente. Los 37 escenarios comerciales siguen sin ejecutar; no declarar completo el bot.
-- Código y documentos pendientes de commit/push manual de Samuel. No se creó commit ni se hizo push; el checkout sigue con historia divergente respecto a `origin/main`. Los dos commits remotos del favicon no se revirtieron al desplegar: se conservaron assets remotos.
+- Worker activo: `b4ec81dc-6818-4237-bbf6-6b565aca9409`, al 100%. Anterior: `d48b21d3-7e03-4592-83da-b04e45e6628f`.
+- [Motor nuevo en n8n](https://intranetelrey.app.n8n.cloud/workflow/pGxqUgjYE6NCyiwZ): 17 nodos, modelo gpt-5-mini por Gateway y seis herramientas. Publicado: `5f3fbc3f-9180-4b5a-b291-1332916472a2`.
+- Entrada privada: `POST /webhook/el-rey-assistant-turn-v1`. Modos test, preview y pilot; el motor solo devuelve propuestas. No guarda datos de ejecuciones.
+- `BOT_PILOT_ENABLED=true`, contacto autorizado **+57 312 737 8289**, mensajes posteriores a `2026-09-29T05:00:41.000Z`. Número empresarial **+57 314 789 9116**.
+- Los mensajes de otros contactos conservan la ruta antigua de mantenimiento. No se cambiaron las URLs comerciales antiguas ni se reactivó el agente anterior.
+- Se conservaron bindings, secretos, configuración de ejecución y PQRS. Nuevos assets: `index-BagG0HoE.js` / `index-CHMuJAxa.css`. No se aplicaron migraciones en este avance.
+- Comprobación remota: Meta autenticado, funciones de Supabase presentes y contexto de la sede de prueba legible (2 registros informativos, 0 productos activos, 1 referencia QR). Esto no prueba entrega de WhatsApp.
+- **Entrega real confirmada:** mensaje de horario recibido a las 09:00:26 Colombia y procesado a las 09:00:39, un solo intento; respuesta con estado Meta `read`. El recorrido pendiente → aviso → aclaración → respuesta también pasó: la aclaración de Samuel se envió a las 09:03:32 y tiene estado Meta `read`.
 
-### Cambio de cuenta y dirección vigente — 25/09/2026
+## Cómo probar
 
-**Avance posterior de credenciales, 22:16 Colombia:** Samuel no conserva los secretos anteriores. Se crearon en Cloudflare dos secretos nuevos `N8N_REBUILD_GATEWAY_SECRET` y `N8N_REBUILD_WEBHOOK_SECRET`, conservando los anteriores y ambas URLs hacia la cuenta vieja. Revisión de configuración `39e09f96-0820-470b-8e57-059d5b6a49fb`, sin despliegue de código local. Los formularios de ambas credenciales en n8n quedaron preparados en Safari, todavía sin valor ni guardado. El archivo privado y estado están referenciados en `docs/ACCESOS.md`. El Worker aún no consume los nuevos secretos: falta implementar esa conexión y probarla. Se verificó además que Cloudflare Builds sí está enlazado a `main`; un push puede desplegar.
+Desde el teléfono personal autorizado, escribir **PROBAR BOT** al número empresarial. Este comando inicia la prueba y libera control manual únicamente en ese chat; los reintentos del mismo evento no vuelven a liberarlo. Los demás mensajes respetan la pausa manual.
 
-Samuel decidió **empezar de cero en una nueva cuenta de n8n**, conservando los requisitos y las conexiones con la intranet. La continuación de los flujos anteriores ya no es el plan vigente.
+Preguntar información de la sede y luego algo no registrado. La segunda consulta debe crear un pendiente propio del piloto, avisar al WhatsApp personal y permitir responder desde la intranet. El aviso se excluye del historial que recibe la IA. La respuesta del equipo se devuelve al cliente y queda disponible como información de esa conversación.
 
-- Nueva cuenta: `https://intranetelrey.app.n8n.cloud`; MCP: `https://intranetelrey.app.n8n.cloud/mcp-server/http`.
-- Autenticación completada. Estado inicial del diseño: 0 workflows y 0 credenciales; estado vigente actualizado en la sección del 26/09. Hay cobertura de Gateway informada por el MCP, sin comprobar saldo/modelo.
-- Arquitectura nueva: [ARQUITECTURA_BOT_NUEVO.md](docs/ARQUITECTURA_BOT_NUEVO.md). Incluye responsabilidades, integración, herramientas, control humano, promociones y secuencia de pruebas.
-- Samuel confirmó que el stock de promociones se actualizará manualmente en la intranet por sede. Diseñar confirmación de existencias, protección de reservas y descuento de compras del bot sin asumir sincronización con cajas.
-- Borrador de instrucciones y casos de aceptación: `n8n/rebuild/`. **Son diseño y especificaciones, no un agente instalado ni pruebas aprobadas.**
-- El endpoint de salud público del Worker respondió con configuración presente; no prueba entrega ni que sus rutas apunten a la cuenta nueva. En el archivo local `wrangler.jsonc` la automatización todavía apunta a la cuenta antigua.
-- Durante el diseño del 25/09 no se crearon workflows ni se desplegó código. El diagnóstico publicado del 26/09 se detalla arriba. Mantener el criterio de piloto y mantenimiento antes de activar la atención nueva.
-- Al empezar el diseño, HEAD local era `26ad42b` y el árbol estaba limpio. Los nuevos documentos quedan pendientes del commit manual de Samuel.
+La intranet también incluye **Generar respuesta de prueba** y **Usar como borrador** dentro de una conversación. La vista previa no envía nada y requiere sesión, sede, consentimiento y control automático.
 
-El resto de este documento conserva el estado de la infraestructura anterior como referencia. Sus IDs **no pertenecen a la cuenta nueva**.
+## Implementación y comprobaciones
 
-Samuel solicitó actualizar documentación y accesos para continuar en otro chat. Esta actualización es documental: no activa flujos, no despliega código y no borra información.
+- `src/bot-pilot.js`: selección por contacto/fecha, ingreso durable, adjuntos antes de IA, contexto, respuestas, pendientes, avisos y continuación desde intranet.
+- `src/bot-preview.js`: contexto limitado por sede y conversación; claves modernas de Supabase sin Bearer JWT; descarte por cambios de permisos/contexto; separación de notificaciones internas y respuestas humanas.
+- El piloto reutiliza las funciones transaccionales revisadas `ingest_whatsapp_message`, `persist_whatsapp_commercial_response`, `create_human_task` y la cola/claims existentes. El adaptador solo permite responder o consultar al equipo; nunca mapea a finalizar pedidos, aprobar pagos o enviar QR.
+- Pendientes del piloto identificados por `context.pilot_engine=new-whatsapp-v1`; recuperación cada minuto con leases e idempotencia. La aclaración en la intranet se enruta al consumidor nuevo en vez del webhook anterior.
+- 18 pruebas de contexto/contrato, 10 de piloto, 11 de conexión y 12 de control manual aprobadas; dos variantes PostgreSQL de control manual y 148 regresiones heredadas aprobadas. Lint/build correctos.
+- 7 comprobaciones HTTP del motor publicado con datos sintéticos y llamadas reales al modelo aprobadas. Prueba de workerd local hacia n8n publicado con base sintética aprobada.
+- Exportación, fixtures, evidencia y comandos en [n8n/rebuild/README.md](n8n/rebuild/README.md). Archivos privados de despliegue en `~/.config/grupo-el-rey/attention-20260928/`; no copiar secretos.
 
-**Último estado remoto verificado: bot comercial en mantenimiento.** El flujo 01 registra los mensajes y envía el aviso temporal; 03 está bloqueado y 05 despublicado. La reconstrucción está autorizada, pero **no está terminada ni validada de extremo a extremo**. No confundir código guardado, commit, migración aplicada y versión publicada.
+## Límites y siguiente trabajo
 
-El 25/09 se intentó consultar 01 mediante `mcp__codex_apps__n8n_get_workflow_details`; respondió `Mcp error: -32603: Internal error`. No se volvió a verificar producción ese día. Las versiones de mantenimiento documentadas abajo son las últimas comprobadas en este trabajo, no una lectura en vivo del 25/09.
+1. Primer intercambio real y ciclo aviso → aclaración desde intranet → devolución al cliente aprobados. Mantener el piloto limitado mientras se completan compras e inventario.
+2. El inventario de la sede de prueba no tiene productos activos. Implementar confirmación explícita del conteo manual y su vigencia; `updated_at` no acredita stock. Cargar promociones reales desde la intranet.
+3. Completar consumidor comercial con transacciones que comparen versiones de control/contexto al confirmar efectos. El piloto revalida antes de guardar y despachar, pero aún reutiliza RPC heredadas sin un CAS completo del contrato nuevo.
+4. Carrito/opciones durables, reserva de stock, cotización aceptada, QR exacto y creación de pedido siguen pendientes. Actualmente cualquier propuesta de QR/cotización se deriva al equipo.
+5. Visión/audio/PDF, respuesta humana por WhatsApp vinculada, horarios comerciales/recordatorio y plantillas para avisos fuera de ventana todavía no están completos. El piloto del dueño permite pruebas fuera del horario comercial; no extender esa excepción.
+6. Avisos al dueño requieren un mensaje suyo en las últimas 23 horas; si no hay ventana, quedan pendientes. No afirmar que se enviaron.
+7. Las 37 pruebas comerciales de aceptación no están todas ejecutadas. Los tests heredados no acreditan el bot completo.
 
-## Leer en este orden
+## Estado anterior que se conserva
 
-1. [Accesos e identificadores, sin secretos](docs/ACCESOS.md).
-2. [Requisitos acordados y arquitectura objetivo](docs/CHATBOT_N8N.md).
-3. [Arquitectura de la cuenta nueva](docs/ARQUITECTURA_BOT_NUEVO.md); luego [inventario de trabajo anterior](docs/RECONSTRUCCION_BOT.md) solo para evaluar componentes reutilizables.
-4. [Mantenimiento publicado](n8n/MANTENIMIENTO_20260919.md).
-5. [Despliegue de la plataforma existente](docs/DESPLIEGUE.md), solo cuando corresponda publicar.
+El control manual y el historial por conversación se publicaron previamente. Migración remota confirmada: `202609260001_whatsapp_manual_control.sql`. No volver a aplicarla sin comprobar historial. Las migraciones v2 del 20/09 se probaron localmente, pero no están acreditadas en producción; **no ejecutar todas las migraciones pendientes**.
 
-## Carpetas y repositorios
+El diagnóstico `9rR5rLK8oW5FLnF0` continúa publicado en versión `04d9bd27-8bcc-4a28-8c06-a7e402c9c54c`. El laboratorio `FNofeL4WI8mcU2qE` permanece separado del canal real.
 
-- **Aplicación real:** `/Users/samuel/Desktop/Cowork for Grupo El Rey/Plataforma`.
-- **Landing:** `/Users/samuel/Desktop/Cowork for Grupo El Rey/Landing page`.
-- **Carpeta del chat:** `/Users/samuel/Documents/ChatGPT/Grupo El Rey`. Tiene un repositorio separado y respaldos antiguos de n8n; no es el código de la intranet.
-- Repositorio de la plataforma: `https://github.com/Polaris-Studi0/grupo-el-rey-operacion.git`.
-- Al iniciar esta actualización, la plataforma tenía el árbol limpio y HEAD `edd3788` — `pqrs`. Antes: `4389834` — `new`, con los fundamentos v2, y `19c7720` — `Pausa`.
-- No revertir ni sobrescribir el módulo PQRS añadido después del trabajo del bot.
+## Accesos, preferencias y referencias
 
-## Estado de n8n conocido
+Aplicación: `/Users/samuel/Desktop/Cowork for Grupo El Rey/Plataforma`. Repositorio: `Polaris-Studi0/grupo-el-rey-operacion`.
 
-| Flujo | ID | Último estado comprobado |
-|---|---|---|
-| 01 Entrada y trazabilidad | `dgAsTSuWoX6mfYOn` | Mantenimiento publicado: `63dcfc1c-c6a6-474d-8b39-5fe296d0f47f` |
-| 02 Consentimiento | `SmmZnTB6tvSmtntt` | Camino anterior, desconectado de la entrada de mantenimiento |
-| 03 Asistente comercial | `xP8kOe3z2GSnRqkJ` | Publicado pero bloqueado: `64a36633-3b25-4223-8f12-4a3ed64c1884`; `Filtrar autorizados` devuelve `null` |
-| 04 Pendientes humanos | `gi0Vdd1W3weL6i4W` | Última versión publicada conocida: `5d624e2d-aecc-4aeb-a831-210fc2818091` |
-| 05 Reapertura 9 AM | `dUaIlsHiPpEooFs7` | Despublicado durante mantenimiento |
-| Pruebas aisladas | `oMu3IeXg4MHwx8bC` | Sin publicar; último recorrido manual era una validación SQL del aviso, no una prueba completa de v2 |
+Usar MCP nativo `mcp__n8n__*`, que funcionó. El conector `mcp__codex_apps__n8n_*` había fallado con -32603. Redescubrir acceso al retomar. No manejar pantalla; sí editar código y usar CLI.
 
-Un workflow marcado `active=true` no demuestra que la IA atienda: 03 está publicado precisamente con un filtro que impide ejecutarla. Inspeccionar el grafo publicado y diferenciarlo del borrador.
+No borrar datos ni revertir PQRS. No commit/push: Samuel los realiza en GitHub Desktop y un push puede desplegar por Cloudflare Builds. HEAD al iniciar: `e0922ad`; los cambios nuevos siguen sin commit.
 
-## Cómo retomar sin repetir los errores
+Leer [accesos](docs/ACCESOS.md), [arquitectura objetivo](docs/ARQUITECTURA_BOT_NUEVO.md), [requisitos](docs/CHATBOT_N8N.md) y [evidencia actual](n8n/rebuild/README.md). La arquitectura del 25/09 describe el objetivo; este traspaso determina el estado implementado. La infraestructura antigua está documentada como referencia y no debe restaurarse.
 
-- Reconstruir una IA conversacional con herramientas limitadas de la intranet. No añadir otra cadena de palabras clave que sustituya lo que pregunta el cliente.
-- Mantener el aviso de mantenimiento hasta tener una versión nueva probada. La autorización para reconstruir ya existe; no solicitarla de nuevo para tareas ordinarias.
-- Usar MCP de n8n preferentemente. Si falla, registrar el error; no concluir que las credenciales están agotadas ni inventar acceso. Samuel también autorizó usar la interfaz de su PC cuando sea necesario.
-- Conservar transacciones, idempotencia, comprobantes, permisos y continuidad del pedido que sí sirven. Se permite sustituir la arquitectura que no funcione.
-- No borrar conversaciones ni pedidos para iniciar otro chat. Las limpiezas anteriores eran puntuales y no se repiten automáticamente.
-- Samuel prefiere hacer commit y push desde GitHub Desktop. Preparar un título descriptivo, pero no afirmar que se creó un commit si no se hizo. El botón de commit puede usar ese título.
-- Dar avances breves en español, cuidar créditos y ejecuciones, sin sacrificar el funcionamiento. El límite inicial de dos ejecuciones por mensaje dejó de ser una restricción estricta.
+## Incidente de recepción corregido — 29/09, 09:00 Colombia
 
-## Mensaje para pegar en un chat nuevo
+Samuel reportó que envió mensajes y no recibió respuesta. El diagnóstico privado confirmó recepción auténtica por Meta y persistencia de los mensajes; el bloqueo ocurrió antes de llamar a n8n. `privacy_consents` usa `captured_at`, pero el piloto ordenaba por `created_at`. Se corrigió la consulta y se incluyó en la comprobación del esquema remoto. Las pruebas del piloto ahora contrastan las columnas de esa consulta contra la migración SQL.
 
-```text
-Vamos a construir desde cero el bot de WhatsApp de Grupo Almacenes El Rey en la cuenta nueva de n8n.
-Lee primero /Users/samuel/Desktop/Cowork for Grupo El Rey/Plataforma/HANDOFF_N8N_WHATSAPP.md y los documentos vigentes que enlaza.
-La carpeta /Users/samuel/Documents/ChatGPT/Grupo El Rey es la carpeta del chat, no la aplicación real.
-Lee docs/ARQUITECTURA_BOT_NUEVO.md y n8n/rebuild/README.md. La cuenta nueva es intranetelrey.app.n8n.cloud; ya tiene dos credenciales comprobadas y un workflow publicado de diagnóstico de conexión. El agente comercial sigue pendiente. Los IDs antiguos pertenecen a otra cuenta. Revisa el estado actual; usa MCP preferentemente. No reactives el bot anterior, no borres datos ni reviertas PQRS.
-Implementa y prueba una IA con herramientas conectadas a la intranet que cumpla los requisitos documentados: autorización, nombre y sede; lenguaje natural; información real; asistencia y aprobación manual por WhatsApp; imágenes, QR y comprobantes; pedidos, seguimiento, horarios y recordatorio único de 30 minutos.
-Sigue las etapas de la arquitectura nueva, empezando por canal y control manual. n8n/rebuild contiene un borrador de instrucciones y escenarios todavía no ejecutados. Los componentes anteriores se pueden reutilizar solo tras revisarlos y probarlos. Distingue lo probado localmente de lo realmente desplegado y no declares terminado el bot hasta verificar el recorrido completo. Deja un título descriptivo de commit para usar en GitHub Desktop.
-```
+Worker corregido `c613bd76-07c6-49b2-8325-9fc56f13a533` publicado al 100%, con bindings y runtime conservados respecto a `2779f9b5-3acf-49ef-a780-b8406bbd704c`. Comprobación privada de producción aprobada (Meta, datos, consentimiento y contexto). No se reenviaron mensajes históricos; algunos eventos agotaron sus reintentos antes de la corrección. Se solicitó un mensaje nuevo de horario para comprobar la respuesta completa. **Prueba posterior aprobada:** el mensaje nuevo de horario fue recibido a las 09:00:26, procesado a las 09:00:39 y la respuesta tiene estado Meta `read`.
+
+`GET /api/bot/pilot/status?diagnostics=true`, protegido por `N8N_REBUILD_GATEWAY_SECRET`, muestra metadatos de recepción/entrega del teléfono piloto sin incluir textos de clientes ni secretos.
+
+**Prueba de información faltante aprobada (09:02 Colombia):** la consulta del cargador generó una respuesta al cliente y un aviso al dueño; ambos tienen estado Meta `read`. Pendiente humano `f8a8dd2a-3c35-470a-87c6-b9076aeab71f`. Samuel lo aclaró en **WhatsApp e IA → Pendientes → Confirmar respuesta**. Su aclaración se envió a las **09:03:32 Colombia**, mensaje `7711310f-80fb-4bf5-b261-856566e97fc0`, con estado Meta `read`. El ciclo completo está aprobado con mensajes reales; no se inventó información comercial.
+
+## Aclaraciones naturales — 29/09, 09:16 Colombia
+
+Samuel pidió que la respuesta del operador se use como información y no se cite con «el equipo responde» ni se copie la pregunta interna. La continuación de un pendiente ahora consulta el motor nuevo con una aclaración confirmada vinculada al pendiente y a la sede. El motor consulta ese hecho y redacta una o dos frases sin atribución interna, sin datos ajenos ni nuevas gestiones. No transforma la aclaración en pedido, pago, QR o nueva derivación. Las aclaraciones también se integran naturalmente en las consultas posteriores de esa conversación.
+
+Antes de encolar se revalidan contexto, control manual y la respuesta confirmada. Los reintentos reutilizan el texto ya encolado; no generan otra redacción. Si falla el modelo, se usa el dato confirmado directamente, sin el encabezado anterior ni la pregunta interna. No se reenviaron respuestas históricas ni se modificaron pedidos.
+
+Workflow publicado: `5f3fbc3f-9180-4b5a-b291-1332916472a2`. Worker: `b4ec81dc-6818-4237-bbf6-6b565aca9409`. Pruebas: 14 de piloto, 19 de contexto/contrato, 7 HTTP del motor y 3 casos de aclaración con modelo real y datos sintéticos. Los tres casos conservan negación, precio/condiciones e incertidumbre. Evidencia: `n8n/rebuild/clarification-evidence-20260929.json`; reproducir con `node scripts/check-bot-clarifications.mjs`. Esta nueva redacción todavía no se ha comprobado con otro envío real al teléfono; la entrega y el ciclo humano del piloto anterior sí están acreditados arriba.

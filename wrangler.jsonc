@@ -7,6 +7,9 @@
   "keep_vars": true,
   "triggers": { "crons": ["* * * * *"] },
   "vars": {
+    "BOT_PILOT_ENABLED": "true",
+    "BOT_PILOT_STARTED_AT": "2026-09-29T05:00:41.000Z",
+    "BOT_PILOT_PHONE": "573127378289",
     "N8N_AUTOMATION_URL": "https://almaceneselrey.app.n8n.cloud/webhook/el-rey-whatsapp-automation",
     "PQRS_NOTIFICATION_EMAIL": "elrey@polaris-studio.tech",
     "PQRS_FROM_EMAIL": "PQRS Almacenes El Rey <pqrs@almaceneselrey.co>",
