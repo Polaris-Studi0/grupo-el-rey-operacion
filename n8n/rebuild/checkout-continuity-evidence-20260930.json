@@ -1,0 +1,116 @@
+{
+  "checked_at": "2026-09-30T18:37:19.882Z",
+  "workflow_version": "49590459-2789-4769-8efd-80ffa22cd0c5",
+  "scope": "synthetic_server_and_published_model_no_sends_or_commits",
+  "results": [
+    {
+      "name": "nombre_explicito",
+      "route": "server",
+      "status": "decision_ready",
+      "passed": true,
+      "decision": {
+        "intent": "checkout",
+        "reply_text": "Continuemos con los datos de tu compra.",
+        "checkout": {
+          "customer_name": "Samuel"
+        },
+        "confirmed_item": null,
+        "actions": [],
+        "accept_summary": false,
+        "cancel_cart": false
+      }
+    },
+    {
+      "name": "telefono",
+      "route": "server",
+      "status": "decision_ready",
+      "passed": true,
+      "decision": {
+        "intent": "checkout",
+        "reply_text": "Continuemos con los datos de tu compra.",
+        "checkout": {
+          "recipient_phone": "3001234567"
+        },
+        "confirmed_item": null,
+        "actions": [],
+        "accept_summary": false,
+        "cancel_cart": false
+      }
+    },
+    {
+      "name": "direccion_y_barrio",
+      "route": "model",
+      "status": "decision_ready",
+      "passed": true,
+      "decision": {
+        "intent": "checkout",
+        "reply_text": "Continúo con tu selección y los datos que indicas. El resumen y el pago requieren las comprobaciones de la compra.",
+        "offered_product_ids": [],
+        "quote": null,
+        "actions": [],
+        "checkout": {
+          "customer_name": "Samuel",
+          "recipient_name": "Ana",
+          "recipient_phone": "3001234567",
+          "fulfillment_type": "delivery",
+          "delivery_address": "Calle 80 # 95-20",
+          "delivery_zone": "Aures",
+          "payment_method": ""
+        },
+        "confirmed_item": null,
+        "accept_summary": false,
+        "cancel_cart": false
+      }
+    },
+    {
+      "name": "recibo_yo",
+      "route": "model",
+      "status": "decision_ready",
+      "passed": true,
+      "decision": {
+        "intent": "checkout",
+        "reply_text": "Continúo con tu selección y los datos que indicas. El resumen y el pago requieren las comprobaciones de la compra.",
+        "offered_product_ids": [],
+        "quote": null,
+        "actions": [],
+        "checkout": {
+          "customer_name": "",
+          "recipient_name": "Samuel",
+          "recipient_phone": "",
+          "fulfillment_type": "",
+          "delivery_address": "",
+          "delivery_zone": "",
+          "payment_method": ""
+        },
+        "confirmed_item": null,
+        "accept_summary": false,
+        "cancel_cart": false
+      }
+    },
+    {
+      "name": "pregunta_costo_sin_direccion",
+      "route": "model",
+      "status": "decision_ready",
+      "passed": true,
+      "decision": {
+        "intent": "checkout",
+        "reply_text": "Continúo con tu selección y los datos que indicas. El resumen y el pago requieren las comprobaciones de la compra.",
+        "offered_product_ids": [],
+        "quote": null,
+        "actions": [],
+        "checkout": {
+          "customer_name": "",
+          "recipient_name": "",
+          "recipient_phone": "",
+          "fulfillment_type": "",
+          "delivery_address": "",
+          "delivery_zone": "",
+          "payment_method": ""
+        },
+        "confirmed_item": null,
+        "accept_summary": false,
+        "cancel_cart": false
+      }
+    }
+  ]
+}

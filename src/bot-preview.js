@@ -77,6 +77,9 @@ export async function loadPreviewContext(env, operator, conversationId, expected
   if (!latest) throw fail('Todavía no hay un mensaje del cliente para probar.', 409);
   const file = attachments.find(a => a.message_id === latest.id && a.storage_path);
   const commerce = conversation.sales_state?.pilot_commerce || {};
+  const quoteReplies=commerce.quote_id?publicMessages.filter(m=>m.direction==='outbound'&&m.raw_payload?.quote_id===commerce.quote_id):[];
+  const quoteInputIds=new Set(quoteReplies.map(m=>m.raw_payload?.inbound_message_id));
+  const quoteStart=Math.min(...publicMessages.filter(m=>m.direction==='inbound'&&quoteInputIds.has(m.id)).map(m=>Date.parse(m.created_at)));
   const ownQuantity = productId => reservations.filter(r=>r.product_id===productId && (commerce.reservations||[]).includes(r.id) && Date.parse(r.expires_at)>now).reduce((n,r)=>n+r.quantity,0);
   const products = inventory.slice(0,100).map(row => productSnapshot(row, branchId, now, ownQuantity(row.product_id))).filter(Boolean);
   const offeredDelivered = publicMessages.some(m=>m.id===commerce.offered_message_id);
@@ -100,6 +103,7 @@ export async function loadPreviewContext(env, operator, conversationId, expected
     last_options: offeredDelivered ? (commerce.offered_ids||[]).filter(id=>products.some(p=>p.id===id)) : [],
     cart: (commerce.stage==='ordered'?[]:commerce.cart||[]).filter(i=>products.some(p=>p.id===i.product_id)).map(i=>({product_id:i.product_id,quantity:i.qty})),
     checkout: {...commerce,summary_delivered:summaryDelivered},
+    checkout_inputs: [...publicMessages].reverse().filter(m=>m.direction==='inbound'&&Date.parse(m.created_at)>=quoteStart).map(m=>({id:m.id,text:text(m.body,4000),kind:m.message_type})),
     payment: {ready_for_qr: commerce.payment_method==='transfer' && commerce.accepted_quote_id===commerce.quote_id && !!commerce.quote_id && Date.parse(commerce.reservation_until)>now,quote_id:commerce.quote_id||''},
     order: order ? {id: order.id, status: order.status, summary: `Tu pedido ${order.order_number} de ${order.branch_name||branches[0].name} está ${labels[order.status]||'pendiente de revisión'}. Total: ${new Intl.NumberFormat('es-CO',{style:'currency',currency:'COP',maximumFractionDigits:0}).format(Number(order.total)+Number(order.delivery_fee))}. ${order.promised_at && Date.parse(order.promised_at)>now ? `Hora estimada confirmada: ${new Date(order.promised_at).toLocaleString('es-CO',{timeZone:'America/Bogota'})}.` : 'No hay hora de entrega vigente confirmada.'}`} : null
   };

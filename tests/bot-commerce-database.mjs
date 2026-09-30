@@ -1,6 +1,7 @@
 import {PGlite} from '@electric-sql/pglite';
 import {readFile,readdir} from 'node:fs/promises';
 import assert from 'node:assert/strict';
+import {checkoutReply} from '../src/bot-checkout.js';
 const dir=new URL('../supabase/migrations/',import.meta.url);
 const files=(await readdir(dir)).filter(f=>f.endsWith('.sql')).sort();
 const db=new PGlite();const withV2=false;
@@ -156,5 +157,36 @@ assert.equal(approvedSelection.order_id,null);await sent(approvedSelection);
 const completedSelection=await commit(humanCid,{intent:'checkout',accept_summary:true,checkout:{payment_method:'cash_prepaid'}});
 assert.ok(completedSelection.order_id);assert.equal(Number((await one('select total from orders where id=$1',[completedSelection.order_id])).total),50000);
 console.log('PASS human offer -> exact selection -> checkout fields -> only missing count -> approved inventory -> summary -> actual order');
+
+// Follow the actual delivery conversation through persistence, including the
+// former name/recipient mix-up and the phone number that triggered escalation.
+const deliveryCid=await chat('+570000000031');const deliveryAsk=await inbound(deliveryCid,'¿Tienen disfraces?');
+const deliveryTask=(await one("select (create_human_task($1,'delivery-continuity-test','product_lookup','normal','Disfraces','¿Tienen disfraces?',jsonb_build_object('pilot_engine','new-whatsapp-v1','inbound_message_id',$2::text),null,'+570000000999',null)).id id",[deliveryCid,deliveryAsk])).id;
+await db.query("select resolve_human_task($1,'resolved',$2)",[deliveryTask,savedAnswer]);
+let lastDelivery=await commit(deliveryCid,{intent:'checkout',confirmed_item:{...selection,source_task_id:deliveryTask}});await sent(lastDelivery);
+const exported=JSON.parse(await readFile(new URL('../n8n/rebuild/attention-core.workflow.json',import.meta.url),'utf8'));
+const guardCode=exported.nodes.find(n=>n.name==='Validar propuesta y referencias').parameters.jsCode;
+async function deliveryReply(text,modelFields=null){
+ const id=await inbound(deliveryCid,text);const snapshot={message:{id,text,kind:'text'},checkout:await state(deliveryCid),history:[{role:'assistant',text:(await body(lastDelivery)).body}]};
+ let decision=checkoutReply({snapshot});
+ if(!decision&&modelFields){
+  const output={intent:'clarification',reply_text:'Perfecto, listo para enviar.',product_ids:[],quote_items:[],qr_asset_id:'',human_reason:'',human_question:'',checkout:modelFields};
+  const guarded=new Function('$input','$',guardCode)({first:()=>({json:{output}})},()=>({first:()=>({json:{context:{...snapshot,products:[],expires_at:new Date(Date.now()+60000).toISOString()}}})}))[0].json;
+  assert.equal(guarded.http_status,200);decision=guarded.response.decision;
+ }
+ assert.ok(decision,`Checkout reply not recognized: ${text}`);
+ lastDelivery=await commit(deliveryCid,decision,id);await sent(lastDelivery);
+ const reply=(await body(lastDelivery)).body;assert.doesNotMatch(reply,/listo para enviar|super man|50\.000/i);return reply;
+}
+assert.match(await deliveryReply('a domicilio'),/nombre/);
+assert.match(await deliveryReply('A nombre de Samuel porfa'),/dirección/);
+assert.equal((await state(deliveryCid)).customer_name,'Samuel');
+assert.match(await deliveryReply('3127378289'),/dirección/);
+assert.equal((await state(deliveryCid)).recipient_phone,'3127378289');assert.equal(lastDelivery.task_ids.length,0);
+assert.match(await deliveryReply('Calle 10 # 20-30',{delivery_address:'Calle 10 # 20-30'}),/barrio/);
+assert.match(await deliveryReply('Barrio Robledo',{delivery_zone:'Robledo'}),/Quién recibe|quién recibe/);
+assert.match(await deliveryReply('Recibe Samuel'),/unidades disponibles/);assert.equal(lastDelivery.task_ids.length,1);
+assert.equal((await state(deliveryCid)).pending_selection.unit_price_cop,50000);assert.equal(lastDelivery.order_id,null);
+console.log('PASS real delivery wording -> persisted buyer name -> phone without escalation -> address -> sector -> recipient -> stock check, without premature shipment promises');
 
 }catch(e){console.error(e.message,e.where||'',e.detail||'');process.exitCode=1;}finally{await db.close();}

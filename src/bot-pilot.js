@@ -1,6 +1,7 @@
 import {branchSelection,branchMenu,orderedBranches,asksForBranches,asksToChangeBranch} from './bot-branches.js';
 import {authenticates} from './bot-connection.js';
 import {loadPreviewContext,readBotRows,requestBotDecision} from './bot-preview.js';
+import {checkoutReply,recoveredCheckoutFields} from './bot-checkout.js';
 
 const PHONE=/^[1-9]\d{7,14}$/;
 const NOTICE='Soy el asistente virtual con IA de Almacenes El Rey. Para atender tu consulta y gestionar una posible compra, necesitamos tu autorización para tratar los datos de esta conversación. Consulta nuestra política: https://intranet.almaceneselrey.co/privacidad . Responde ACEPTO para continuar o NO ACEPTO para finalizar la atención automatizada.';
@@ -126,12 +127,13 @@ async function processTurn(inbound,env,{rpc,deliver}){
   const context=await loadPreviewContext(env,{role:'admin'},c.id,c.automation_control_version);
   if(context.snapshot.message.id!==inbound.message_id)return;
   let decision;
-  try{decision=await requestBotDecision(env,context,'pilot',inbound.message_id);}
+  try{const direct=checkoutReply(context);decision=direct?{decision:direct}:await requestBotDecision(env,context,'pilot',inbound.message_id);}
   catch(error){
     console.error('Pilot decision unavailable',JSON.stringify({code:error.code||'request_failed',status:error.upstream_status||null}));
     decision={decision:{intent:'handoff',reply_text:'No pude completar esta consulta automáticamente. El equipo debe revisarla para continuar por este chat.',actions:[{type:'propose_human_task',reason:'missing_information',question:`Revisar la consulta porque la respuesta automática no estuvo disponible: ${String(inbound.body).slice(0,650)}`}]}};
   }
 
+  if(decision.decision.intent==='checkout')decision.decision.checkout={...recoveredCheckoutFields(context),...Object.fromEntries(Object.entries(decision.decision.checkout||{}).filter(([,value])=>value))};
   const current=await loadPreviewContext(env,{role:'admin'},c.id,c.automation_control_version);
   if(current.context_fingerprint!==context.context_fingerprint)return;
   if(!await pilotDeliveryEligible(env,expected()))return;

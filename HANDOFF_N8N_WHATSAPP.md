@@ -1,16 +1,29 @@
 # Traspaso vigente — bot de Grupo Almacenes El Rey
 
-Actualizado el **30/09/2026, mañana de Colombia**. Este documento determina el estado real; los documentos de arquitectura describen el objetivo.
+Actualizado el **30/09/2026, tarde de Colombia**. Este documento determina el estado real; los documentos de arquitectura describen el objetivo.
 
 ## Publicado y autorizado
 
-- Aplicación real: `/Users/samuel/Desktop/Cowork for Grupo El Rey/Plataforma`. Samuel autorizó editar código y publicar el piloto. **No manejar pantalla; usar MCP/CLI. No commit/push**: Samuel usa GitHub Desktop. HEAD actual de Samuel: `58a9924 chatbot sep 29`; cambios de esta corrección sin commit.
-- Worker `grupo-el-rey-operacion`: **`a3bb1ef7-9e1d-4442-a37c-e5f82d605a34`**, 100%. Versión inmediatamente anterior: `238cf6fc-3a52-48de-a1eb-e20333987f14`. Bindings y runtime comparados e iguales a esa versión. Assets `index-BYgdxqRQ.js` / `index-CHMuJAxa.css`.
-- [Motor nuevo de n8n](https://intranetelrey.app.n8n.cloud/workflow/pGxqUgjYE6NCyiwZ), 17 nodos, gpt-5-mini mediante Gateway. Publicado **`a1db7148-cf5d-43e0-b1fc-5f29a19c58ad`**. Conserva la corrección de sedes y añade continuidad comercial después de una aclaración humana.
+- Aplicación real: `/Users/samuel/Desktop/Cowork for Grupo El Rey/Plataforma`. Samuel autorizó editar código y publicar el piloto. **No manejar pantalla; usar MCP/CLI. No commit/push**: Samuel usa GitHub Desktop. HEAD actual de Samuel: `ece08ce bot sep 30`; cambios de esta corrección sin commit.
+- Worker `grupo-el-rey-operacion`: **`2a704ccc-26c6-48ab-a1de-4d8042b36416`**, 100%. Versión inmediatamente anterior: `a3bb1ef7-9e1d-4442-a37c-e5f82d605a34`. Bindings y runtime comparados e iguales a esa versión. Assets `index-BYgdxqRQ.js` / `index-CHMuJAxa.css`.
+- [Motor nuevo de n8n](https://intranetelrey.app.n8n.cloud/workflow/pGxqUgjYE6NCyiwZ), 17 nodos, gpt-5-mini mediante Gateway. Publicado **`49590459-2789-4769-8efd-80ffa22cd0c5`**. Conserva la corrección de sedes y añade continuidad comercial después de una aclaración humana.
 - Webhook privado `POST /webhook/el-rey-assistant-turn-v1`. Solo propone: no envía ni escribe en la base. No guardar datos de ejecuciones exitosas/fallidas/manuales ni progreso.
 - Piloto habilitado únicamente para **+57 312 737 8289**, inicio `2026-09-29T05:00:41.000Z`. WhatsApp empresarial **+57 314 789 9116**. No ampliar al público automáticamente. El piloto permite pruebas fuera del horario; no trasladar esa excepción a clientes.
 - Otros teléfonos conservan la ruta anterior. Hay eventos ajenos al piloto con `n8n respondió 404`: **no afirmar que esa ruta de mantenimiento funciona**, ni reactivar el bot viejo para resolverlo. Debe resolverse antes de abrir al público.
 - Meta autenticado; contexto remoto legible. Durante el incidente, La Estrella tenía **0 productos activos y 0 QR activos**. El diagnóstico debe comprobar de nuevo la sede elegida y sus recursos. Samuel pidió no cargar promociones todavía; las subirá cuando existan. No sembrar productos ficticios.
+
+## Incidente de nombre y teléfono — corrección publicada el 30/09 por la tarde
+
+La captura posterior confirmó que la selección de Superman ya continuaba por WhatsApp (08:54), pero falló al recoger datos: «A nombre de Samuel porfa» quedó como `recipient_name`, faltaba `customer_name`, y un turno con texto libre anunció «listo para enviar» sin dirección. Al recibir el teléfono llegó una derivación técnica. **La prueba anterior de selección no cubría adecuadamente esa continuación.**
+
+- `src/bot-checkout.js` procesa respuestas inequívocas del cliente durante una compra activa: nombre explícito del comprador, destinatario explícito, teléfono móvil colombiano y modalidad. No consume IA ni crea pendientes para esos datos. Las respuestas ambiguas/compuestas y consultas siguen en n8n.
+- El contexto conserva `checkout_inputs` limitado a mensajes de la cotización actual. Se recuperan únicamente campos explícitos faltantes; no se usa el nombre del perfil, notificaciones internas ni nombres de compras anteriores. La corrección recupera el nombre y teléfono del incidente al continuar, sin modificar/reemitir el historial.
+- La salida de IA con datos comerciales o una aclaración durante recogida de datos pasa por la transacción de checkout; no se envía como una promesa libre. Se conserva la posibilidad de hacer preguntas informativas aparte. El prompt distingue comprador/destinatario y mantiene los datos parciales.
+- SQL menciona producto/precio una vez y luego pregunta solo lo que falta. No anuncia envío antes de completar el pedido. Conteo, tarifa, aceptación y pago mantienen sus validaciones.
+- Migración `202609300003_bot_checkout_continuity.sql` aplicada por CLI administrativa. No se sembraron productos, no se borraron tareas ni se enviaron mensajes desde las pruebas.
+- **49 pruebas Node y 12 grupos PostgreSQL** aprobados; lint/build aprobados. Recorrido aislado: selección → domicilio → nombre → teléfono → dirección → barrio → destinatario → conteo. El modelo publicado pasó dirección/barrio/destinatario/teléfono juntos, «recibo yo» y costo sin dirección. Otros dos casos usan el procesamiento directo del servidor. Evidencia `checkout-continuity-evidence-20260930.json`.
+- Reproducción privada con el contexto real: recupera el comprador y el teléfono correctos, sin IA ni tarea humana (`checkout-sep30-direct-replay.json`). **Falta nueva entrega real después de esta corrección**. Samuel puede continuar con dirección y barrio, sin repetir nombre/teléfono.
+- El pendiente técnico antiguo `5b8c5e8a-11b7-4edc-8207-90619dbb86b4` permanece sin borrar. No resolverlo automáticamente ni volver a enviar mensajes históricos. Una consulta natural/compuesta todavía puede depender de n8n; no afirmar que todo funciona sin IA.
 
 ## Incidente de sedes: resuelto y entrega real confirmada
 
@@ -37,7 +50,7 @@ Samuel confirmó en intranet «super man unitalla a 50.000» y «sharkboy talla 
 - No se sembraron productos/promociones ni se borraron pendientes. El pendiente repetido antiguo `9d1f1660-b6db-42a1-9856-ff3f9c578fad` permanece como historial; no resolverlo para probar la corrección. Reenviar una nueva elección en WhatsApp.
 - Límite actual: selección de **un producto** desde la aclaración, precio literal en pesos (50000 o 50.000). Expresiones como «50 mil» necesitan aclaración. Antes de ampliar al público, revisar reutilización de productos ya catalogados para evitar duplicados al confirmar artículos similares desde distintas consultas.
 
-Comprobación con el contexto real de la conversación `1ebe4418-0684-4358-8cd5-b635e107a8b6`: propuesta `checkout`, tarea fuente correcta, 1 unidad por 50000, sin derivación, sin mutaciones y sin envío. Evidencia privada `confirmed-selection-live-proposal.json` bajo la carpeta de diagnóstico. **Aún falta la nueva entrega real por WhatsApp y la compra real**; la prueba aislada sí completó el pedido después del conteo y aceptación. Producción respondió 200, Meta conectado, contexto legible, assets nuevos y catálogo todavía vacío.
+Comprobación con el contexto real de la conversación `1ebe4418-0684-4358-8cd5-b635e107a8b6`: propuesta `checkout`, tarea fuente correcta, 1 unidad por 50000, sin derivación, sin mutaciones y sin envío. Evidencia privada `confirmed-selection-live-proposal.json` bajo la carpeta de diagnóstico. **La selección sí llegó realmente a WhatsApp a las 08:54; falta la compra real completa**; la prueba aislada sí completó el pedido después del conteo y aceptación. Producción respondió 200, Meta conectado, contexto legible, assets nuevos y catálogo todavía vacío.
 
 ## Comercio implementado, todavía sin compra real de aceptación
 
@@ -62,6 +75,7 @@ Aplicadas **solo** las migraciones aditivas:
 - `202609290004_bot_context_snapshot.sql` (lectura estable, acotada por conversación/sede, solo service_role).
 - `202609300001_bot_confirmed_selection.sql` (selección humana provisional y aprobación explícita de conteo).
 - `202609300002_bot_confirmed_selection_source_guard.sql` (rechaza tareas resueltas sin respuesta).
+- `202609300003_bot_checkout_continuity.sql` (preguntas progresivas sin repetir producto/precio).
 
 La migración de control manual del 26/09 ya estaba aplicada. V2 del 20/09 NO está aplicada. La base no tiene `supabase_migrations.schema_migrations`: comprobar funciones/columnas, no inferir estado por historial CLI. No ejecutar toda la carpeta.
 
@@ -73,10 +87,10 @@ Claves de reconstrucción fuera de Git: `~/.config/grupo-el-rey/n8n-rebuild-secr
 
 ## Verificación y siguientes pasos
 
-- 45 pruebas Node del conjunto comercial (incluye 2 recorridos del webhook firmado con Meta/base simulados), 11 grupos PostgreSQL aislados y 9 pruebas de ingreso heredadas aprobados. Lint y build aprobados; advertencia de bundle Vite >500 kB existente.
+- 49 pruebas Node del conjunto comercial (incluye 2 recorridos del webhook firmado con Meta/base simulados), 12 grupos PostgreSQL aislados y 9 pruebas de ingreso heredadas aprobados. Lint y build aprobados; advertencia de bundle Vite >500 kB existente.
 - Cinco casos comerciales con modelo real y datos sintéticos aprobados tras cambiar la regla informativa. Son propuestas, **no compras reales**. Evidencia en `n8n/rebuild/commerce-evidence-20260929.json`.
 - Prueba real de sedes aprobada por Samuel y estado Meta read. No se reenviaron mensajes históricos, no se borraron pendientes ni pedidos y no se cargó stock.
 - Antes de público: compra completa con producto/precio/conteo real y QR de la sede cuando Samuel los cargue; probar dirección/tarifa/resumen/pago/pedido/seguimiento/control humano en WhatsApp.
 - Faltan horarios operativos/recordatorio, interpretación de audio/imágenes/PDF, respuesta humana mediante aviso citado en WhatsApp, envío de imagen de producto y plantillas de aviso fuera de 23 horas. El responsable hoy contesta desde intranet.
 - La ejecución de IA sigue sujeta al límite de tiempo del trabajo de fondo HTTP; el inbox durable recupera turnos interrumpidos. Antes de público conviene separar ejecución prolongada en cola. El arreglo de sedes es directo y no depende de ese tiempo de IA.
-- No afirmar «perfecto» ni «listo para público». La siguiente prueba es reenviar «quiero el de Superman» y comprobar que pregunta domicilio/recogida sin repetir la consulta. La compra real requiere conteo explícito de Samuel y datos reales.
+- No afirmar «perfecto» ni «listo para público». La siguiente prueba es continuar con dirección y barrio, conservando la selección, el nombre y el teléfono ya dados. La compra real requiere conteo explícito de Samuel y datos reales.

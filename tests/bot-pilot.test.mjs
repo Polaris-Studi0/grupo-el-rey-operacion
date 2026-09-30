@@ -3,6 +3,7 @@ import {snapshotFixture} from './helpers/bot-snapshot.mjs';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {partitionPilotWebhook,processPilotWebhook,notifyPilotTask,resumePilotTask} from '../src/bot-pilot.js';
+import {checkoutReply,recoveredCheckoutFields} from '../src/bot-checkout.js';
 
 const cid='10000000-0000-4000-8000-000000000001',uid='10000000-0000-4000-8000-000000000002',mid='10000000-0000-4000-8000-000000000003',tid='10000000-0000-4000-8000-000000000004';
 const env={BOT_PILOT_ENABLED:'true',BOT_PILOT_PHONE:'573127378289',SUPABASE_URL:'https://db.invalid',SUPABASE_SECRET_KEY:'sb_secret_test',N8N_REBUILD_WEBHOOK_SECRET:'test-new-key'};
@@ -133,3 +134,28 @@ test('natural branch correction is stored without asking the model to pretend to
  await processPilotWebhook(payload([{id:'wamid.switch',from:env.BOT_PILOT_PHONE,type:'text',text:{body:'creo que me queda mejor la de campo valdez'}}]),env,s.dependencies);
  assert.equal(s.db.whatsapp_conversations[0].branch_id,'b9');assert.equal(s.trace.includes('model'),false);assert.match(s.events.find(e=>e.name==='queue_outbound_whatsapp_message').body.p_body,/Campo Valdez/);
 }));
+
+test('explicit checkout name and phone persist through the pilot without AI or human escalation',async()=>{
+ for(const [text,field,value] of [['A nombre de Samuel porfa','customer_name','Samuel'],['3127378289','recipient_phone','3127378289'],['a domicilio','fulfillment_type','delivery']]){
+  await scenario({modelFails:true,setup:db=>{
+   db.whatsapp_conversations[0].sales_state.pilot_commerce={stage:'collecting',pending_selection:{name:'super man',unit_price_cop:50000,quantity:1}};
+   db.whatsapp_messages[0].body=text;
+  }},async s=>{
+   await processPilotWebhook(payload([{id:'wamid.field',from:env.BOT_PILOT_PHONE,type:'text',text:{body:text}}]),env,s.dependencies);
+   const decision=s.events.find(e=>e.name==='commit_bot_commerce_turn').body.p_decision;
+   assert.equal(decision.checkout[field],value);assert.equal(decision.intent,'checkout');
+   assert.equal(s.trace.includes('model'),false);assert.equal(s.tasks.length,0);assert.equal(s.sent.length,1);
+  });
+ }
+});
+
+test('checkout input recovery uses explicit customer data, never profile names or an older purchase',()=>{
+ const snapshot={checkout:{stage:'collecting',pending_selection:{name:'super man'},recipient_name:'Samuel'},message:{id:mid,text:'3127378289',kind:'text'},customer:{name:'Wrong profile'},history:[],checkout_inputs:[{id:tid,text:'A nombre de Samuel porfa',kind:'text'}]};
+ assert.deepEqual(checkoutReply({snapshot}).checkout,{customer_name:'Samuel',recipient_phone:'3127378289'});
+ assert.deepEqual(recoveredCheckoutFields({snapshot:{...snapshot,message:{id:mid,text:'Calle 10 # 20-30',kind:'text'}}}),{customer_name:'Samuel'},'a compound/model-parsed reply can persist earlier explicit missing fields too');
+ const noHistory={...snapshot,checkout_inputs:[]};assert.equal(checkoutReply({snapshot:noHistory}).checkout.customer_name,undefined);
+ for(const stage of ['ordered','cancelled','payment','review'])assert.equal(checkoutReply({snapshot:{...snapshot,checkout:{...snapshot.checkout,stage}}}),null);
+ for(const text of ['¿Cuánto vale el domicilio?','Quiero hablar con una persona','Cancela la compra','El teléfono no es 3127378289','Hola'])assert.equal(checkoutReply({snapshot:{...snapshot,message:{id:mid,text,kind:'text'},history:[{role:'assistant',text:'¿A nombre de quién hacemos la compra?'}]}}),null);
+ const bare=checkoutReply({snapshot:{...snapshot,checkout_inputs:[],message:{id:mid,text:'Samuel',kind:'text'},history:[{role:'assistant',text:'¿A nombre de quién hacemos la compra?'}]}});
+ assert.equal(bare.checkout.customer_name,'Samuel');assert.equal(bare.checkout.recipient_name,undefined);
+});

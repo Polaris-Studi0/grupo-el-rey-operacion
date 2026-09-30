@@ -87,6 +87,22 @@ test('scope is enforced in database queries and messages not delivered are omitt
     assert.equal(calls.length,2,'bounded context uses two reads including authorization');
   });
 });
+
+test('recoverable checkout inputs begin at this quotation, excluding older names and internal notices',async()=>{
+ await harness({setup:db=>{
+  db.whatsapp_conversations[0].sales_state={pilot_commerce:{stage:'collecting',quote_id:'current-quote',pending_selection:{name:'camisa'}}};
+  db.whatsapp_messages=[
+   {id:mid,direction:'inbound',sender_type:'customer',message_type:'text',body:'3001234567',created_at:'2026-09-30T15:03:00Z'},
+   {id:'notice',direction:'outbound',sender_type:'system',delivery_status:'sent',body:'PRIVATE-NOTICE',created_at:'2026-09-30T15:02:30Z',raw_payload:{internal_notification:true}},
+   {id:'reply',direction:'outbound',sender_type:'assistant',delivery_status:'sent',body:'¿Cuál es tu teléfono?',created_at:'2026-09-30T15:02:00Z',raw_payload:{quote_id:'current-quote',inbound_message_id:pid}},
+   {id:pid,direction:'inbound',sender_type:'customer',message_type:'text',body:'A nombre de Samuel porfa',created_at:'2026-09-30T15:01:00Z'},
+   {id:'old',direction:'inbound',sender_type:'customer',message_type:'text',body:'A nombre de Otra Persona',created_at:'2026-09-29T15:00:00Z'}
+  ];
+ }},async()=>{
+  const r=await loadPreviewContext(env,operator,cid,2);
+  assert.deepEqual(r.snapshot.checkout_inputs.map(m=>m.text),['A nombre de Samuel porfa','3001234567']);
+ });
+});
 test('effective price, reserved quantity and explicit stock freshness are calculated by server',async()=>{
   await harness({setup:db=>db.branch_inventory[0].stock_confirmed_at='2026-09-28T12:00:00Z'},async()=>{
     const fresh=await loadPreviewContext({...env,BOT_STOCK_MAX_AGE_MINUTES:'60'},operator,cid,2,Date.parse('2026-09-28T12:30:00Z'));

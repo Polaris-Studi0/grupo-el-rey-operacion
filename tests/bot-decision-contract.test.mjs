@@ -112,3 +112,14 @@ test('human task proposals do not require a redundant tool call or bypass factua
  assert.equal(guard(c,{...d,human_reason:'approve_payment'},[]).status,'invalid_handoff');
  assert.equal(guard(c,decision({intent:'information',reply_text:'Tenemos disfraces.'}),[]).status,'missing_tool_evidence');
 });
+
+test('unfinished checkout clarification cannot announce shipment or skip field persistence',()=>{
+ const c=validate(attentionFixture('horario')).context;
+ c.checkout={stage:'collecting',pending_selection:{name:'camisa',quantity:1,unit_price_cop:50000}};
+ for(const intent of ['clarification','information']){
+  const r=guard(c,decision({intent,reply_text:'Listo para enviar a tu nombre.',checkout:{customer_name:'Samuel'}}));
+  assert.equal(r.status,'decision_ready');assert.equal(r.decision.intent,'checkout');assert.equal(r.decision.checkout.customer_name,'Samuel');assert.doesNotMatch(r.decision.reply_text,/listo para enviar/i);
+ }
+ const question=guard(c,decision({intent:'information',reply_text:'Aceptamos transferencia.'}),['consultar_informacion']);
+ assert.equal(question.decision.intent,'information','an unrelated informational question remains informational');
+});
