@@ -4,6 +4,7 @@ import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {partitionPilotWebhook,processPilotWebhook,notifyPilotTask,resumePilotTask} from '../src/bot-pilot.js';
 import {checkoutReply,recoveredCheckoutFields} from '../src/bot-checkout.js';
+import {orderSnapshot,orderStatusReply} from '../src/bot-orders.js';
 
 const cid='10000000-0000-4000-8000-000000000001',uid='10000000-0000-4000-8000-000000000002',mid='10000000-0000-4000-8000-000000000003',tid='10000000-0000-4000-8000-000000000004';
 const env={BOT_PILOT_ENABLED:'true',BOT_PILOT_PHONE:'573127378289',SUPABASE_URL:'https://db.invalid',SUPABASE_SECRET_KEY:'sb_secret_test',N8N_REBUILD_WEBHOOK_SECRET:'test-new-key'};
@@ -158,4 +159,26 @@ test('checkout input recovery uses explicit customer data, never profile names o
  for(const text of ['¿Cuánto vale el domicilio?','Quiero hablar con una persona','Cancela la compra','El teléfono no es 3127378289','Hola'])assert.equal(checkoutReply({snapshot:{...snapshot,message:{id:mid,text,kind:'text'},history:[{role:'assistant',text:'¿A nombre de quién hacemos la compra?'}]}}),null);
  const bare=checkoutReply({snapshot:{...snapshot,checkout_inputs:[],message:{id:mid,text:'Samuel',kind:'text'},history:[{role:'assistant',text:'¿A nombre de quién hacemos la compra?'}]}});
  assert.equal(bare.checkout.customer_name,'Samuel');assert.equal(bare.checkout.recipient_name,undefined);
+});
+
+test('arrival inquiry reads the verified order even when the model is unavailable',async()=>scenario({modelFails:true,setup:db=>{
+ db.orders=[{id:tid,order_number:'REY-1003',status:'preparing',fulfillment_type:'delivery',total:50000,delivery_fee:15000,promised_at:new Date(Date.now()+900000).toISOString()}];
+ db.whatsapp_messages[0].body='Sabes en cuánto tiempo llega?';
+ db.whatsapp_conversations[0].sales_state.pilot_commerce={stage:'ordered',order_id:tid};
+}},async s=>{
+ await processPilotWebhook(payload([{id:'wamid.eta',from:env.BOT_PILOT_PHONE,type:'text',text:{body:'Sabes en cuánto tiempo llega?'}}]),env,s.dependencies);
+ const d=s.events.find(e=>e.name==='commit_bot_commerce_turn').body.p_decision;
+ assert.equal(d.intent,'order_status');assert.match(d.reply_text,/REY-1003.*65\.000.*alrededor.*aproximada/);assert.equal(s.tasks.length,0);assert.equal(s.trace.includes('model'),false);
+}));
+
+test('estimates preserve their clock time, expire honestly and never override completed orders',()=>{
+ const now=Date.parse('2026-09-30T18:46:00Z');const base={id:tid,order_number:'REY-1003',status:'preparing',fulfillment_type:'delivery',total:50000,delivery_fee:15000,promised_at:'2026-09-30T19:01:00Z'};
+ const ask=(order,text='Sabes en cuánto tiempo llega?')=>orderStatusReply({snapshot:{message:{text,kind:'text'},order}});
+ const first=orderSnapshot(base,'Sede',now),later=orderSnapshot(base,'Sede',now+600000);
+ assert.equal(first.summary,later.summary,'do not restart a 15-minute estimate when asked again');assert.match(first.summary,/2:01/);
+ for(const promised_at of [null,'2026-09-30T18:00:00Z']){const order=orderSnapshot({...base,promised_at},'Sede',now);const r=ask(order);assert.equal(r.intent,'handoff');assert.match(r.reply_text,/Dame un momento/);assert.equal(r.actions.length,1);assert.equal(ask(order,'¿Cómo va mi pedido?').intent,'order_status');}
+ for(const status of ['delivered','cancelled']){const r=ask(orderSnapshot({...base,status,promised_at:null},'Sede',now));assert.equal(r.intent,'order_status');assert.deepEqual(r.actions,[]);}
+ assert.equal(ask(first,'Quiero cancelar mi pedido'),null);
+ assert.equal(ask(null,'¿Cuándo llega el pedido REY-9999?').intent,'clarification');
+ assert.doesNotMatch(ask(null,'¿Cuándo llega el pedido REY-9999?').reply_text,/REY-1003/);
 });

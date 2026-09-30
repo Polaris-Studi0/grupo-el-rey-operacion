@@ -1,4 +1,5 @@
 import {orderedBranches,stockClosingTime} from './bot-branches.js';
+import {orderSnapshot} from './bot-orders.js';
 // Operator-requested preview only. This module never writes to Supabase or Meta.
 const CORE_URL = 'https://intranetelrey.app.n8n.cloud/webhook/el-rey-assistant-turn-v1';
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -86,7 +87,6 @@ export async function loadPreviewContext(env, operator, conversationId, expected
   const summaryDelivered = publicMessages.some(m=>m.id===commerce.summary_message_id);
   const requestedNumber = /\bREY[- ]?(\d+)\b/i.exec(latest.body||'');
   const order = requestedNumber ? orders.find(o=>o.order_number.toUpperCase()===`REY-${requestedNumber[1]}`) : orders.find(o=>o.id===commerce.order_id) || (orders.length===1 ? orders[0] : null);
-  const labels = {preparing:'en preparación',ready:order?.fulfillment_type==='pickup'?'listo para recoger':'listo para despacho',dispatched:'en camino',delivered:'entregado',cancelled:'cancelado'};
   const sourceVersion = Math.max(Date.parse(conversation.updated_at) || 0, Date.parse(conversation.last_message_at) || 0);
   const state = {
     control: {manual_paused: conversation.automation_paused === true, closed: false, consent: 'granted', allow_ai: true},
@@ -105,7 +105,7 @@ export async function loadPreviewContext(env, operator, conversationId, expected
     checkout: {...commerce,summary_delivered:summaryDelivered},
     checkout_inputs: [...publicMessages].reverse().filter(m=>m.direction==='inbound'&&Date.parse(m.created_at)>=quoteStart).map(m=>({id:m.id,text:text(m.body,4000),kind:m.message_type})),
     payment: {ready_for_qr: commerce.payment_method==='transfer' && commerce.accepted_quote_id===commerce.quote_id && !!commerce.quote_id && Date.parse(commerce.reservation_until)>now,quote_id:commerce.quote_id||''},
-    order: order ? {id: order.id, status: order.status, summary: `Tu pedido ${order.order_number} de ${order.branch_name||branches[0].name} está ${labels[order.status]||'pendiente de revisión'}. Total: ${new Intl.NumberFormat('es-CO',{style:'currency',currency:'COP',maximumFractionDigits:0}).format(Number(order.total)+Number(order.delivery_fee))}. ${order.promised_at && Date.parse(order.promised_at)>now ? `Hora estimada confirmada: ${new Date(order.promised_at).toLocaleString('es-CO',{timeZone:'America/Bogota'})}.` : 'No hay hora de entrega vigente confirmada.'}`} : null
+    order: order ? orderSnapshot(order,branches[0].name,now) : null
   };
   const fingerprint = await digest({state, sourceVersion, controlVersion: expectedVersion, latestMessage: publicMessages[0]?.id});
   return {contract: 'el-rey.bot.turn.v1', mode: 'preview', conversation_id: conversationId, control_version: expectedVersion,

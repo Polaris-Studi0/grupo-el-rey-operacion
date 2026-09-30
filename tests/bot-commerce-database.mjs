@@ -53,6 +53,7 @@ await assert.rejects(()=>db.query("select resolve_bot_commerce_task($1,'resolved
 await db.query("select resolve_bot_commerce_task($1,'resolved','{\"approved\":true,\"amount\":260000}')",[paymentId]);
 const order=await commit(cid,{},noRepeat.mid,paymentId);assert.ok(order.order_id);const saved=await one('select * from orders where id=$1',[order.order_id]);assert.equal(Number(saved.total),250000);assert.equal(Number(saved.delivery_fee),10000);assert.equal(saved.payment_receipt_path,'test/receipt.png');assert.equal(saved.payment_receipt_bucket,'whatsapp-media');assert.equal(saved.status,'preparing');
 assert.deepEqual(await one('select available_qty,reserved_qty from branch_inventory'),{available_qty:9,reserved_qty:0});
+assert.doesNotMatch((await body(order)).body,/no tenemos una hora de entrega/,'receipt should not contradict a later estimate entered in intranet');
 const orderAgain=await commit(cid,{},noRepeat.mid,paymentId);assert.equal(orderAgain.order_id,order.order_id);assert.equal((await one('select count(*)::int n from orders')).n,1);
 const info=await commit(cid,{intent:'information',reply_text:'Tu consulta informativa.'});assert.equal((await body(info)).body,'Tu consulta informativa.');assert.equal((await state(cid)).stage,'ordered');
 console.log('PASS delivery fee, exact subtotal, actual QR queue, receipt scope, explicit approval, single order, stock deduction and retry');
@@ -82,7 +83,7 @@ const ca=await chat('+570000000015'),cb=await chat('+570000000016');
 const qa=await commit(ca,{intent:'quote',quote:cart.quote,checkout:{customer_name:'A',fulfillment_type:'pickup'}});await sent(qa);
 const qb=await commit(cb,{intent:'quote',quote:cart.quote,checkout:{customer_name:'B',fulfillment_type:'pickup'}});await sent(qb);
 await commit(ca,{accept_summary:true,checkout:{payment_method:'transfer'}});
-const loser=await commit(cb,{accept_summary:true,checkout:{payment_method:'transfer'}});assert.equal((await body(loser)).message_type,'text');assert.match((await body(loser)).body,/confirmar las existencias/);assert.equal((await one('select reserved_qty from branch_inventory')).reserved_qty,1);
+const loser=await commit(cb,{accept_summary:true,checkout:{payment_method:'transfer'}});assert.equal((await body(loser)).message_type,'text');assert.match((await body(loser)).body,/te confirmo la disponibilidad/);assert.equal((await one('select reserved_qty from branch_inventory')).reserved_qty,1);
 console.log('PASS last unit cannot be reserved by two conversations');
 // A resolved payment with mere wording or a stale quote never creates an order.
 const caState=await state(ca),receiptA=await inbound(ca,'Pago');
@@ -113,7 +114,7 @@ console.log('PASS one database snapshot scopes contact, branch, orders and publi
 for(const r of (await db.query("select id from inventory_reservations where status='active'")).rows)await db.query('select release_chat_inventory($1)',[r.id]);
 await db.exec("update branch_inventory set available_qty=2;update branch_inventory set stock_confirmed_at=now();update branch_payment_qrs set mime_type='image/webp';");
 const cq=await chat('+570000000019');const qq=await commit(cq,{intent:'quote',quote:cart.quote,checkout:{customer_name:'QR test',fulfillment_type:'pickup'}});await sent(qq);
-const unavailable=await commit(cq,{accept_summary:true,checkout:{payment_method:'transfer'}});assert.equal((await body(unavailable)).message_type,'text');assert.match((await body(unavailable)).body,/QR.*revisión/);assert.ok(unavailable.task_ids.length);
+const unavailable=await commit(cq,{accept_summary:true,checkout:{payment_method:'transfer'}});assert.equal((await body(unavailable)).message_type,'text');assert.match((await body(unavailable)).body,/te confirmo el medio de pago/);assert.ok(unavailable.task_ids.length);
 console.log('PASS unsupported QR formats request correction instead of sending an invalid image');
 
 const cc=await chat('+570000000020');const qc=await commit(cc,{intent:'quote',quote:cart.quote,checkout:{customer_name:'Crédito test',fulfillment_type:'pickup'}});await sent(qc);
