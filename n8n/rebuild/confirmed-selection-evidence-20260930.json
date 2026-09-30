@@ -1,0 +1,180 @@
+{
+  "checked_at": "2026-09-30T13:49:08.526Z",
+  "scope": "published_model_synthetic_data_no_customer_messages",
+  "results": [
+    {
+      "name": "elige_superman",
+      "passed": true,
+      "http": 200,
+      "status": "decision_ready",
+      "decision": {
+        "intent": "checkout",
+        "reply_text": "Continúo con tu selección y los datos que indicas. El resumen y el pago requieren las comprobaciones de la compra.",
+        "offered_product_ids": [],
+        "quote": null,
+        "actions": [],
+        "checkout": {
+          "customer_name": "",
+          "recipient_name": "",
+          "recipient_phone": "",
+          "fulfillment_type": "",
+          "delivery_address": "",
+          "delivery_zone": "",
+          "payment_method": ""
+        },
+        "confirmed_item": {
+          "source_task_id": "40000000-0000-4000-8000-000000000001",
+          "source_excerpt": "uno de super man unitalla a 50.000",
+          "name": "super man",
+          "variant": "unitalla",
+          "unit_price_cop": 50000,
+          "quantity": 1
+        },
+        "accept_summary": false,
+        "cancel_cart": false
+      },
+      "evidence": {
+        "tools_used": [
+          "consultar_informacion"
+        ]
+      }
+    },
+    {
+      "name": "elige_segunda_opcion",
+      "passed": true,
+      "http": 200,
+      "status": "decision_ready",
+      "decision": {
+        "intent": "checkout",
+        "reply_text": "Continúo con tu selección y los datos que indicas. El resumen y el pago requieren las comprobaciones de la compra.",
+        "offered_product_ids": [],
+        "quote": null,
+        "actions": [],
+        "checkout": {
+          "customer_name": "",
+          "recipient_name": "",
+          "recipient_phone": "",
+          "fulfillment_type": "",
+          "delivery_address": "",
+          "delivery_zone": "",
+          "payment_method": ""
+        },
+        "confirmed_item": {
+          "source_task_id": "40000000-0000-4000-8000-000000000001",
+          "source_excerpt": "otro de sharkboy talla s a 100.000",
+          "name": "sharkboy",
+          "variant": "talla s",
+          "unit_price_cop": 100000,
+          "quantity": 1
+        },
+        "accept_summary": false,
+        "cancel_cart": false
+      },
+      "evidence": {
+        "tools_used": [
+          "consultar_informacion"
+        ]
+      }
+    },
+    {
+      "name": "continua_recogida",
+      "passed": true,
+      "http": 200,
+      "status": "decision_ready",
+      "decision": {
+        "intent": "checkout",
+        "reply_text": "Continúo con tu selección y los datos que indicas. El resumen y el pago requieren las comprobaciones de la compra.",
+        "offered_product_ids": [],
+        "quote": null,
+        "actions": [],
+        "checkout": {
+          "customer_name": "Ana",
+          "recipient_name": "Ana",
+          "recipient_phone": "",
+          "fulfillment_type": "pickup",
+          "delivery_address": "",
+          "delivery_zone": "",
+          "payment_method": ""
+        },
+        "confirmed_item": null,
+        "accept_summary": false,
+        "cancel_cart": false
+      },
+      "evidence": {
+        "tools_used": [
+          "consultar_informacion"
+        ]
+      }
+    },
+    {
+      "name": "nombre_sin_repetir_producto",
+      "passed": true,
+      "http": 200,
+      "status": "decision_ready",
+      "decision": {
+        "intent": "checkout",
+        "reply_text": "Continúo con tu selección y los datos que indicas. El resumen y el pago requieren las comprobaciones de la compra.",
+        "offered_product_ids": [],
+        "quote": null,
+        "actions": [],
+        "checkout": {
+          "customer_name": "Ana Pérez",
+          "recipient_name": "",
+          "recipient_phone": "",
+          "fulfillment_type": "",
+          "delivery_address": "",
+          "delivery_zone": "",
+          "payment_method": ""
+        },
+        "confirmed_item": null,
+        "accept_summary": false,
+        "cancel_cart": false
+      },
+      "evidence": {
+        "tools_used": [
+          "consultar_informacion"
+        ]
+      }
+    },
+    {
+      "name": "consulta_sin_datos_pide_solo_lo_necesario",
+      "checked_at": "2026-09-30T13:49:08.525Z",
+      "workflow_version": "a1db7148-cf5d-43e0-b1fc-5f29a19c58ad",
+      "passed": true,
+      "http": 200,
+      "status": "decision_ready",
+      "decision": {
+        "intent": "handoff",
+        "reply_text": "Necesito confirmar ese dato en la sede para darte una respuesta segura.",
+        "offered_product_ids": [],
+        "quote": null,
+        "actions": [
+          {
+            "type": "propose_human_task",
+            "reason": "missing_information",
+            "question": "¿Tenemos disfraces para Halloween disponibles en Sede de prueba?",
+            "related_message_id": "TEST-MSG-horario"
+          }
+        ],
+        "checkout": {
+          "customer_name": "",
+          "recipient_name": "",
+          "recipient_phone": "",
+          "fulfillment_type": "",
+          "delivery_address": "",
+          "delivery_zone": "",
+          "payment_method": ""
+        },
+        "confirmed_item": null,
+        "accept_summary": false,
+        "cancel_cart": false
+      },
+      "evidence": {
+        "tools_used": [
+          "consultar_informacion",
+          "solicitar_equipo"
+        ]
+      }
+    }
+  ]
+}

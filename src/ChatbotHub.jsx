@@ -23,12 +23,13 @@ function Conversations({ data, onOpenAttachment, onRecoverAttachment, onChanged 
 }
 
 function Tasks({ tasks, messages, attachments, onOpenAttachment, onRecoverAttachment, onResolved }){
-  const [answer,setAnswer]=useState({});const [amount,setAmount]=useState({});const [approved,setApproved]=useState({});
+  const [answer,setAnswer]=useState({});const [amount,setAmount]=useState({});const [approved,setApproved]=useState({});const [counts,setCounts]=useState({});
   const [busy,setBusy]=useState(null);const [error,setError]=useState("");
   async function submit(task,status){
     const commerce=!!task.context?.commerce;const payment=["payment_verification","credit_application"].includes(task.task_type);
     const value=answer[task.id]?.trim();const resolution={answer:value|| (status==="resolved"?(payment?"Pago aprobado":"Tarifa de domicilio confirmada"):"No disponible")};
     if(commerce&&status==="resolved"){
+      if(task.context?.commerce?.kind==="confirmed_item"){resolution.available_qty=Number(counts[task.id]);resolution.approved_item=approved[task.id]===true;resolution.answer=value||"Existencias confirmadas para la selección";}
       if(task.task_type==="delivery_quote")resolution.delivery_fee=Number(amount[task.id]);
       if(payment){resolution.approved=approved[task.id]===true;resolution.amount=Number(amount[task.id]);}
     }
@@ -42,15 +43,17 @@ function Tasks({ tasks, messages, attachments, onOpenAttachment, onRecoverAttach
     const recentMedia=messages.find(message=>message.id===inboundId&&message.conversation_id===task.conversation_id&&message.direction==="inbound"&&message.media_id);
     const commerce=!!task.context?.commerce;const payment=commerce&&["payment_verification","credit_application"].includes(task.task_type);
     const fee=commerce&&task.task_type==="delivery_quote";const hasAmount=amount[task.id]!==undefined&&amount[task.id]!==""&&Number.isSafeInteger(Number(amount[task.id]))&&Number(amount[task.id])>=0;
-    const ready=fee?hasAmount:payment?hasAmount&&approved[task.id]&&Number(amount[task.id])===task.context.commerce.amount:!!answer[task.id]?.trim();
+    const selectedItem=task.context?.commerce?.kind==="confirmed_item"?task.context.commerce.selection:null;
+    const ready=selectedItem?approved[task.id]&&counts[task.id]!==undefined&&counts[task.id]!==""&&Number.isSafeInteger(Number(counts[task.id]))&&Number(counts[task.id])>=selectedItem.quantity:fee?hasAmount:payment?hasAmount&&approved[task.id]&&Number(amount[task.id])===task.context.commerce.amount:!!answer[task.id]?.trim();
     return <article className={`human-task ${task.priority}`} key={task.id}>
       <header><div><span>{TASK_LABELS[task.task_type]||task.task_type}</span><b>{task.title}</b></div><time>{formatDateTime(task.created_at)}</time></header>
       <p style={{whiteSpace:"pre-line"}}>{task.question}</p><div className="task-context"><span>{branchName(task.branch_id)}</span></div>
       {files.length?<div className="task-files">{files.map(file=><button key={file.id} onClick={()=>onOpenAttachment(file.storage_path)}>Ver {task.task_type==="payment_verification"?"comprobante":file.original_name||"archivo"}</button>)}</div>:recentMedia?<div className="task-files"><button onClick={()=>onRecoverAttachment(recentMedia.id)}>Recuperar comprobante</button></div>:task.task_type==="payment_verification"&&<p className="task-file-waiting">No hay un comprobante vinculado disponible.</p>}
+      {selectedItem&&<><p><strong>{selectedItem.name}{selectedItem.variant?` · ${selectedItem.variant}`:""}</strong> · {formatMoney(selectedItem.unit_price_cop)} cada uno · Cliente solicita {selectedItem.quantity}.</p><label>Existencias físicas de este producto<input type="number" min={selectedItem.quantity} step="1" value={counts[task.id]??""} onChange={e=>setCounts({...counts,[task.id]:e.target.value})}/></label><label className="check"><input type="checkbox" checked={approved[task.id]||false} onChange={e=>setApproved({...approved,[task.id]:e.target.checked})}/> Confirmo este producto, su precio y el conteo indicado.</label><p className="form-note">Se guardará en el inventario de esta sede, sin descuento promocional. El conteo vale hasta las 8 p. m. de hoy.</p></>}
       {(fee||payment)&&<label>{fee?"Valor confirmado del domicilio (COP)":"Importe verificado (COP)"}<input type="number" min="0" step="1" value={amount[task.id]??""} onChange={e=>setAmount({...amount,[task.id]:e.target.value})}/></label>}
       {payment&&<><p>Total de esta compra: <strong>{formatMoney(task.context.commerce.amount)}</strong></p><label className="check"><input type="checkbox" checked={approved[task.id]||false} onChange={e=>setApproved({...approved,[task.id]:e.target.checked})}/> Verifiqué el pago o la aprobación del crédito por este importe.</label></>}
       <textarea value={answer[task.id]||""} onChange={e=>setAnswer({...answer,[task.id]:e.target.value})} placeholder={commerce?"Aclaración para el cliente (obligatoria al rechazar)":"Escribe la información confirmada para el cliente"}/>
-      <footer><button disabled={busy===task.id||!answer[task.id]?.trim()} onClick={()=>submit(task,"rejected")}>No disponible</button><button className="primary" disabled={busy===task.id||!ready} onClick={()=>submit(task,"resolved")}>{busy===task.id?"Guardando…":payment?"Aprobar pago":fee?"Confirmar domicilio":"Confirmar respuesta"}</button></footer>
+      <footer><button disabled={busy===task.id||!answer[task.id]?.trim()} onClick={()=>submit(task,"rejected")}>No disponible</button><button className="primary" disabled={busy===task.id||!ready} onClick={()=>submit(task,"resolved")}>{busy===task.id?"Guardando…":selectedItem?"Confirmar existencias y continuar":payment?"Aprobar pago":fee?"Confirmar domicilio":"Confirmar respuesta"}</button></footer>
     </article>;
   })}</div>;
 }

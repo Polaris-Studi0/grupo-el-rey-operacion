@@ -121,4 +121,40 @@ await db.query("select resolve_bot_commerce_task($1,'resolved','{\"approved\":tr
 const co=await commit(cc,{},cr.mid,cr.task_ids[0]);assert.ok(co.order_id);assert.equal((await one('select payment_method from orders where id=$1',[co.order_id])).payment_method,'addi');
 console.log('PASS credit approval requires the explicit human decision before creating an order');
 
+// A free-text human offer is usable conversational memory, not fictitious stock.
+const humanCid=await chat('+570000000030');const askMid=await inbound(humanCid,'¿Tienen disfraces?');
+const humanTask=(await one("select (create_human_task($1,'human-offer-test','product_lookup','normal','Disfraces','¿Tienen disfraces?',jsonb_build_object('pilot_engine','new-whatsapp-v1','inbound_message_id',$2::text),null,'+570000000999',null)).id id",[humanCid,askMid])).id;
+await db.query("select resolve_human_task($1,'resolved',$2)",[humanTask,{answer:'Sí, tenemos 2 disfraces, uno de super man unitalla a 50.000 y otro de sharkboy talla s a 100.000'}]);
+const selection={source_task_id:humanTask,source_excerpt:'uno de super man unitalla a 50.000',name:'super man',variant:'unitalla',unit_price_cop:50000,quantity:1};
+const savedAnswer=(await one('select resolution from human_tasks where id=$1',[humanTask])).resolution;
+await db.query("update human_tasks set resolution='{}' where id=$1",[humanTask]);
+await assert.rejects(()=>db.query('select bot_confirmed_selection($1,$2)',[humanCid,selection]),/selección no coincide/);
+await db.query('update human_tasks set resolution=$2 where id=$1',[humanTask,savedAnswer]);
+await assert.rejects(()=>db.query('select bot_confirmed_selection($1,$2)',[cid,selection]),/selección no coincide/);
+await assert.rejects(()=>db.query('select bot_confirmed_selection($1,$2)',[humanCid,{...selection,unit_price_cop:100000}]),/Precio o cantidad/);
+await assert.rejects(()=>db.query('select bot_confirmed_selection($1,$2)',[humanCid,{...selection,source_excerpt:'super man a 5.000'}]),/selección no coincide/);
+const previousProducts=Number((await one('select count(*) n from products')).n);
+const chosen=await commit(humanCid,{intent:'checkout',confirmed_item:selection});
+assert.equal(chosen.task_ids.length,0);assert.match((await body(chosen)).body,/domicilio.*recoges/);assert.match((await body(chosen)).body,/50\.000/);
+assert.equal((await state(humanCid)).pending_selection.source_task_id,humanTask);assert.equal((await state(humanCid)).cart.length,0);
+assert.equal(Number((await one('select count(*) n from products')).n),previousProducts);
+const fulfillment=await commit(humanCid,{intent:'checkout',checkout:{fulfillment_type:'pickup'}});
+assert.match((await body(fulfillment)).body,/nombre/);assert.equal(fulfillment.task_ids.length,0);
+const named=await commit(humanCid,{intent:'checkout',checkout:{customer_name:'Cliente de prueba'}});
+assert.equal(named.task_ids.length,1);const stockTask=named.task_ids[0];const stockQuestion=(await one('select question from human_tasks where id=$1',[stockTask])).question;
+assert.doesNotMatch(stockQuestion,/product_id|otras sedes/);assert.match(stockQuestion,/ya confirmados/);
+await assert.rejects(()=>db.query("select resolve_bot_commerce_task($1,'resolved',$2)",[stockTask,{available_qty:1}]),/Confirma las existencias/);
+await assert.rejects(()=>db.query("select resolve_bot_commerce_task($1,'resolved',$2)",[stockTask,{available_qty:0,approved_item:true}]),/Confirma las existencias/);
+// Isolated test fixes the stock function's closing guard so the test works at night.
+const stockDefinition=(await one("select pg_get_functiondef('public.confirm_bot_stock(text,uuid,integer)'::regprocedure) d")).d;
+await db.exec(stockDefinition.replace("if (now() at time zone 'America/Bogota')::time>=time '20:00' then",'if false then'));
+await db.query("select resolve_bot_commerce_task($1,'resolved',$2)",[stockTask,{available_qty:1,approved_item:true,answer:'Conteo físico confirmado'}]);
+const approvedSelection=await commit(humanCid,{},named.mid,stockTask);
+assert.match((await body(approvedSelection)).body,/50\.000/);assert.match((await body(approvedSelection)).body,/Está todo correcto/);
+assert.equal((await state(humanCid)).pending_selection,undefined);assert.equal((await state(humanCid)).cart[0].unit_price,50000);
+assert.equal(approvedSelection.order_id,null);await sent(approvedSelection);
+const completedSelection=await commit(humanCid,{intent:'checkout',accept_summary:true,checkout:{payment_method:'cash_prepaid'}});
+assert.ok(completedSelection.order_id);assert.equal(Number((await one('select total from orders where id=$1',[completedSelection.order_id])).total),50000);
+console.log('PASS human offer -> exact selection -> checkout fields -> only missing count -> approved inventory -> summary -> actual order');
+
 }catch(e){console.error(e.message,e.where||'',e.detail||'');process.exitCode=1;}finally{await db.close();}

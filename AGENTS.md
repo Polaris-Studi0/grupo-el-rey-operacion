@@ -1,6 +1,6 @@
 # Instrucciones para continuar Grupo El Rey
 
-Leer primero `HANDOFF_N8N_WHATSAPP.md`, actualizado el 29/09/2026, y `n8n/rebuild/README.md`.
+Leer primero `HANDOFF_N8N_WHATSAPP.md`, actualizado el 30/09/2026, y `n8n/rebuild/README.md`.
 
 - Aplicación real: esta carpeta Plataforma. La carpeta de chat en Documents es otro repositorio.
 - Samuel autorizó el piloto en WhatsApp con su número personal, además de la reconstrucción por MCP y las ediciones del proyecto. No pedir autorización otra vez para trabajo rutinario de ese alcance.
@@ -16,6 +16,8 @@ Leer primero `HANDOFF_N8N_WHATSAPP.md`, actualizado el 29/09/2026, y `n8n/rebuil
 - Documentos en `docs/archivo/` son históricos.
 
 - Samuel indicó el 29/09 que aún NO se carguen promociones. Él las subirá a la intranet cuando estén disponibles. No sembrar productos ficticios en producción.
-- Migraciones nuevas 202609290001, 202609290002, 202609290003 y 202609290004 aplicadas por Management API, sin activar v2. La base no tiene tabla supabase_migrations.schema_migrations; no deducir estado del historial CLI ni ejecutar toda la carpeta.
+- Migraciones nuevas 202609290001, 202609290002, 202609290003, 202609290004, 202609300001 y 202609300002 aplicadas por Management API, sin activar v2. La base no tiene tabla supabase_migrations.schema_migrations; no deducir estado del historial CLI ni ejecutar toda la carpeta.
 
 - Incidente de sedes corregido y probado realmente el 29/09, 20:29 Colombia (Meta read y Samuel confirmó). Sedes directas sin IA; contexto comercial agrupado; un trabajo de recuperación por ejecución. No quitar esos límites ni volver a las lecturas separadas.
+
+- Corrección del 30/09: selección comercial desde una respuesta humana guardada como pending_selection, sin inventar stock. Conteo explícito en intranet antes del resumen/pago. Publicado, probado en base aislada y propuesta con contexto real; falta nueva entrega real por WhatsApp. Detalles y límites en HANDOFF.

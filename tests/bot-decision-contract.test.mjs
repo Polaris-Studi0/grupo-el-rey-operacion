@@ -76,3 +76,39 @@ test('confirmed clarification is grounded as a fact and cannot trigger another a
   assert.equal(guard(c,decision({intent:'information',reply_text:'El equipo responde: no hay.'}),['consultar_informacion']).status,'internal_attribution');
   p.snapshot.human_resolution.answer='';assert.equal(validate(p).response.status,'invalid_human_resolution');
 });
+
+test('human-confirmed selection is grounded in a scoped literal fact and never approves payment',()=>{
+ const p=attentionFixture('horario');p.snapshot.products=[];
+ const source=crypto.randomUUID();p.snapshot.confirmed_answers=[{id:source,answer:'Tenemos uno de super man unitalla a 50.000 y otro de sharkboy talla s a 100.000'}];
+ const c=validate(p).context;const item={source_task_id:source,source_excerpt:'uno de super man unitalla a 50.000',name:'super man',variant:'unitalla',unit_price_cop:50000,quantity:1};
+ const d=decision({intent:'checkout',reply_text:'¿Domicilio o recogida?',confirmed_item:item});
+ const ok=guard(c,d,['consultar_informacion']);assert.equal(ok.status,'decision_ready');assert.deepEqual(ok.decision.confirmed_item,item);assert.deepEqual(ok.decision.actions,[]);noEffects(ok);
+ for(const patch of [{source_task_id:crypto.randomUUID()},{unit_price_cop:100000},{variant:'talla XL'},{source_excerpt:'super man a 5.000'},{quantity:0},{source_excerpt:p.snapshot.confirmed_answers[0].answer}])assert.equal(guard(c,{...d,confirmed_item:{...item,...patch}},['consultar_informacion']).status,'unverified_confirmed_item');
+ assert.equal(guard(c,d,[]).status,'unverified_confirmed_item');
+ c.checkout={pending_selection:item};
+ const continued=guard(c,{...d,reply_text:'Ya está listo para recoger.',checkout:{fulfillment_type:'pickup'}},['consultar_informacion']);
+ assert.equal(continued.status,'decision_ready');assert.equal(continued.decision.confirmed_item,null);
+ assert.equal(continued.decision.checkout.fulfillment_type,'pickup');assert.doesNotMatch(continued.decision.reply_text,/listo para recoger/i);
+ const changed=guard(c,{...d,confirmed_item:{...item,quantity:2}},['consultar_informacion']);
+ assert.equal(changed.decision.confirmed_item.quantity,2);
+});
+
+test('human questions omit appended catalog checklists while keeping distinct customer questions',()=>{
+ const c=validate(attentionFixture('humano')).context;
+ const ask=question=>guard(c,decision({intent:'handoff',human_reason:'missing_information',human_question:question}),['solicitar_equipo']).decision.actions[0].question;
+ assert.equal(ask('¿Tenemos disfraces de Halloween? Indicar para cada opción: nombre exacto, tallas y precio. Si hay modelos agotados, marcarlo así.'),'¿Tenemos disfraces de Halloween?');
+ assert.equal(ask('¿Tenemos disfraces de Halloween? Si es así, indicar tallas, precios y cantidades en stock.'),'¿Tenemos disfraces de Halloween?');
+ assert.equal(ask('¿Tenemos disfraces de Halloween? Indique modelos (nombre exacto), tallas y precio por unidad.'),'¿Tenemos disfraces de Halloween?');
+ assert.equal(ask('¿Hay tallas infantiles? ¿Qué precio tienen?'),'¿Hay tallas infantiles? ¿Qué precio tienen?');
+ assert.equal(ask('Confirmar el horario del domingo.'),'Confirmar el horario del domingo.');
+});
+
+test('human task proposals do not require a redundant tool call or bypass factual evidence',()=>{
+ const c=validate(attentionFixture('humano')).context;
+ const d=decision({intent:'handoff',human_reason:'missing_information',human_question:'¿Tenemos disfraces?',reply_text:'Ya avisé al equipo.'});
+ const proposed=guard(c,d,['consultar_informacion']);
+ assert.equal(proposed.status,'decision_ready');assert.equal(proposed.requires_commit,true);noEffects(proposed);
+ assert.doesNotMatch(proposed.decision.reply_text,/Ya avisé/);
+ assert.equal(guard(c,{...d,human_reason:'approve_payment'},[]).status,'invalid_handoff');
+ assert.equal(guard(c,decision({intent:'information',reply_text:'Tenemos disfraces.'}),[]).status,'missing_tool_evidence');
+});

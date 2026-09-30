@@ -99,7 +99,7 @@ async function processTurn(inbound,env,{rpc,deliver}){
     const selected=branchSelection(inbound.body,branches,offeredBranches).selected;
     if(selected||asksToChangeBranch(inbound.body)){
       const shopping=c.sales_state?.pilot_commerce;
-      if(shopping?.cart?.length&&shopping.stage!=='ordered'&&shopping.stage!=='cancelled'){
+      if((shopping?.cart?.length||shopping?.pending_selection)&&shopping.stage!=='ordered'&&shopping.stage!=='cancelled'){
         await sendFixed('Tienes una compra en curso. Antes de cambiar de sede, dime si deseas cancelar ese carrito.');return;
       }
 

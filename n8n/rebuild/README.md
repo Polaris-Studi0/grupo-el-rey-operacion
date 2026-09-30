@@ -1,8 +1,8 @@
-# Piloto de WhatsApp — 29/09/2026
+# Piloto de WhatsApp — 30/09/2026
 
 Estado vigente y límites: [HANDOFF_N8N_WHATSAPP.md](../../HANDOFF_N8N_WHATSAPP.md).
 
-[Motor de atención](https://intranetelrey.app.n8n.cloud/workflow/pGxqUgjYE6NCyiwZ) publicado en `c0d66b23-aaa8-465a-8693-cdee2d054f05`; Worker `238cf6fc-3a52-48de-a1eb-e20333987f14`. Solo el teléfono piloto autorizado; no activar al público automáticamente.
+[Motor de atención](https://intranetelrey.app.n8n.cloud/workflow/pGxqUgjYE6NCyiwZ) publicado en `a1db7148-cf5d-43e0-b1fc-5f29a19c58ad`; Worker `a3bb1ef7-9e1d-4442-a37c-e5f82d605a34`. Solo el teléfono piloto autorizado; no activar al público automáticamente.
 
 ## Contrato y responsabilidades
 
@@ -32,7 +32,7 @@ npm run build
 npm run check:bot-commerce
 ```
 
-El último comando consume modelo/n8n con datos sintéticos y no envía mensajes a clientes. Claves leídas fuera del repositorio, sin imprimir valores. 42 pruebas Node comerciales y 10 grupos PostgreSQL aislados aprobados; cinco propuestas comerciales HTTP con modelo real aprobadas. Las pruebas del webhook simulan Meta/base, mientras que la confirmación real de sedes está documentada por separado.
+El último comando consume modelo/n8n con datos sintéticos y no envía mensajes a clientes. Claves leídas fuera del repositorio, sin imprimir valores. 45 pruebas Node comerciales y 11 grupos PostgreSQL aislados aprobados; cinco propuestas comerciales HTTP con modelo real aprobadas. Las pruebas del webhook simulan Meta/base, mientras que la confirmación real de sedes está documentada por separado.
 
 Otros casos/evidencia: `acceptance-cases.json` (no todos ejecutados), `attention-fixtures.mjs`, `pilot-evidence-20260929.json`, `clarification-evidence-20260929.json`, `commerce-evidence-20260929.json`, `sedes-evidence-20260929.json`. Los archivos anteriores conservan la versión/hora a la que corresponden.
 
@@ -40,4 +40,10 @@ Otros casos/evidencia: `acceptance-cases.json` (no todos ejecutados), `attention
 
 Samuel no quiere cargar promociones todavía; las subirá a la intranet cuando existan. No crear catálogo ficticio. Faltan compra real completa y QR por sede, horarios/recordatorios, lectura de medios, respuesta humana por WhatsApp citado y plantillas fuera de ventana. La ruta de otros números sigue heredada y presenta 404; resolverla antes de público, sin restaurar el bot antiguo.
 
-Migraciones 202609290001 a 202609290004 aplicadas; v2 del 20/09 no aplicada. Limpieza manual de Samuel terminada: no repetirla. No commit/push automático. Información detallada, accesos y versiones en el traspaso principal.
+Migraciones 202609290001 a 202609290004 y 202609300001/002 aplicadas; v2 del 20/09 no aplicada. Limpieza manual de Samuel terminada: no repetirla. No commit/push automático. Información detallada, accesos y versiones en el traspaso principal.
+
+## Selección después de la respuesta humana
+
+`confirmed_answers` contiene hechos del operador de esta conversación/sede. `confirmed_item` permite recordar un artículo elegido con fuente literal, precio y talla verificados. SQL guarda `pending_selection` y recoge los datos faltantes; después pide solo conteo. La intranet exige conteo y aprobación explícitos antes de registrar inventario regular. Luego se aplican resumen, reserva y pago existentes.
+
+La prueba aislada cubre desde aclaración hasta pedido. La propuesta con contexto real identificó Superman unitalla a $50.000 sin derivación; no fue enviada. Falta probar nuevamente por WhatsApp. No se cargaron productos. Evidencia sintética en `confirmed-selection-evidence-20260930.json`; reproducir con `node scripts/check-bot-confirmed-selection.mjs` (o un nombre de caso como argumento para repetir solo ese caso).
