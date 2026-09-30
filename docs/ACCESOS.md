@@ -4,9 +4,9 @@ Actualizado: 29/09/2026. Inventario de referencias conocidas; **no contiene secr
 
 ## Estado vigente del piloto (29/09)
 
-- Motor nuevo: `pGxqUgjYE6NCyiwZ`, publicado en versión `5f3fbc3f-9180-4b5a-b291-1332916472a2`; modelo gpt-5-mini mediante Gateway, comprobado con llamadas reales.
+- Motor nuevo: `pGxqUgjYE6NCyiwZ`, publicado en versión `c0d66b23-aaa8-465a-8693-cdee2d054f05`; modelo gpt-5-mini mediante Gateway, comprobado con llamadas reales.
 - Entrada privada: `/webhook/el-rey-assistant-turn-v1`. El Worker transforma mensajes de Meta a contexto del agente y despacha las respuestas autorizadas. Meta mantiene `/api/whatsapp/webhook` del Worker.
-- Worker activo: `b4ec81dc-6818-4237-bbf6-6b565aca9409`; piloto limitado al teléfono de Samuel terminado en 8289. La recepción de mensajes reales está confirmada; se corrigió una consulta de consentimiento que impedía responder. Respuesta posterior confirmada por Meta como `read` a las 09:00 Colombia.
+- Worker activo: `238cf6fc-3a52-48de-a1eb-e20333987f14`; piloto limitado al teléfono de Samuel terminado en 8289. La recepción de mensajes reales está confirmada; se corrigió una consulta de consentimiento que impedía responder. Respuesta posterior confirmada por Meta como `read` a las 09:00 Colombia.
 - Diagnóstico privado del piloto: `/api/bot/pilot/status?diagnostics=true`, cabecera `x-elrey-gateway-secret` con la clave nueva de gateway. Sin textos de clientes.
 - Las referencias del 25–26/09 que siguen describen instalación y diagnóstico anteriores, no el estado del motor actual. Estado completo en [traspaso](../HANDOFF_N8N_WHATSAPP.md).
 

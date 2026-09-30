@@ -1,4 +1,4 @@
-import {branchSelection,branchMenu,orderedBranches} from './bot-branches.js';
+import {branchSelection,branchMenu,orderedBranches,asksForBranches,asksToChangeBranch} from './bot-branches.js';
 import {authenticates} from './bot-connection.js';
 import {loadPreviewContext,readBotRows,requestBotDecision} from './bot-preview.js';
 
@@ -85,14 +85,29 @@ async function processTurn(inbound,env,{rpc,deliver}){
     if(!consent?.granted){await sendFixed(NOTICE,true);return;}
     c=(await readBotRows(env,'whatsapp_conversations',{id:`eq.${c.id}`,select:'*',limit:'1'}))[0];
   }
-  if(c.branch_id&&/\b(cambiar(?:me)?(?: de)? sede|otra sede)\b/.test(normalize(inbound.body))){
-    const shopping=c.sales_state?.pilot_commerce;
-    if(shopping?.cart?.length&&shopping.stage!=='ordered'&&shopping.stage!=='cancelled'){
-      await sendFixed('Tienes una compra en curso. Antes de cambiar de sede, dime si deseas cancelar ese carrito.');return;
+  if(asksForBranches(inbound.body)){
+    const list=orderedBranches(await readBotRows(env,'branches',{active:'eq.true',select:'id,name',limit:'20'}));
+    await sendFixed(branchMenu(list),false,{branch_options:list.map(b=>b.id)});return;
+  }
+  let offeredBranches=[];
+  if(c.branch_id){
+    const lastReply=(await readBotRows(env,'whatsapp_messages',{conversation_id:`eq.${c.id}`,direction:'eq.outbound',delivery_status:'in.(sent,delivered,read)',or:'(raw_payload->>internal_notification.is.null,raw_payload->>internal_notification.eq.false)',select:'raw_payload',order:'created_at.desc,id.desc',limit:'1'}))[0];
+    offeredBranches=lastReply?.raw_payload?.branch_options||[];
+  }
+  if(c.branch_id&&(asksToChangeBranch(inbound.body)||offeredBranches.length)){
+    const branches=await readBotRows(env,'branches',{active:'eq.true',select:'id,name',limit:'20'});
+    const selected=branchSelection(inbound.body,branches,offeredBranches).selected;
+    if(selected||asksToChangeBranch(inbound.body)){
+      const shopping=c.sales_state?.pilot_commerce;
+      if(shopping?.cart?.length&&shopping.stage!=='ordered'&&shopping.stage!=='cancelled'){
+        await sendFixed('Tienes una compra en curso. Antes de cambiar de sede, dime si deseas cancelar ese carrito.');return;
+      }
+
+      if(!await pilotDeliveryEligible(env,expected()))return;
+      const rows=await patch(env,'whatsapp_conversations',{id:`eq.${c.id}`,automation_control_version:`eq.${c.automation_control_version}`},{branch_id:selected?.id||null});
+      if(!rows.length)return;c=rows[0];
+      if(selected){await sendFixed(`Claro, te atendemos en ${selected.name}. ¿En qué podemos ayudarte?`);return;}
     }
-    if(!await pilotDeliveryEligible(env,expected()))return;
-    const rows=await patch(env,'whatsapp_conversations',{id:`eq.${c.id}`,automation_control_version:`eq.${c.automation_control_version}`},{branch_id:null});
-    if(!rows.length)return;c=rows[0];
   }
   if(!c.branch_id){
     const branches=await readBotRows(env,'branches',{active:'eq.true',select:'id,name',order:'id.asc',limit:'20'});
@@ -112,7 +127,10 @@ async function processTurn(inbound,env,{rpc,deliver}){
   if(context.snapshot.message.id!==inbound.message_id)return;
   let decision;
   try{decision=await requestBotDecision(env,context,'pilot',inbound.message_id);}
-  catch{decision={decision:{intent:'handoff',reply_text:'No pude completar esta consulta automáticamente. El equipo debe revisarla para continuar por este chat.',actions:[{type:'propose_human_task',reason:'missing_information',question:`Revisar la consulta porque la respuesta automática no estuvo disponible: ${String(inbound.body).slice(0,650)}`}]}};}
+  catch(error){
+    console.error('Pilot decision unavailable',JSON.stringify({code:error.code||'request_failed',status:error.upstream_status||null}));
+    decision={decision:{intent:'handoff',reply_text:'No pude completar esta consulta automáticamente. El equipo debe revisarla para continuar por este chat.',actions:[{type:'propose_human_task',reason:'missing_information',question:`Revisar la consulta porque la respuesta automática no estuvo disponible: ${String(inbound.body).slice(0,650)}`}]}};
+  }
 
   const current=await loadPreviewContext(env,{role:'admin'},c.id,c.automation_control_version);
   if(current.context_fingerprint!==context.context_fingerprint)return;
@@ -123,11 +141,18 @@ async function processTurn(inbound,env,{rpc,deliver}){
 
 async function deliverCommerceResult(result,conversationId,env,{rpc,deliver}){
   if(result.skipped)return;
-  for(const id of result.task_ids||[])await notifyPilotTask(id,env,{rpc,deliver});
   for(const id of result.message_ids||[]){
     const sent=await deliver(id,env,{conversation_id:conversationId,inbound_message_id:result.inbound_message_id,control_version:result.control_version,require_consent:true});
-    if(!sent.ok)throw Error('La respuesta de la compra quedó pendiente de entrega');
+    if(!sent.ok){
+      const detail=await sent.json().catch(()=>({}));
+      // A new message or manual takeover intentionally invalidates the old turn.
+      // Retrying it ten times cannot make it eligible again.
+      if(detail.state==='pilot_context_changed'||['commerce_context_changed','conversation_unavailable'].includes(detail.reason))return;
+      throw Error('La respuesta de la compra quedó pendiente de entrega');
+    }
   }
+  // Customer acknowledgement first; owner notifications also have cron recovery.
+  for(const id of result.task_ids||[])await notifyPilotTask(id,env,{rpc,deliver});
   if(result.order_receipt_id){
     // Owner-only pilot: the owner window equals this customer's verified window.
     const q=await rpc('prepare_whatsapp_order_notification',{p_receipt_id:result.order_receipt_id,p_admin_phone:`+${pilotPhone(env)}`},env);
@@ -212,10 +237,11 @@ export async function resumePilotTask(taskId,env,{rpc,deliver}){
 export async function recoverPilotTasks(env,dependencies){
   if(env.BOT_PILOT_ENABLED!=='true'||!pilotPhone(env))return;
   const contact=(await readBotRows(env,'whatsapp_contacts',{phone_e164:`eq.+${pilotPhone(env)}`,select:'id',limit:'1'}))[0];if(!contact)return;
-  const conversations=await readBotRows(env,'whatsapp_conversations',{contact_id:`eq.${contact.id}`,source:'neq.internal_admin',status:'neq.closed',select:'id',limit:'5'});
+  const conversations=await readBotRows(env,'whatsapp_conversations',{contact_id:`eq.${contact.id}`,source:'neq.internal_admin',status:'neq.closed',select:'id,branch_id',order:'created_at.desc',limit:'1'});
   for(const c of conversations){
     await dependencies.rpc('expire_bot_commerce_reservations',{p_conversation_id:c.id},env);
-    const tasks=await readBotRows(env,'human_tasks',{conversation_id:`eq.${c.id}`,'context->>pilot_engine':'eq.new-whatsapp-v1',or:'(and(status.in.(pending,in_progress),admin_notified_at.is.null),and(status.in.(resolved,rejected),automation_resumed_at.is.null))',select:'id,status',order:'created_at.asc',limit:'5'});
+    if(!c.branch_id)continue;
+    const tasks=await readBotRows(env,'human_tasks',{conversation_id:`eq.${c.id}`,branch_id:`eq.${c.branch_id}`,'context->>pilot_engine':'eq.new-whatsapp-v1',or:'(and(status.in.(pending,in_progress),admin_notified_at.is.null),and(status.in.(resolved,rejected),automation_resumed_at.is.null))',select:'id,status',order:'created_at.asc',limit:'1'});
     for(const task of tasks){if(['resolved','rejected'].includes(task.status))await resumePilotTask(task.id,env,dependencies);else await notifyPilotTask(task.id,env,dependencies);}
   }
 }
@@ -225,7 +251,7 @@ export async function handlePilotStatus(request,env){
   try{
     const phone=pilotPhone(env);
     if(!phone)return Response.json({ok:false,reason:'pilot_phone_missing'},{status:503});
-    const requiredFunctions=['ingest_whatsapp_message','commit_bot_commerce_turn','bot_customer_orders','persist_whatsapp_commercial_response','create_human_task','claim_automation_event','prepare_whatsapp_automation_message','complete_automation_event','queue_outbound_whatsapp_message','claim_outbound_whatsapp_message'];
+    const requiredFunctions=['ingest_whatsapp_message','commit_bot_commerce_turn','bot_customer_orders','bot_context_snapshot','persist_whatsapp_commercial_response','create_human_task','claim_automation_event','prepare_whatsapp_automation_message','complete_automation_event','queue_outbound_whatsapp_message','claim_outbound_whatsapp_message'];
     const api=await fetch(`${env.SUPABASE_URL}/rest/v1/`,{headers:{...dbHeaders(env),accept:'application/openapi+json'},redirect:'manual',signal:AbortSignal.timeout(10000)});
     const schema=api.ok?await api.json():null;
     const missingFunctions=requiredFunctions.filter(name=>!schema?.paths?.[`/rpc/${name}`]);

@@ -100,6 +100,14 @@ assert.equal((await db.query('select * from bot_customer_orders($1)',[cid])).row
 assert.equal((await db.query('select * from bot_customer_orders($1)',[cb])).rows.length,0);
 assert.equal((await one("select has_function_privilege('authenticated','public.bot_customer_orders(uuid)','execute') ok")).ok,false);
 console.log('PASS order lookup is bound to the verified contact and never exposes another client');
+const snap=(await one('select snapshot from bot_context_snapshot($1)',[cid])).snapshot;
+assert.equal(snap.conversation.id,cid);assert.equal(snap.contacts.length,1);
+assert.ok(snap.orders.every(o=>o.id===order.order_id));assert.ok(snap.inventory.every(i=>i.branch_id==='b1'));
+assert.equal(snap.allBranches.length,10);assert.equal(snap.messages.some(m=>m.raw_payload?.internal_notification),false);
+assert.equal((await one("select has_function_privilege('authenticated','public.bot_context_snapshot(uuid)','execute') ok")).ok,false);
+assert.equal((await db.query('select * from bot_context_snapshot($1)',['99999999-0000-4000-8000-000000000001'])).rows.length,0);
+console.log('PASS one database snapshot scopes contact, branch, orders and public messages; browser access denied');
+
 
 for(const r of (await db.query("select id from inventory_reservations where status='active'")).rows)await db.query('select release_chat_inventory($1)',[r.id]);
 await db.exec("update branch_inventory set available_qty=2;update branch_inventory set stock_confirmed_at=now();update branch_payment_qrs set mime_type='image/webp';");

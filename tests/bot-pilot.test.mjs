@@ -1,4 +1,5 @@
 import test from 'node:test';
+import {snapshotFixture} from './helpers/bot-snapshot.mjs';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {partitionPilotWebhook,processPilotWebhook,notifyPilotTask,resumePilotTask} from '../src/bot-pilot.js';
@@ -24,11 +25,13 @@ async function scenario(options={},run){
       return Response.json({contract:'el-rey.bot.decision.v1',status:'decision_ready',mode:'pilot',source:'intranet',turn_id:p.turn_id,conversation_id:cid,expected_control_version:2,expected_context_version:p.context_version,expected_context_fingerprint:p.context_fingerprint,expires_at:p.snapshot.expires_at,send_allowed:false,mutations_executed:[],decision:options.decision||{intent:'information',reply_text:p.snapshot.human_resolution?'En esta sede no tenemos cargadores para carros eléctricos.':'Cerramos a las 20:00.',actions:[]}});
     }
     assert.equal(u.hostname,'db.invalid');assert.equal(init.headers.authorization,undefined,'modern secret must not be used as a bearer JWT');
+    if(u.pathname.endsWith('/rpc/bot_context_snapshot'))return Response.json(snapshotFixture(db));
     const table=u.pathname.endsWith('/rpc/bot_customer_orders')?'orders':u.pathname.split('/').at(-1);assert.ok(table in db,table);
     if(table==='privacy_consents')for(const item of (u.searchParams.get('order')||'').split(',').filter(Boolean))assert.ok(consentColumns.has(item.split('.')[0]),`Unknown privacy_consents column: ${item}`);
     if(init.method==='PATCH'){const body=JSON.parse(init.body);Object.assign(db[table][0],body);trace.push('patch');return Response.json(db[table]);}
     if(table==='whatsapp_messages'&&u.searchParams.get('idempotency_key')?.startsWith('eq.human-task-response:'))return Response.json(options.cachedResolution?[{id:tid,raw_payload:{control_version:1,inbound_message_id:mid}}]:[]);
     if(table==='whatsapp_messages'&&u.searchParams.has('idempotency_key'))return Response.json(options.cached?[{id:tid,delivery_status:'queued'}]:[]);
+    if(table==='whatsapp_messages'&&u.searchParams.get('direction')==='eq.outbound')return Response.json(db[table].filter(m=>m.direction==='outbound'&&['sent','delivered','read'].includes(m.delivery_status)&&!m.raw_payload?.internal_notification).slice(0,1));
     if(table==='whatsapp_messages'&&u.searchParams.get('direction')==='eq.inbound')return Response.json(db[table].filter(m=>m.direction==='inbound').slice(0,1));
     return Response.json(db[table]);
   };
@@ -48,7 +51,7 @@ async function scenario(options={},run){
     if(name==='record_whatsapp_consent')return {recognized:true,granted:false};
     throw Error('Unexpected RPC '+name);
   };
-  const dependencies={rpc,persistMedia:async()=>trace.push('media'),deliver:async(id,_env,expected)=>{trace.push('deliver');sent.push({id,expected});return Response.json({}, {status:options.deliveryFails?502:200});}};
+  const dependencies={rpc,persistMedia:async()=>trace.push('media'),deliver:async(id,_env,expected)=>{trace.push('deliver');sent.push({id,expected});if(options.staleDelivery)return Response.json({state:'pilot_context_changed'},{status:409});return Response.json({}, {status:options.deliveryFails?502:200});}};
   try{return await run({db,trace,sent,events,tasks,dependencies});}finally{globalThis.fetch=original;}
 }
 
@@ -111,4 +114,22 @@ test('operator changes or a revised clarification during wording prevent queuein
 });
 test('a clarification belonging to a different branch cannot be sent',async()=>scenario({setup:db=>{resolved(db);db.human_tasks[0].branch_id='b2';}},async s=>{
   assert.equal((await resumePilotTask(tid,env,s.dependencies)).reason,'branch_changed');assert.equal(s.sent.length,0);assert.equal(s.trace.includes('model'),false);
+}));
+
+test('branch directory uses real names, numerical order, and no AI or human task',async()=>{
+ for(const body of ['muestrame todas las sedes','que sedes son?'])await scenario({setup:db=>db.branches=[{id:'b10',name:'San Antonio de Prado'},{id:'b1',name:'Robledo Aures'}]},async s=>{
+  await processPilotWebhook(payload([{id:'wamid.sedes',from:env.BOT_PILOT_PHONE,type:'text',text:{body}}]),env,s.dependencies);
+  assert.equal(s.trace.includes('model'),false);assert.equal(s.tasks.length,0);
+  const q=s.events.find(e=>e.name==='queue_outbound_whatsapp_message');assert.match(q.body.p_body,/1\. Robledo Aures\n2\. San Antonio de Prado/);assert.doesNotMatch(q.body.p_body,/\bb(?:10|[1-9])\b/);assert.equal(s.sent.length,1);
+ });
+});
+test('customer reply is dispatched before the owner notification',async()=>scenario({modelFails:true},async s=>{
+ await processPilotWebhook(payload(),env,s.dependencies);assert.equal(s.sent[0].id,tid);assert.ok(s.sent[0].expected);assert.equal(s.sent[1].id,uid);
+}));
+test('obsolete committed reply ends without an endless delivery retry',async()=>scenario({staleDelivery:true},async s=>{
+ await processPilotWebhook(payload(),env,s.dependencies);assert.equal(s.sent.length,1);assert.equal(s.events.some(e=>e.name==='prepare_whatsapp_automation_message'),false);
+}));
+test('natural branch correction is stored without asking the model to pretend to switch',async()=>scenario({setup:db=>db.branches.push({id:'b9',name:'Campo Valdez'})},async s=>{
+ await processPilotWebhook(payload([{id:'wamid.switch',from:env.BOT_PILOT_PHONE,type:'text',text:{body:'creo que me queda mejor la de campo valdez'}}]),env,s.dependencies);
+ assert.equal(s.db.whatsapp_conversations[0].branch_id,'b9');assert.equal(s.trace.includes('model'),false);assert.match(s.events.find(e=>e.name==='queue_outbound_whatsapp_message').body.p_body,/Campo Valdez/);
 }));

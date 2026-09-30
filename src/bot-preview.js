@@ -63,25 +63,18 @@ export async function loadPreviewContext(env, operator, conversationId, expected
   if (!conversation || !allowed(operator, conversation)) throw fail('No tienes acceso a esta conversación.', 403);
   eligible(conversation);
   if (conversation.automation_control_version !== expectedVersion) throw fail('El control de la conversación cambió. Actualiza e inténtalo de nuevo.', 409);
+  const data = (await read(env, 'rpc/bot_context_snapshot', {p_conversation_id:conversationId}))[0]?.snapshot;
+  if (!data?.conversation || !allowed(operator,data.conversation)) throw fail('No tienes acceso a esta conversación.',403);
+  eligible(data.conversation);
+  if (data.conversation.automation_control_version !== expectedVersion) throw fail('El control de la conversación cambió. Actualiza e inténtalo de nuevo.',409);
+  Object.assign(conversation,data.conversation);
   const branchId = conversation.branch_id;
-  const [branches, contacts, messages, knowledge, inventory, qrs, instructions, orders, answers, reservations, allBranches] = await Promise.all([
-    read(env, 'branches', {id: `eq.${branchId}`, active: 'eq.true', select: 'id,name', limit: '1'}),
-    read(env, 'whatsapp_contacts', {id: `eq.${conversation.contact_id}`, select: 'preferred_name,display_name', limit: '1'}),
-    read(env, 'whatsapp_messages', {conversation_id: `eq.${conversationId}`, select: 'id,direction,sender_type,message_type,body,delivery_status,created_at,raw_payload', or: '(and(direction.eq.inbound,sender_type.eq.customer),and(direction.eq.outbound,delivery_status.in.(sent,delivered,read)))', order: 'created_at.desc,id.desc', limit: '60'}),
-    read(env, 'branch_knowledge', {active: 'eq.true', or: `(branch_id.eq.${branchId},branch_id.is.null)`, select: 'id,branch_id,category,title,content,valid_from,valid_until,updated_at', order: 'updated_at.desc,id.asc', limit: '100'}),
-    read(env, 'branch_inventory', {branch_id: `eq.${branchId}`, active: 'eq.true', select: '*,product:products(id,name,description,active,seasonal)', order: 'product_id.asc', limit: '101'}),
-    read(env, 'branch_payment_qrs', {branch_id: `eq.${branchId}`, active: 'eq.true', select: 'branch_id,storage_path,updated_at,mime_type', limit: '2'}),
-    read(env, 'whatsapp_operator_actions', {conversation_id: `eq.${conversationId}`, action: 'eq.instruction', status: 'eq.pending_bot', select: 'request_id,payload,created_at', order: 'created_at.desc,request_id.desc', limit: '10'}),
-    read(env, 'rpc/bot_customer_orders', {p_conversation_id:conversationId}),
-    read(env, 'human_tasks', {conversation_id: `eq.${conversationId}`, branch_id: `eq.${branchId}`, status: 'in.(resolved,rejected)', 'context->>pilot_engine': 'eq.new-whatsapp-v1', select: 'id,question,resolution,resolved_at', order: 'resolved_at.desc,id.desc', limit: '10'}),
-    read(env, 'inventory_reservations', {conversation_id:`eq.${conversationId}`,status:'eq.active',select:'id,product_id,quantity,expires_at',limit:'50'}),
-    read(env, 'branches', {active:'eq.true',select:'id,name',limit:'20'})
-  ]);
+  const {branches,contacts,messages,knowledge,inventory,qrs,instructions,orders,answers,reservations,allBranches,attachments}=data;
+  if ([branches,contacts,messages,knowledge,inventory,qrs,instructions,orders,answers,reservations,allBranches,attachments].some(rows=>!Array.isArray(rows))) throw fail('El contexto recibido no es válido.');
   if (!branches[0]) throw fail('La sede no está disponible.', 409);
   const publicMessages = messages.filter(m => m.raw_payload?.internal_notification !== true && (m.direction === 'inbound' && m.sender_type === 'customer' || m.direction === 'outbound' && ['sent','delivered','read'].includes(m.delivery_status)));
   const latest = publicMessages.find(m => m.direction === 'inbound');
   if (!latest) throw fail('Todavía no hay un mensaje del cliente para probar.', 409);
-  const attachments = await read(env, 'whatsapp_attachments', {conversation_id: `eq.${conversationId}`, message_id: `eq.${latest.id}`, select: 'id,message_id,storage_path,mime_type', order: 'id.asc', limit: '1'});
   const file = attachments.find(a => a.message_id === latest.id && a.storage_path);
   const commerce = conversation.sales_state?.pilot_commerce || {};
   const ownQuantity = productId => reservations.filter(r=>r.product_id===productId && (commerce.reservations||[]).includes(r.id) && Date.parse(r.expires_at)>now).reduce((n,r)=>n+r.quantity,0);
@@ -121,13 +114,14 @@ export async function requestBotDecision(env, context, mode = 'preview', turnId 
     const packet = {...context,mode,turn_id:turnId}; delete packet.warnings; delete packet.latest_message_id;
     const result = await fetch(CORE_URL, {method:'POST', headers:{'content-type':'application/json','x-elrey-webhook-secret':env.N8N_REBUILD_WEBHOOK_SECRET},
       body:JSON.stringify(packet), redirect:'manual', signal:AbortSignal.timeout(100000)});
-    if (!result.ok) throw fail('El bot no pudo completar la prueba. No se envió ningún mensaje.');
-    const data=await result.json();
+    const data=await result.json().catch(()=>null);
+    const decisionError = message => Object.assign(fail(message), {code:typeof data?.status==='string'&&/^[a-z_]{1,60}$/.test(data.status)?data.status:'invalid_decision',upstream_status:result.status});
+    if (!result.ok || !data) throw decisionError('El bot no pudo completar la prueba. No se envió ningún mensaje.');
     if (data.contract!=='el-rey.bot.decision.v1' || data.status!=='decision_ready' || data.mode!==mode || data.source!=='intranet'
       || data.turn_id!==turnId || data.conversation_id!==context.conversation_id || data.expected_control_version!==context.control_version
       || data.expected_context_version!==context.context_version || data.expected_context_fingerprint!==context.context_fingerprint
       || data.send_allowed!==false || !Array.isArray(data.mutations_executed) || data.mutations_executed.length
-      || typeof data.decision?.reply_text!=='string' || !data.decision.reply_text.trim() || data.decision.reply_text.length>1800) throw fail('La respuesta no pasó la validación. No se envió ningún mensaje.');
+      || typeof data.decision?.reply_text!=='string' || !data.decision.reply_text.trim() || data.decision.reply_text.length>1800) throw decisionError('La respuesta no pasó la validación. No se envió ningún mensaje.');
     if (!(Date.parse(data.expires_at)>Date.now())) throw fail('La prueba venció. Vuelve a generarla.',409);
 
     return data;

@@ -384,11 +384,12 @@ async function processClaimedWebhook(payload,eventKey,eventType,inbox,env){
 // Durable inbox recovery runs in Cloudflare, not n8n. An empty inbox costs no
 // n8n executions. Expired leases recover jobs interrupted after HTTP acknowledgement.
 async function recoverWebhookInbox(env){
-  const pending=await supabaseRpc("claim_pending_whatsapp_events",{p_limit:5},env)||[];
+  const pending=await supabaseRpc("claim_pending_whatsapp_events",{p_limit:1},env)||[];
   await Promise.all(pending.map(async inbox=>{
     try{await processClaimedWebhook(inbox.payload,inbox.event_key,inbox.event_type,inbox,env);}
     catch(error){console.error("WhatsApp inbox retry failed",error.message);}
   }));
+  return pending.length;
 }
 
 async function receiveWebhook(request,env,context){
@@ -693,8 +694,12 @@ function health(env){
 
 export default {
   async scheduled(_controller,env,context){
-    context.waitUntil(recoverWebhookInbox(env));
-    context.waitUntil(recoverPilotTasks(env,{rpc:supabaseRpc,deliver:deliverQueuedWhatsAppMessage}).catch(error=>console.error("Pilot task recovery failed",error.message)));
+    // Cron recovery shares one invocation budget. Process one durable job,
+    // then try human tasks on a later tick if the inbox is clear.
+    context.waitUntil((async()=>{
+      if(await recoverWebhookInbox(env))return;
+      await recoverPilotTasks(env,{rpc:supabaseRpc,deliver:deliverQueuedWhatsAppMessage});
+    })().catch(error=>console.error("WhatsApp recovery failed",error.message)));
   },
   async fetch(request,env,context){
     const url = new URL(request.url);

@@ -6,6 +6,14 @@ const aliases = {
   b10: ['san antonio de prado', 'san antonio prado', 'prado']
 };
 export const orderedBranches = branches => [...branches].sort((a,b) => Number(a.id.slice(1))-Number(b.id.slice(1)));
+export function asksForBranches(body) {
+  const value=normalize(body);
+  return /\bsedes\b/.test(value) && !/\b(horario|horarios|telefono|telefonos|direccion|direcciones|domicilio|pago|pagos|producto|productos)\b/.test(value)
+    && (/\b(cuales|que|todas|lista|listado|muestra|muestrame|mostrar|ver|tienen|hay|son|quedan)\b/.test(value)||value==='sedes');
+}
+export function asksToChangeBranch(body) {
+  return /\b(cambiar(?:me)?(?: de)? sede|otra sede|me queda mejor|prefiero la|atenderme en|atiendan en)\b/.test(normalize(body));
+}
 export function branchSelection(body, branches, options = []) {
   const value = normalize(body);
   const tag = /\[SEDE:([^\]]+)\]/i.exec(body || '');

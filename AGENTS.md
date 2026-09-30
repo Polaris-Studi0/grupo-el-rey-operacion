@@ -16,4 +16,6 @@ Leer primero `HANDOFF_N8N_WHATSAPP.md`, actualizado el 29/09/2026, y `n8n/rebuil
 - Documentos en `docs/archivo/` son históricos.
 
 - Samuel indicó el 29/09 que aún NO se carguen promociones. Él las subirá a la intranet cuando estén disponibles. No sembrar productos ficticios en producción.
-- Migraciones nuevas 202609290001, 202609290002 y 202609290003 aplicadas por Management API, sin activar v2. La base no tiene tabla supabase_migrations.schema_migrations; no deducir estado del historial CLI ni ejecutar toda la carpeta.
+- Migraciones nuevas 202609290001, 202609290002, 202609290003 y 202609290004 aplicadas por Management API, sin activar v2. La base no tiene tabla supabase_migrations.schema_migrations; no deducir estado del historial CLI ni ejecutar toda la carpeta.
+
+- Incidente de sedes corregido y probado realmente el 29/09, 20:29 Colombia (Meta read y Samuel confirmó). Sedes directas sin IA; contexto comercial agrupado; un trabajo de recuperación por ejecución. No quitar esos límites ni volver a las lecturas separadas.

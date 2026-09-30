@@ -1,6 +1,6 @@
 # Bot WhatsApp — requisitos vigentes y arquitectura objetivo
 
-Acuerdos de Samuel consolidados al 25/09/2026. **Este documento describe el resultado solicitado, no una implementación ya publicada.** Estado real y pendientes: [traspaso](../HANDOFF_N8N_WHATSAPP.md) y [reconstrucción](RECONSTRUCCION_BOT.md).
+Acuerdos de Samuel consolidados al 29/09/2026. **Este documento describe el resultado solicitado, no una implementación ya publicada.** Estado real y pendientes: [traspaso](../HANDOFF_N8N_WHATSAPP.md) y [reconstrucción](RECONSTRUCCION_BOT.md).
 
 Samuel eligió construir desde cero en una nueva cuenta de n8n conservando estos requisitos. Diseño y secuencia de implementación vigentes: [ARQUITECTURA_BOT_NUEVO.md](ARQUITECTURA_BOT_NUEVO.md). Una consulta informativa debe poder resolverse por sí misma o evolucionar a compra sin perder contexto.
 
@@ -22,7 +22,8 @@ Todo se integra con la intranet y la misma base de Supabase: conversaciones, inf
 3. Después de autorizar, obtener el nombre. El nombre de perfil de WhatsApp no lo sustituye; distinguir comprador de destinatario. Si el cliente ya lo suministró inequívocamente, conservarlo y no repetir la pregunta.
 4. Si la sede está indicada mediante la web o una elección del cliente, validarla contra las sedes activas y conservarla. Si sigue desconocida después del nombre, enviar la lista y pedir la elección.
 5. Las etiquetas web expresan origen/selección; no son instrucciones privilegiadas, prueba de precio, aprobación de pago ni autorización de datos. Un slug inexistente o `general` no selecciona una sede.
-6. También atender a quien llega directamente por WhatsApp, sin etiquetas. Interpretar abreviaciones, posición en una lista y elecciones naturales con el contexto; aclarar solo ambigüedades reales.
+6. Mostrar sedes por su nombre y numeración normal, sin códigos internos b1/b10. Una selección debe actualizar la sede real, no limitarse a una afirmación del modelo.
+7. También atender a quien llega directamente por WhatsApp, sin etiquetas. Interpretar abreviaciones, posición en una lista y elecciones naturales con el contexto; aclarar solo ambigüedades reales.
 
 Slugs de la web: ver `../Landing page/app.js` respecto a la carpeta Plataforma. La migración v2 contiene su correspondencia con `b1`–`b10`.
 

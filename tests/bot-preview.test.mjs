@@ -1,4 +1,5 @@
 import test from 'node:test';
+import {snapshotFixture} from './helpers/bot-snapshot.mjs';
 import assert from 'node:assert/strict';
 import worker from '../src/worker.js';
 import {loadPreviewContext} from '../src/bot-preview.js';
@@ -33,6 +34,7 @@ async function harness(options={},run){
     }
     if(url.hostname==='supabase.invalid'&&url.pathname.startsWith('/rest/v1/')){
       assert.equal(init.method||'GET','GET','preview must not mutate Supabase');
+      if(url.pathname.endsWith('/rpc/bot_context_snapshot'))return options.unavailableTable?Response.json({}, {status:503}):Response.json(snapshotFixture(db));
       const table=url.pathname.endsWith('/rpc/bot_customer_orders')?'orders':url.pathname.split('/').at(-1);if(!(table in db))throw Error('Unexpected table '+table);
       if(options.unavailableTable===table)return Response.json({}, {status:503});
       return Response.json(db[table]);
@@ -81,8 +83,8 @@ test('scope is enforced in database queries and messages not delivered are omitt
   await harness({setup:db=>db.whatsapp_messages.unshift({id:pid,direction:'outbound',sender_type:'assistant',body:'UNSENT',delivery_status:'queued'})},async({calls})=>{
     const result=await loadPreviewContext(env,operator,cid,2);
     assert.equal(JSON.stringify(result.snapshot.history).includes('UNSENT'),false);
-    for(const table of ['whatsapp_messages','whatsapp_operator_actions','whatsapp_attachments'])assert.equal(calls.find(c=>c.url.pathname.endsWith('/'+table)).url.searchParams.get('conversation_id'),'eq.'+cid);
-    assert.equal(calls.find(c=>c.url.pathname.endsWith('/branch_inventory')).url.searchParams.get('branch_id'),'eq.b1');
+    assert.equal(calls.find(c=>c.url.pathname.endsWith('/rpc/bot_context_snapshot')).url.searchParams.get('p_conversation_id'),cid);
+    assert.equal(calls.length,2,'bounded context uses two reads including authorization');
   });
 });
 test('effective price, reserved quantity and explicit stock freshness are calculated by server',async()=>{

@@ -1,5 +1,5 @@
 {
-  "checked_at": "2026-09-29T20:32:48.970Z",
+  "checked_at": "2026-09-30T01:27:22.491Z",
   "scope": "published_engine_synthetic_data_no_customer_effects",
   "results": [
     {
@@ -9,7 +9,7 @@
       "decision_status": "decision_ready",
       "decision": {
         "intent": "quote",
-        "reply_text": "Perfecto, Ana. Preparé una cotización para 2 ramos (Ramo de prueba) para entrega a Calle 10 #20-30, barrio Floresta, a nombre de Carlos, teléfono 3001112233. ¿Cómo prefieres pagar? (transfer, Addi, Sistecrédito o pago en sede al recoger)",
+        "reply_text": "Perfecto — preparé una cotización para 2 ramos para entrega a domicilio en Floresta. Nombre: Ana Pérez. Recibe: Carlos (3001112233). Dirección: Calle 10 #20-30. Horario de la sede: lunes a domingo de 9:00 a 20:00. ¿Deseas que confirme esta compra y te muestre las opciones de pago?",
         "offered_product_ids": [
           "TEST-RAMO"
         ],
@@ -59,7 +59,7 @@
       "decision_status": "decision_ready",
       "decision": {
         "intent": "checkout",
-        "reply_text": "Perfecto, quedó aceptado el resumen y eliges transferencia. Tu compra: 2 ramos para recoger en Sede de prueba a nombre de Ana. Registraré el método de pago para que el equipo prepare las instrucciones de pago por este chat.",
+        "reply_text": "Perfecto — acepté el resumen y marco transferencia como forma de pago. Para completar, realiza la transferencia y adjunta el comprobante aquí; el equipo revisará el pago y te confirmará. ¿Deseas que espere el comprobante en este chat?",
         "offered_product_ids": [],
         "quote": null,
         "actions": [],
@@ -83,15 +83,15 @@
       "decision_status": "decision_ready",
       "decision": {
         "intent": "checkout",
-        "reply_text": "Tomé la dirección que indicaste: Carrera 8 #15-20, barrio Prado. Para completar el resumen necesito el teléfono del destinatario.",
+        "reply_text": "Perfecto — actualicé la dirección de entrega a Carrera 8 #15-20, barrio Prado. ¿Confirmas que la entrega es para Ana y aceptas el resumen con esta dirección actualizada?",
         "offered_product_ids": [],
         "quote": null,
         "actions": [],
         "checkout": {
           "customer_name": "",
-          "recipient_name": "",
+          "recipient_name": "Ana",
           "recipient_phone": "",
-          "fulfillment_type": "",
+          "fulfillment_type": "delivery",
           "delivery_address": "Carrera 8 #15-20",
           "delivery_zone": "Prado",
           "payment_method": ""
@@ -131,7 +131,7 @@
       "decision_status": "decision_ready",
       "decision": {
         "intent": "information",
-        "reply_text": "Los medios de pago disponibles en tu sede son: transferencia por QR de la sede, Addi, Sistecrédito y pago en la sede al momento de recoger. No ofrecemos contraentrega.",
+        "reply_text": "Puedes pagar con transferencia (QR de la sede), Addi, Sistecrédito o pagando en la sede al recoger tu compra. No hay contraentrega.",
         "offered_product_ids": [],
         "quote": null,
         "actions": [],

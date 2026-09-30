@@ -1,0 +1,32 @@
+{
+  "checked_at": "2026-09-30T01:29:22.721100Z",
+  "scope": "live_pilot_branch_directory_and_synthetic_regression_separated",
+  "worker_version": "238cf6fc-3a52-48de-a1eb-e20333987f14",
+  "n8n_version": "c0d66b23-aaa8-465a-8693-cdee2d054f05",
+  "model_reproduction": {
+    "before": "409 missing_tool_evidence",
+    "after": "200 decision_ready",
+    "tools_used": [
+      "consultar_informacion"
+    ],
+    "external_messages_sent": false
+  },
+  "webhook_simulation": {
+    "signed_inbound": true,
+    "meta_and_database_mocked": true,
+    "branch_directory_subrequests": 19,
+    "handoff_subrequests": 33,
+    "previous_worker_exceeded_50": true
+  },
+  "live_branch_directory": {
+    "tested_worker_version": "bfc661ac-3e67-4a1c-b430-41a83abe03be",
+    "received_at": "2026-09-30T01:29:18.394414Z",
+    "processed_at": "2026-09-30T01:29:22.721100Z",
+    "attempts": 1,
+    "delivery_status": "read",
+    "user_confirmed": true,
+    "branch_codes_hidden": true
+  },
+  "commerce_purchase_acceptance": "pending_real_catalog_and_end_to_end_purchase",
+  "public_rollout": false
+}
