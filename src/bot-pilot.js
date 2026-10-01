@@ -16,32 +16,34 @@ async function patch(env,table,filters,body){
 }
 const normalize=value=>String(value||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').trim().toLowerCase();
 export function pilotPhone(env){const phone=String(env.BOT_PILOT_PHONE||'').replace(/^\+/,'');return PHONE.test(phone)?phone:null;}
-function afterPilotStart(message,env){return !env.BOT_PILOT_STARTED_AT||Number(message.timestamp)*1000>=Date.parse(env.BOT_PILOT_STARTED_AT);}
+export const botEnabled=env=>env.BOT_PUBLIC_ENABLED==='true'||env.BOT_PILOT_ENABLED==='true';
+const allowedPhone=(phone,env)=>PHONE.test(phone||'')&&(env.BOT_PUBLIC_ENABLED==='true'||env.BOT_PILOT_ENABLED==='true'&&phone===pilotPhone(env));
+function afterPilotStart(message,env){const start=env.BOT_PUBLIC_ENABLED==='true'&&message.from!==pilotPhone(env)?env.BOT_PUBLIC_STARTED_AT:env.BOT_PILOT_STARTED_AT;return !start||Number(message.timestamp)*1000>=Date.parse(start);}
 export function partitionPilotWebhook(payload,env){
-  const phone=env.BOT_PILOT_ENABLED==='true'?pilotPhone(env):null;
-  const select=pilot=>({...payload,entry:(payload.entry||[]).map(entry=>({...entry,changes:(entry.changes||[]).map(change=>({...change,value:{...change.value,statuses:[],messages:(change.value?.messages||[]).filter(m=>(phone!==null&&m.from===phone&&afterPilotStart(m,env))===pilot)}})).filter(change=>change.value.messages.length)})).filter(entry=>entry.changes.length)});
-  return {pilot:select(true),legacy:select(false)};
+
+  const select=pilot=>({...payload,entry:(payload.entry||[]).map(entry=>({...entry,changes:(entry.changes||[]).map(change=>({...change,value:{...change.value,statuses:[],messages:(change.value?.messages||[]).filter(m=>(allowedPhone(m.from,env)&&afterPilotStart(m,env))===pilot)}})).filter(change=>change.value.messages.length)})).filter(entry=>entry.changes.length)});
+  return {pilot:select(true),legacy:env.BOT_PUBLIC_ENABLED==='true'?{...payload,entry:[]}:select(false)};
 }
 
 export async function pilotDeliveryEligible(env,expected){
   const c=(await readBotRows(env,'whatsapp_conversations',{id:`eq.${expected.conversation_id}`,select:'id,contact_id,status,consent_status,consented_at,consent_version,automation_paused,automation_control_version',limit:'1'}))[0];
   if(!c||c.status==='closed'||c.automation_paused||c.automation_control_version!==expected.control_version)return false;
   const contact=(await readBotRows(env,'whatsapp_contacts',{id:`eq.${c.contact_id}`,select:'phone_e164',limit:'1'}))[0];
-  if(contact?.phone_e164!==`+${pilotPhone(env)}`)return false;
+  if(!allowedPhone(contact?.phone_e164?.replace(/^\+/,''),env))return false;
   if(expected.require_consent&&!(c.consent_status==='granted'&&c.consented_at&&c.consent_version))return false;
   const latest=(await readBotRows(env,'whatsapp_messages',{conversation_id:`eq.${c.id}`,direction:'eq.inbound',sender_type:'eq.customer',select:'id,created_at',order:'created_at.desc,id.desc',limit:'1'}))[0];
   return latest?.id===expected.inbound_message_id&&Date.parse(latest.created_at)>Date.now()-23*60*60*1000;
 }
 
 export async function processPilotWebhook(payload,env,{rpc,persistMedia,deliver}){
-  if(env.BOT_PILOT_ENABLED!=='true'||!pilotPhone(env))throw Error('Piloto no habilitado');
+  if(!botEnabled(env)||!pilotPhone(env))throw Error('Bot no habilitado');
   const received=[];
   for(const entry of payload.entry||[])for(const change of entry.changes||[])for(const message of change.value?.messages||[]){
-    if(message.from!==pilotPhone(env)||!afterPilotStart(message,env))throw Error('Mensaje fuera del piloto');
+    if(!allowedPhone(message.from,env)||!afterPilotStart(message,env))throw Error('Mensaje fuera de la atención habilitada');
     const contact=(change.value.contacts||[]).find(c=>c.wa_id===message.from);
     const body=message.text?.body??message[message.type]?.caption??message.button?.text??message.interactive?.button_reply?.title??message.interactive?.list_reply?.title??'';
     const ingested=await rpc('ingest_whatsapp_message',{p_phone_e164:`+${message.from}`,p_whatsapp_id:message.from,p_display_name:contact?.profile?.name||null,p_meta_message_id:message.id,p_message_type:message.type,p_body:body,p_media_id:message[message.type]?.id||null,p_raw_payload:{message,contact:contact||{},metadata:change.value.metadata||{}},p_source:'whatsapp',p_branch_id:null},env);
-    received.push({...ingested,body,meta_message_id:message.id});
+    received.push({...ingested,body,is_owner:message.from===pilotPhone(env),meta_message_id:message.id});
   }
   // The new route stores inbound messages before attempting their attachments.
   await persistMedia(payload,env);
@@ -62,7 +64,7 @@ async function processTurn(inbound,env,{rpc,deliver}){
   }
   // Explicit start command is accepted only from the configured owner test number.
   // An ingress retry never releases a later manual takeover.
-  if(normalize(inbound.body)==='probar bot'&&inbound.created){
+  if(normalize(inbound.body)==='probar bot'&&inbound.is_owner&&inbound.created){
     const rows=await patch(env,'whatsapp_conversations',{id:`eq.${c.id}`,automation_control_version:`eq.${c.automation_control_version}`},{automation_paused:false,automation_control_version:c.automation_control_version+1});
     if(!rows.length)return;c=rows[0];
   }
@@ -125,7 +127,7 @@ async function processTurn(inbound,env,{rpc,deliver}){
     if(selected){const rows=await patch(env,'whatsapp_conversations',{id:`eq.${c.id}`,branch_id:'is.null',automation_control_version:`eq.${c.automation_control_version}`},{branch_id:selected.id});if(!rows.length)return;c=rows[0];}
     else{const list=choices||orderedBranches(branches);await sendFixed(branchMenu(list),false,{branch_options:list.map(b=>b.id)});return;}
   }
-  if(normalize(inbound.body)==='probar bot'){await sendFixed('El piloto del nuevo bot está activo en este chat. Puedes preguntarme por información de la sede o consultar productos. Las compras y los pagos necesitan confirmación del equipo.');return;}
+  if(normalize(inbound.body)==='probar bot'&&inbound.is_owner){await sendFixed('El piloto del nuevo bot está activo en este chat. Puedes preguntarme por información de la sede o consultar productos. Las compras y los pagos necesitan confirmación del equipo.');return;}
   const context=await loadPreviewContext(env,{role:'admin'},c.id,c.automation_control_version);
   if(context.snapshot.message.id!==inbound.message_id)return;
   let decision;
@@ -244,7 +246,12 @@ export async function resumePilotTask(taskId,env,{rpc,deliver}){
 }
 
 export async function recoverPilotTasks(env,dependencies){
-  if(env.BOT_PILOT_ENABLED!=='true'||!pilotPhone(env))return;
+  if(!botEnabled(env)||!pilotPhone(env))return;
+  if(env.BOT_PUBLIC_ENABLED==='true'){
+    const next=await dependencies.rpc('next_public_bot_task',{p_owner_phone:`+${pilotPhone(env)}`},env);
+    if(next){if(['resolved','rejected'].includes(next.status))await resumePilotTask(next.id,env,dependencies);else await notifyPilotTask(next.id,env,dependencies);}
+    return;
+  }
   const contact=(await readBotRows(env,'whatsapp_contacts',{phone_e164:`eq.+${pilotPhone(env)}`,select:'id',limit:'1'}))[0];if(!contact)return;
   const conversations=await readBotRows(env,'whatsapp_conversations',{contact_id:`eq.${contact.id}`,source:'neq.internal_admin',status:'neq.closed',select:'id,branch_id',order:'created_at.desc',limit:'1'});
   for(const c of conversations){
@@ -291,6 +298,6 @@ export async function handlePilotStatus(request,env){
       const ownEvents=events.filter(event=>(event.payload?.entry||[]).some(entry=>(entry.changes||[]).some(change=>(change.value?.messages||[]).some(message=>message.from===phone))));
       diagnostics={events:ownEvents.map(({payload,...event})=>({...event,messages:payload.entry.flatMap(entry=>entry.changes||[]).flatMap(change=>change.value?.messages||[]).filter(message=>message.from===phone).map(message=>({id:message.id,timestamp:message.timestamp,type:message.type}))})),messages:c?await readBotRows(env,'whatsapp_messages',{conversation_id:`eq.${c.id}`,select:'id,direction,sender_type,delivery_status,failure_reason,created_at,idempotency_key,send_started_at,meta_message_id',order:'created_at.desc,id.desc',limit:'10'}):[]};
     }
-    return Response.json({ok:!missingFunctions.length&&meta.ok,pilot_enabled:env.BOT_PILOT_ENABLED==='true',schema_verified:!missingFunctions.length,missing_functions:missingFunctions,meta_connected:meta.ok,meta_error_code:metaData.error?.code||null,business_phone:meta.ok?metaData.display_phone_number:null,phone_suffix:phone.slice(-4),conversation:c?{id:c.id,branch_id:c.branch_id,consent_status:c.consent_status,manual_control:c.automation_paused,control_version:c.automation_control_version}:null,context:context||null,marketing,diagnostics},{headers:{'cache-control':'no-store'}});
+    return Response.json({ok:!missingFunctions.length&&meta.ok,pilot_enabled:env.BOT_PILOT_ENABLED==='true',public_enabled:env.BOT_PUBLIC_ENABLED==='true',public_started_at:env.BOT_PUBLIC_STARTED_AT||null,schema_verified:!missingFunctions.length,missing_functions:missingFunctions,meta_connected:meta.ok,meta_error_code:metaData.error?.code||null,business_phone:meta.ok?metaData.display_phone_number:null,phone_suffix:phone.slice(-4),conversation:c?{id:c.id,branch_id:c.branch_id,consent_status:c.consent_status,manual_control:c.automation_paused,control_version:c.automation_control_version}:null,context:context||null,marketing,diagnostics},{headers:{'cache-control':'no-store'}});
   }catch(error){return Response.json({ok:false,error:error.message},{status:503});}
 }

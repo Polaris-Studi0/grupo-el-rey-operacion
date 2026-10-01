@@ -131,3 +131,44 @@ test('product images can only refer to scoped assets and never accompany payment
  assert.equal(guard(c,{...d,media_ids:['private-receipt']},['consultar_informacion']).status,'unverified_image');
  assert.equal(guard(c,{...d,media_ids:[id,id]},['consultar_informacion']).status,'unverified_image');
 });
+
+test('a human offer with several sizes asks the customer instead of choosing or escalating',()=>{
+ const p=attentionFixture('horario');p.snapshot.products=[];p.snapshot.last_options=[];
+ const source='40000000-0000-4000-8000-000000000002';
+ const answer='Tenemos disfraces de mujer maravilla en tall m, s. A 50.000';
+ p.snapshot.confirmed_answers=[{id:source,answer}];p.snapshot.message.text='bueno, entonces dame ese igualmente';
+ const c=validate(p).context;
+ const item={source_task_id:source,source_excerpt:answer,name:'mujer maravilla',variant:'',unit_price_cop:50000,quantity:1};
+ for(const variant of ['', 'm', 'm, s']){
+  const result=guard(c,decision({intent:'checkout',confirmed_item:{...item,variant}}),['consultar_informacion']);
+  assert.equal(result.status,'decision_ready');assert.equal(result.decision.intent,'clarification');
+  assert.match(result.decision.reply_text,/talla.*M o S/);assert.equal(result.decision.confirmed_item,null);
+  assert.deepEqual(result.decision.actions,[]);assert.deepEqual(result.decision.checkout,{});noEffects(result);
+ }
+ c.message.text='la S porfa';
+ const chosen=guard(c,decision({intent:'checkout',confirmed_item:{...item,variant:'s'}}),['consultar_informacion']);
+ assert.equal(chosen.status,'decision_ready');assert.equal(chosen.decision.intent,'checkout');
+ assert.equal(chosen.decision.confirmed_item.variant,'s');assert.equal(chosen.decision.confirmed_item.unit_price_cop,50000);
+ c.checkout={stage:'collecting',pending_selection:chosen.decision.confirmed_item};c.message.text='a domicilio';
+ const continued=guard(c,decision({intent:'checkout',confirmed_item:{...item,variant:'s'},checkout:{fulfillment_type:'delivery'}}),['consultar_informacion']);
+ assert.equal(continued.decision.intent,'checkout');assert.equal(continued.decision.confirmed_item,null);assert.equal(continued.decision.checkout.fulfillment_type,'delivery');
+ c.checkout={};
+ c.message.text='la M o la S, cualquiera';
+ assert.equal(guard(c,decision({intent:'checkout',confirmed_item:{...item,variant:'s'}}),['consultar_informacion']).decision.intent,'clarification');
+ const invalid=guard(c,decision({intent:'checkout',confirmed_item:{...item,unit_price_cop:40000}}),['consultar_informacion']);
+ assert.equal(invalid.status,'unverified_confirmed_item','asking for a discount cannot change the verified price');
+});
+
+test('profile display name is not offered to the model as the confirmed buyer name',()=>{
+ const p=attentionFixture('horario');p.snapshot.customer.name='Nombre de perfil';
+ const validated=validate(p);const input=JSON.parse(validated.llm_input);
+ assert.equal(input.customer,undefined);assert.doesNotMatch(validated.llm_input,/Nombre de perfil/);
+});
+
+test('agent failure evidence uses categories without leaking error contents',()=>{
+ const c=validate(attentionFixture('horario')).context;
+ for(const [message,type]of [['Model output does not fit required format SECRET','structured_output'],['429 rate limit SECRET','rate_limit'],['maximum iterations reached SECRET','iteration_limit'],['request timed out SECRET','timeout'],['unknown SECRET','agent_error']]){
+  const r=new Function('$input','$',code('Fallo controlado sin envíos'))({first:()=>({json:{error:{message}}})},()=>({first:()=>({json:{context:c}})}))[0].json.response;
+  assert.equal(r.status,'agent_unavailable');assert.equal(r.evidence.failure_type,type);noEffects(r);assert.doesNotMatch(JSON.stringify(r),/SECRET/);
+ }
+});

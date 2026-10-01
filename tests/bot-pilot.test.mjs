@@ -182,3 +182,18 @@ test('estimates preserve their clock time, expire honestly and never override co
  assert.equal(ask(null,'¿Cuándo llega el pedido REY-9999?').intent,'clarification');
  assert.doesNotMatch(ask(null,'¿Cuándo llega el pedido REY-9999?').reply_text,/REY-1003/);
 });
+
+test('public routing accepts new customer phones and never forwards historical batches to the old account',()=>{
+ const started=new Date(Date.now()-10000).toISOString();const config={...env,BOT_PUBLIC_ENABLED:'true',BOT_PUBLIC_STARTED_AT:started};
+ const p=payload([{id:'new',from:'573000000008',timestamp:String(Math.floor(Date.now()/1000))},{id:'old',from:'573000000009',timestamp:'1'}]);
+ const split=partitionPilotWebhook(p,config);assert.deepEqual(split.pilot.entry[0].changes[0].value.messages.map(m=>m.id),['new']);assert.equal(split.legacy.entry.length,0);
+});
+test('a public customer gets the new engine while PROBAR BOT cannot release their manual takeover',async()=>scenario({setup:db=>{db.whatsapp_contacts[0].phone_e164='+573000000008';db.whatsapp_conversations[0].automation_paused=true;}},async s=>{
+ const config={...env,BOT_PUBLIC_ENABLED:'true'};
+ await processPilotWebhook(payload([{id:'external',from:'573000000008',type:'text',text:{body:'PROBAR BOT'}}]),config,s.dependencies);
+ assert.equal(s.db.whatsapp_conversations[0].automation_paused,true);assert.equal(s.sent.length,0);assert.ok(!s.trace.includes('patch'));
+}));
+test('public customer turn responds with the same permission and context checks as the pilot',async()=>scenario({setup:db=>{db.whatsapp_contacts[0].phone_e164='+573000000008';}},async s=>{
+ await processPilotWebhook(payload([{id:'external',from:'573000000008',type:'text',text:{body:'¿A qué hora cierran?'}}]),{...env,BOT_PUBLIC_ENABLED:'true'},s.dependencies);
+ assert.ok(s.trace.includes('model'));assert.equal(s.sent.length,1);assert.equal(s.sent[0].expected.inbound_message_id,mid);
+}));

@@ -307,3 +307,9 @@ export async function listCampaigns(){
 }
 
 export async function listCampaignRecipients(id){const {data,error}=await supabase.from('whatsapp_campaign_recipients').select('*').eq('campaign_id',id).order('phone_e164').limit(1000);if(error)throw error;return data;}
+
+export async function whatsappDemoRequest(body){
+ const {data:{session}}=await supabase.auth.getSession();if(!session)throw Error('Inicia sesión.');
+ const r=await fetch('/api/operator/whatsapp-demo',{method:body?'POST':'GET',headers:{authorization:`Bearer ${session.access_token}`,...(body?{'content-type':'application/json'}:{})},...(body?{body:JSON.stringify(body)}:{})});
+ const result=await r.json();if(!r.ok&&!result.result)throw Error(result.error||'No se pudo completar el demo.');return result;
+}

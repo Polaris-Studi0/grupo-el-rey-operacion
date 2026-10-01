@@ -1,7 +1,8 @@
+import {handleWhatsappDemo} from "./whatsapp-demo.js";
 import {handleCampaigns,recoverCampaigns,recordMarketingOptOuts,withoutMarketingOptOuts} from "./whatsapp-campaigns.js";
 import { handleBotConnection } from "./bot-connection.js";
 import { handleBotPreview } from "./bot-preview.js";
-import { handlePilotStatus, partitionPilotWebhook, processPilotWebhook, pilotDeliveryEligible, resumePilotTask, recoverPilotTasks } from "./bot-pilot.js";
+import { botEnabled, handlePilotStatus, partitionPilotWebhook, processPilotWebhook, pilotDeliveryEligible, resumePilotTask, recoverPilotTasks } from "./bot-pilot.js";
 
 const WEBHOOK_PATH = "/api/whatsapp/webhook";
 const SEND_PATH = "/api/whatsapp/send";
@@ -277,7 +278,7 @@ async function authenticatedOperator(request,env){
 }
 
 async function wakeAutomation(request,env){
-  if(!env.N8N_AUTOMATION_URL||!env.N8N_WEBHOOK_SECRET)return json({error:"Automation webhook is not configured"},503);
+  if(!botEnabled(env)&&(!env.N8N_AUTOMATION_URL||!env.N8N_WEBHOOK_SECRET))return json({error:"Automation webhook is not configured"},503);
   const operator=await authenticatedOperator(request,env);
   if(!operator)return json({error:"Unauthorized"},401);
   let body;
@@ -289,10 +290,11 @@ async function wakeAutomation(request,env){
   const conversation=task&&await operatorConversationScope(task.conversation_id,operator,env);
   if(!conversation)return json({error:"No tienes acceso a este pendiente"},403);
   if(conversation.automation_paused)return json({ok:true,deferred:true,reason:"manual_control",task_id:body.task_id});
-  if(env.BOT_PILOT_ENABLED==="true"){
+  if(botEnabled(env)){
     const pilotResult=await resumePilotTask(body.task_id,env,{rpc:supabaseRpc,deliver:deliverQueuedWhatsAppMessage});
     if(pilotResult)return json(pilotResult,pilotResult.ok?200:502);
   }
+  if(env.BOT_PUBLIC_ENABLED==="true")return json({ok:true,deferred:true,reason:"legacy_task_not_resumed"});
   let lastError;
   for(let attempt=0;attempt<3;attempt+=1){
     try{
@@ -394,6 +396,16 @@ async function recoverWebhookInbox(env){
   return pending.length;
 }
 
+export function splitPublicWebhook(payload){
+  const parts=[];
+  for(const entry of payload.entry||[])for(const change of entry.changes||[]){
+    const value=change.value||{};
+    for(const message of value.messages||[])parts.push({...payload,entry:[{...entry,changes:[{...change,value:{...value,statuses:[],messages:[message],contacts:(value.contacts||[]).filter(c=>c.wa_id===message.from)}}]}]});
+    for(const status of value.statuses||[])parts.push({...payload,entry:[{...entry,changes:[{...change,value:{...value,messages:[],contacts:[],statuses:[status]}}]}]});
+  }
+  return parts.length?parts:[payload];
+}
+
 async function receiveWebhook(request,env,context){
   const rawBody=await request.arrayBuffer();
   if(!env.WHATSAPP_APP_SECRET)return response("Webhook signature verification is not configured",503);
@@ -403,6 +415,19 @@ async function receiveWebhook(request,env,context){
   if(payload?.object!=="whatsapp_business_account")return response("Ignored");
   const description=describeWebhook(payload);
   const eventKey=`payload:${await sha256(rawBody)}`;
+  if(env.BOT_PUBLIC_ENABLED==='true'){
+    const parts=splitPublicWebhook(payload);
+    if(parts.length>1){
+      const records=await Promise.all(parts.map(async part=>({payload:part,event_key:`part:${await sha256(new TextEncoder().encode(JSON.stringify(part)))}`,event_type:describeWebhook(part).eventType})));
+      try{
+        const saved=await fetch(`${env.SUPABASE_URL}/rest/v1/whatsapp_webhook_inbox?on_conflict=event_key`,{method:'POST',headers:supabaseHeaders(env,{prefer:'resolution=ignore-duplicates,return=minimal'}),body:JSON.stringify(records)});
+        if(!saved.ok)return response('Temporary persistence failure',503);
+      }catch{return response('Temporary persistence failure',503);}
+      const first=records[0];
+      context.waitUntil(processWebhook(first.payload,first.event_key,first.event_type,env).catch(error=>console.error('WhatsApp processing failed',error.message)));
+      return response('EVENT_RECEIVED');
+    }
+  }
   try{await persistInbox(payload,eventKey,description.eventType,env);}catch(error){console.error("WhatsApp persistence failed",error.message);return response("Temporary persistence failure",503);}
   context.waitUntil(processWebhook(payload,eventKey,description.eventType,env).catch(error=>console.error("WhatsApp processing failed",error.message)));
   return response("EVENT_RECEIVED");
@@ -707,6 +732,7 @@ export default {
   async fetch(request,env,context){
     const url = new URL(request.url);
     if(url.pathname==="/api/bot/connection"||url.pathname==="/api/bot/connection/probe")return handleBotConnection(request,env);
+    if(url.pathname==="/api/operator/whatsapp-demo")return handleWhatsappDemo(request,env,{authenticate:authenticatedOperator,rpc:supabaseRpc});
     if(url.pathname==="/api/operator/campaigns")return handleCampaigns(request,env,{authenticate:authenticatedOperator,rpc:supabaseRpc});
     if(url.pathname==="/api/operator/bot-preview")return handleBotPreview(request,env,authenticatedOperator);
     if(url.pathname==="/api/bot/pilot/status")return handlePilotStatus(request,env);

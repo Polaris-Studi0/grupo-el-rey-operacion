@@ -1,16 +1,28 @@
 # Traspaso vigente — bot de Grupo Almacenes El Rey
 
-Actualizado el **30/09/2026, tarde de Colombia**. Este documento determina el estado real; los documentos de arquitectura describen el objetivo.
+Actualizado el **01/10/2026, mañana de Colombia**. Este documento determina el estado real; los documentos de arquitectura describen el objetivo.
 
 ## Publicado y autorizado
 
 - Aplicación real: `/Users/samuel/Desktop/Cowork for Grupo El Rey/Plataforma`. Samuel autorizó editar código y publicar el piloto. **No manejar pantalla; usar MCP/CLI. No commit/push**: Samuel usa GitHub Desktop. HEAD comprobado de Samuel: `3f46c9f test bot sep 30`; cambios de esta corrección sin commit.
 - Worker `grupo-el-rey-operacion`: **`893f2f57-9b39-4bdb-9e9e-205fe4eac419`**, 100%. Versión inmediatamente anterior: `eab9085d-1936-4476-ad01-97b1c5730c54`; antes de esta tarea, `08599e3e-0390-4027-bf0e-d5f7d7971835` (publicación de Samuel). Bindings y runtime comparados e iguales a esa versión. Assets `index-BJ9dlxUb.css` / `index-D8ggvs72.js`.
-- [Motor nuevo de n8n](https://intranetelrey.app.n8n.cloud/workflow/pGxqUgjYE6NCyiwZ), 17 nodos, gpt-5-mini mediante Gateway. Publicado **`f0414e5c-3466-4f57-88fc-4888e1f7c491`**. Conserva la corrección de sedes y añade continuidad comercial después de una aclaración humana.
+- [Motor nuevo de n8n](https://intranetelrey.app.n8n.cloud/workflow/pGxqUgjYE6NCyiwZ), 17 nodos, gpt-5-mini mediante Gateway. Publicado **`67d1cdbc-a5ee-4bc0-99f8-99f65d7fca07`**. Conserva la corrección de sedes y añade continuidad comercial después de una aclaración humana.
 - Webhook privado `POST /webhook/el-rey-assistant-turn-v1`. Solo propone: no envía ni escribe en la base. No guardar datos de ejecuciones exitosas/fallidas/manuales ni progreso.
 - Piloto habilitado únicamente para **+57 312 737 8289**, inicio `2026-09-29T05:00:41.000Z`. WhatsApp empresarial **+57 314 789 9116**. No ampliar al público automáticamente. El piloto permite pruebas fuera del horario; no trasladar esa excepción a clientes.
 - Otros teléfonos conservan la ruta anterior. Hay eventos ajenos al piloto con `n8n respondió 404`: **no afirmar que esa ruta de mantenimiento funciona**, ni reactivar el bot viejo para resolverlo. Debe resolverse antes de abrir al público.
 - Meta autenticado; contexto remoto legible. Durante el incidente, La Estrella tenía **0 productos activos y 0 QR activos**. El diagnóstico debe comprobar de nuevo la sede elegida y sus recursos. Samuel pidió no cargar promociones todavía; las subirá cuando existan. No sembrar productos ficticios.
+
+## Continuidad después de descuento y talla — 01/10
+
+Samuel mostró el mensaje «bueno, entonces dame ese igualmente» del 30/09 a las 23:06. La consulta llegó una vez y la respuesta de respaldo/aviso interno constan como `read`: no fue una pérdida de WhatsApp. El contexto conservaba una respuesta de producto/tallas/precio y otra negativa al descuento, sin catálogo ni carrito. **El motivo exacto del fallo original no quedó guardado**: ai_runs almacena el resultado transaccional de la derivación, no el error de generación. No atribuirlo a una causa exacta inventada.
+
+- Reproducción antes del cambio: el modelo sí proponía la selección, pero dejaba vacía la talla pese a existir S y M. En la batería siguiente apareció además HTTP 503 `agent_unavailable` al elegir S; otra ejecución del mismo caso pasó. Es un fallo intermitente observado, sin subtipo registrado entonces.
+- Motor n8n actualizado por MCP, 17 nodos y mismas conexiones. Prompt diferencia selección de producto/talla, conserva oferta/precio tras negativa al descuento, usa la respuesta original literal como fuente y clasifica pedir descuento como información/autorización, no petición explícita de una persona. No compra con IDs inventados ni considera contado el stock de una respuesta humana.
+- Validador pide elegir talla si la fuente literal contiene varias tallas y la selección aún no está resuelta; no elige por el cliente, no crea tarea, no acepta pago. Una talla ya guardada no se pregunta otra vez al aportar domicilio. Se conserva el rechazo de fuentes/precios falsos.
+- El nombre del perfil de WhatsApp se omite del mensaje al modelo: no es nombre confirmado para la compra. El nombre que el cliente indica sigue disponible en historial y checkout.
+- Agente con máximo **2 intentos totales**, espera de 1 s, solo generación/propuesta sin efectos. No se reintenta la entrega WhatsApp ni una compra. Validación/control/consentimiento siguen posteriores; límites de tiempo del Worker siguen siendo una limitación existente. La salida de error devuelve categoría acotada (formato, rate limit, iteraciones, timeout, genérico) sin texto de errores ni secretos. Sigue deshabilitado guardar ejecuciones en n8n. Esta categoría aún no se persiste en ai_runs.
+- Versión publicada **67d1cdbc-a5ee-4bc0-99f8-99f65d7fca07**; anterior a esta corrección f0414e5c. Worker y SQL sin cambios. 28 pruebas Node de contrato/contexto y lint aprobados. Modelo publicado: **5/5 casos sintéticos aprobados** (retoma sin talla, S, descuento negado, descuento sin política, M con domicilio). Evidencia: `n8n/rebuild/size-discount-evidence-20261001.json`; no confundir propuestas con entrega real.
+- No se reenviaron mensajes anteriores ni se resolvieron/borraron pendientes para forzar la prueba. Falta nueva comprobación real de Samuel después de publicar. Sin commit/push; HEAD de Samuel observado `f6c8e3b bot update`.
 
 ## Limpieza completa solicitada — pendiente de ejecución manual, 30/09
 

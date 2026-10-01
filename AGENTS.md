@@ -1,6 +1,6 @@
 # Instrucciones para continuar Grupo El Rey
 
-Leer primero `HANDOFF_N8N_WHATSAPP.md`, actualizado el 30/09/2026, y `n8n/rebuild/README.md`.
+Leer primero `HANDOFF_N8N_WHATSAPP.md`, actualizado el 01/10/2026, y `n8n/rebuild/README.md`.
 
 - Aplicación real: esta carpeta Plataforma. La carpeta de chat en Documents es otro repositorio.
 - Samuel autorizó el piloto en WhatsApp con su número personal, además de la reconstrucción por MCP y las ediciones del proyecto. No pedir autorización otra vez para trabajo rutinario de ese alcance.
@@ -29,3 +29,5 @@ Leer primero `HANDOFF_N8N_WHATSAPP.md`, actualizado el 30/09/2026, y `n8n/rebuil
 - 30/09: imágenes de producto/aclaraciones y sesiones nuevas tras 24 horas sin escribir publicadas; migraciones 202609300005/006/007 aplicadas. **Samuel aplazó publicidad: no continuarla ni habilitarla.** Código preparatorio conservado; pestaña/API/cron deshabilitados, cero campañas enviadas. Ver HANDOFF para versiones y pruebas.
 
 - Nueva limpieza autorizada el 30/09: TODO el dato operativo, incluidos domiciliarios, personal de caja, chats, pendientes, PQRS, catálogo, inventario, conocimientos y QR. Conservar auth, profiles/permisos y branches. Samuel ejecutará personalmente `scripts/reset-all-business-data-20260930.sql` en SQL Editor. **Preparado y probado en base aislada; NO ejecutado en producción ni confirmado aún.** Respaldo privado nuevo elrey_reset_20260930, sin sobrescribir el del 29/09; Storage físico privado y secuencias conservados. No ejecutar por CLI ni asumir que ya está vacío. Esta autorización reemplaza el alcance de conservación de catálogo/QR de la limpieza anterior, únicamente para este SQL.
+
+- 01/10: n8n publicado en 67d1cdbc-a5ee-4bc0-99f8-99f65d7fca07. Continuidad tras descuento/tallas, fuente literal, nombre de perfil excluido del modelo y máximo dos intentos de generación sin efectos. El fallo original del 30/09 23:06 no tiene causa exacta guardada; sí se reprodujo un agent_unavailable intermitente en pruebas. Ver HANDOFF/evidencia y distinguir de entrega real. No reenviar mensajes históricos.

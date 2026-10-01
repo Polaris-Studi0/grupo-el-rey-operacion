@@ -2,7 +2,7 @@
 
 Estado vigente y límites: [HANDOFF_N8N_WHATSAPP.md](../../HANDOFF_N8N_WHATSAPP.md).
 
-[Motor de atención](https://intranetelrey.app.n8n.cloud/workflow/pGxqUgjYE6NCyiwZ) publicado en `f0414e5c-3466-4f57-88fc-4888e1f7c491`; Worker `893f2f57-9b39-4bdb-9e9e-205fe4eac419`. Solo el teléfono piloto autorizado; no activar al público automáticamente.
+[Motor de atención](https://intranetelrey.app.n8n.cloud/workflow/pGxqUgjYE6NCyiwZ) publicado en `67d1cdbc-a5ee-4bc0-99f8-99f65d7fca07`; Worker `893f2f57-9b39-4bdb-9e9e-205fe4eac419`. Solo el teléfono piloto autorizado; no activar al público automáticamente.
 
 ## Contrato y responsabilidades
 
@@ -63,3 +63,9 @@ Pedido piloto REY-1003 registrado y recibido por Samuel, con aprobación manual 
 `product_images` contiene referencias autorizadas; n8n propone hasta dos `media_ids` y el servidor revalida y envía desde el bucket privado. El operador carga fotos en Inventario o Pendientes. Las sesiones nuevas se crean tras 24 horas sin mensajes del cliente, conservando pedidos/historial/control manual y sin arrastrar sede o carrito. Migraciones 202609300005/006/007 aplicadas. `node scripts/check-bot-product-images.mjs`: tres casos sintéticos con el modelo real aprobados, sin enviar mensajes; falta foto real cargada para la prueba de entrega.
 
 **Publicidad aplazada por Samuel.** Código preparatorio conservado y deshabilitado en interfaz, API y cron. No hay campañas enviadas. No habilitar ni seguir construyéndola hasta que él la retome.
+
+## Continuidad de talla y descuento — 01/10
+
+Se pregunta la talla pendiente entre varias opciones, conservando producto/precio después de negar un descuento. Selección humana literal y stock contado siguen siendo cosas distintas. Agente: máximo dos intentos de generación; las validaciones posteriores y el envío idempotente se conservan. Nombre del perfil omitido del prompt para evitar tratarlo como comprador confirmado. Error clasificado sin exponer contenido ni guardar ejecuciones.
+
+Prueba con modelo sin envíos: `node scripts/check-bot-size-discount.mjs`. Evidencia: `size-discount-evidence-20261001.json`. Contrato/contexto: 28 pruebas aprobadas. Falta prueba real de Samuel; no atribuir una causa exacta al fallo original sin evidencia.

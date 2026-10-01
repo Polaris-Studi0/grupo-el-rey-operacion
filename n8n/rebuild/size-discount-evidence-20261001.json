@@ -1,0 +1,186 @@
+{
+  "workflow_version": "67d1cdbc-a5ee-4bc0-99f8-99f65d7fca07",
+  "synthetic": true,
+  "whatsapp_sends": 0,
+  "results": [
+    {
+      "name": "retoma_sin_talla",
+      "checked_at": "2026-10-01T14:24:06.868Z",
+      "http": 200,
+      "status": "decision_ready",
+      "decision": {
+        "media_ids": [],
+        "intent": "clarification",
+        "reply_text": "Claro, ¿lo quieres en talla S o M?",
+        "offered_product_ids": [],
+        "quote": null,
+        "actions": [],
+        "checkout": {
+          "customer_name": "",
+          "recipient_name": "",
+          "recipient_phone": "",
+          "fulfillment_type": "",
+          "delivery_address": "",
+          "delivery_zone": "",
+          "payment_method": ""
+        },
+        "confirmed_item": null,
+        "accept_summary": false,
+        "cancel_cart": false
+      },
+      "evidence": {
+        "tools_used": []
+      },
+      "passed": true
+    },
+    {
+      "name": "elige_s",
+      "checked_at": "2026-10-01T14:24:37.104Z",
+      "http": 200,
+      "status": "decision_ready",
+      "decision": {
+        "media_ids": [],
+        "intent": "checkout",
+        "reply_text": "Continúo con tu selección y los datos que indicas. El resumen y el pago requieren las comprobaciones de la compra.",
+        "offered_product_ids": [],
+        "quote": null,
+        "actions": [],
+        "checkout": {
+          "customer_name": "",
+          "recipient_name": "",
+          "recipient_phone": "",
+          "fulfillment_type": "",
+          "delivery_address": "",
+          "delivery_zone": "",
+          "payment_method": ""
+        },
+        "confirmed_item": {
+          "source_task_id": "40000000-0000-4000-8000-000000000001",
+          "source_excerpt": "Si, tenemos disfraces de la mujer maravilla en tall m, s. A 50.000",
+          "name": "mujer maravilla",
+          "variant": "s",
+          "unit_price_cop": 50000,
+          "quantity": 1
+        },
+        "accept_summary": false,
+        "cancel_cart": false
+      },
+      "evidence": {
+        "tools_used": [
+          "consultar_informacion"
+        ]
+      },
+      "passed": true
+    },
+    {
+      "name": "descuento_ya_negado",
+      "checked_at": "2026-10-01T14:24:45.806Z",
+      "http": 200,
+      "status": "decision_ready",
+      "decision": {
+        "media_ids": [],
+        "intent": "information",
+        "reply_text": "Para este disfraz no podemos aplicar descuento; el precio es $50.000.",
+        "offered_product_ids": [],
+        "quote": null,
+        "actions": [],
+        "checkout": {
+          "customer_name": "",
+          "recipient_name": "",
+          "recipient_phone": "",
+          "fulfillment_type": "",
+          "delivery_address": "",
+          "delivery_zone": "",
+          "payment_method": ""
+        },
+        "confirmed_item": null,
+        "accept_summary": false,
+        "cancel_cart": false
+      },
+      "evidence": {
+        "tools_used": [
+          "consultar_informacion"
+        ]
+      },
+      "passed": true
+    },
+    {
+      "name": "descuento_sin_politica",
+      "checked_at": "2026-10-01T14:24:56.690Z",
+      "http": 200,
+      "status": "decision_ready",
+      "decision": {
+        "media_ids": [],
+        "intent": "handoff",
+        "reply_text": "Dame un momento y te confirmo.",
+        "offered_product_ids": [],
+        "quote": null,
+        "actions": [
+          {
+            "type": "propose_human_task",
+            "reason": "missing_information",
+            "question": "¿Podemos ofrecer un descuento para este producto?",
+            "related_message_id": "TEST-MSG-horario"
+          }
+        ],
+        "checkout": {
+          "customer_name": "",
+          "recipient_name": "",
+          "recipient_phone": "",
+          "fulfillment_type": "",
+          "delivery_address": "",
+          "delivery_zone": "",
+          "payment_method": ""
+        },
+        "confirmed_item": null,
+        "accept_summary": false,
+        "cancel_cart": false
+      },
+      "evidence": {
+        "tools_used": [
+          "solicitar_equipo"
+        ]
+      },
+      "passed": true
+    },
+    {
+      "name": "talla_m_con_domicilio",
+      "checked_at": "2026-10-01T14:25:08.040Z",
+      "http": 200,
+      "status": "decision_ready",
+      "decision": {
+        "media_ids": [],
+        "intent": "checkout",
+        "reply_text": "Continúo con tu selección y los datos que indicas. El resumen y el pago requieren las comprobaciones de la compra.",
+        "offered_product_ids": [],
+        "quote": null,
+        "actions": [],
+        "checkout": {
+          "customer_name": "",
+          "recipient_name": "",
+          "recipient_phone": "",
+          "fulfillment_type": "delivery",
+          "delivery_address": "",
+          "delivery_zone": "",
+          "payment_method": ""
+        },
+        "confirmed_item": {
+          "source_task_id": "40000000-0000-4000-8000-000000000001",
+          "source_excerpt": "Si, tenemos disfraces de la mujer maravilla en tall m, s. A 50.000",
+          "name": "mujer maravilla",
+          "variant": "m",
+          "unit_price_cop": 50000,
+          "quantity": 1
+        },
+        "accept_summary": false,
+        "cancel_cart": false
+      },
+      "evidence": {
+        "tools_used": [
+          "consultar_informacion"
+        ]
+      },
+      "passed": true
+    }
+  ]
+}
