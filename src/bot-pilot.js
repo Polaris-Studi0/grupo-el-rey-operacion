@@ -1,3 +1,4 @@
+import {campaignTemplates} from './whatsapp-campaigns.js';
 import {branchSelection,branchMenu,orderedBranches,asksForBranches,asksToChangeBranch} from './bot-branches.js';
 import {authenticates} from './bot-connection.js';
 import {loadPreviewContext,readBotRows,requestBotDecision} from './bot-preview.js';
@@ -232,6 +233,11 @@ export async function resumePilotTask(taskId,env,{rpc,deliver}){
     }
     const response=await deliver(queued.id,env,{...expected,control_version:queued.raw_payload?.control_version??expected.control_version,inbound_message_id:queued.raw_payload?.inbound_message_id??expected.inbound_message_id});
     if(!response.ok)throw Error('La respuesta del equipo quedó pendiente de entrega');
+    const assets=await readBotRows(env,'bot_media_assets',{task_id:`eq.${task.id}`,active:'eq.true',select:'id',order:'created_at.asc',limit:'2'});
+    if(task.status==='resolved'&&assets.length){
+      const ids=await rpc('queue_bot_images',{p_conversation: c.id,p_inbound:expected.inbound_message_id,p_control:expected.control_version,p_asset_ids:assets.map(a=>a.id),p_key:`human-task-response:${task.id}`},env);
+      for(const id of ids){const sent=await deliver(id,env,expected);if(!sent.ok)throw Error('La imagen quedó pendiente de entrega');}
+    }
     await rpc('complete_automation_event',{p_id:event.id,p_lease_id:event.lease_id,p_error:null},env);
     return {ok:true,task_id:task.id,pilot:true};
   }catch(error){await rpc('complete_automation_event',{p_id:event.id,p_lease_id:event.lease_id,p_error:error.message},env);return {ok:false,deferred:true,reason:'delivery_pending'};}
@@ -274,12 +280,17 @@ export async function handlePilotStatus(request,env){
       const snapshot=await loadPreviewContext(env,{role:'admin'},c.id,c.automation_control_version);
       context={readable:true,information:snapshot.snapshot.information.length,products:snapshot.snapshot.products.length,stock_verified:snapshot.snapshot.products.filter(p=>p.stock_verified).length,qr_assets:snapshot.snapshot.qr_assets.length};
     }
+    let marketing;
+    if(new URL(request.url).searchParams.get('campaigns')==='true'){
+      try{const templates=await campaignTemplates(env);marketing={connected:true,compatible_templates:templates.map(t=>({name:t.name,language:t.language,variables:t.variables}))};}
+      catch(e){marketing={connected:false,error:e.message};}
+    }
     let diagnostics;
     if(new URL(request.url).searchParams.get('diagnostics')==='true'){
       const events=await readBotRows(env,'whatsapp_webhook_inbox',{select:'id,event_type,received_at,processed_at,processing_started_at,attempts,last_error,dead_lettered_at,payload',order:'received_at.desc',limit:'20'});
       const ownEvents=events.filter(event=>(event.payload?.entry||[]).some(entry=>(entry.changes||[]).some(change=>(change.value?.messages||[]).some(message=>message.from===phone))));
       diagnostics={events:ownEvents.map(({payload,...event})=>({...event,messages:payload.entry.flatMap(entry=>entry.changes||[]).flatMap(change=>change.value?.messages||[]).filter(message=>message.from===phone).map(message=>({id:message.id,timestamp:message.timestamp,type:message.type}))})),messages:c?await readBotRows(env,'whatsapp_messages',{conversation_id:`eq.${c.id}`,select:'id,direction,sender_type,delivery_status,failure_reason,created_at,idempotency_key,send_started_at,meta_message_id',order:'created_at.desc,id.desc',limit:'10'}):[]};
     }
-    return Response.json({ok:!missingFunctions.length&&meta.ok,pilot_enabled:env.BOT_PILOT_ENABLED==='true',schema_verified:!missingFunctions.length,missing_functions:missingFunctions,meta_connected:meta.ok,meta_error_code:metaData.error?.code||null,business_phone:meta.ok?metaData.display_phone_number:null,phone_suffix:phone.slice(-4),conversation:c?{id:c.id,branch_id:c.branch_id,consent_status:c.consent_status,manual_control:c.automation_paused,control_version:c.automation_control_version}:null,context:context||null,diagnostics},{headers:{'cache-control':'no-store'}});
+    return Response.json({ok:!missingFunctions.length&&meta.ok,pilot_enabled:env.BOT_PILOT_ENABLED==='true',schema_verified:!missingFunctions.length,missing_functions:missingFunctions,meta_connected:meta.ok,meta_error_code:metaData.error?.code||null,business_phone:meta.ok?metaData.display_phone_number:null,phone_suffix:phone.slice(-4),conversation:c?{id:c.id,branch_id:c.branch_id,consent_status:c.consent_status,manual_control:c.automation_paused,control_version:c.automation_control_version}:null,context:context||null,marketing,diagnostics},{headers:{'cache-control':'no-store'}});
   }catch(error){return Response.json({ok:false,error:error.message},{status:503});}
 }

@@ -1,0 +1,98 @@
+{
+  "checked_at": "2026-10-01T03:49:06.880Z",
+  "workflow_version": "f0414e5c-3466-4f57-88fc-4888e1f7c491",
+  "scope": "synthetic_published_model_no_customer_messages",
+  "results": [
+    {
+      "name": "foto_producto",
+      "status": 200,
+      "decision_status": "decision_ready",
+      "passed": true,
+      "decision": {
+        "media_ids": [
+          "50000000-0000-4000-8000-000000000001"
+        ],
+        "intent": "information",
+        "reply_text": "Aquí tienes la foto del ramo de rosas.",
+        "offered_product_ids": [
+          "TEST-RAMO"
+        ],
+        "quote": null,
+        "actions": [],
+        "checkout": {
+          "customer_name": "",
+          "recipient_name": "",
+          "recipient_phone": "",
+          "fulfillment_type": "",
+          "delivery_address": "",
+          "delivery_zone": "",
+          "payment_method": ""
+        },
+        "confirmed_item": null,
+        "accept_summary": false,
+        "cancel_cart": false
+      }
+    },
+    {
+      "name": "foto_sin_inventario",
+      "status": 200,
+      "decision_status": "decision_ready",
+      "passed": true,
+      "decision": {
+        "media_ids": [
+          "50000000-0000-4000-8000-000000000001"
+        ],
+        "intent": "information",
+        "reply_text": "Aquí tienes una foto del ramo de rosas para que lo veas. Si quieres otra vista o más detalles, me dices.",
+        "offered_product_ids": [],
+        "quote": null,
+        "actions": [],
+        "checkout": {
+          "customer_name": "",
+          "recipient_name": "",
+          "recipient_phone": "",
+          "fulfillment_type": "",
+          "delivery_address": "",
+          "delivery_zone": "",
+          "payment_method": ""
+        },
+        "confirmed_item": null,
+        "accept_summary": false,
+        "cancel_cart": false
+      }
+    },
+    {
+      "name": "foto_faltante",
+      "status": 200,
+      "decision_status": "decision_ready",
+      "passed": true,
+      "decision": {
+        "media_ids": [],
+        "intent": "handoff",
+        "reply_text": "Dame un momento y te confirmo.",
+        "offered_product_ids": [],
+        "quote": null,
+        "actions": [
+          {
+            "type": "propose_human_task",
+            "reason": "missing_information",
+            "question": "¿Tienen foto autorizada del 'disfraz de dinosaurio' para enviar al cliente de la Sede de prueba? Por favor adjuntar imagen(es) del producto y especificar variantes (tallas y colores) si existen. Responder con la imagen autorizada y el nombre exacto del producto tal como debe mostrarse al cliente.",
+            "related_message_id": "TEST-MSG-horario"
+          }
+        ],
+        "checkout": {
+          "customer_name": "",
+          "recipient_name": "",
+          "recipient_phone": "",
+          "fulfillment_type": "",
+          "delivery_address": "",
+          "delivery_zone": "",
+          "payment_method": ""
+        },
+        "confirmed_item": null,
+        "accept_summary": false,
+        "cancel_cart": false
+      }
+    }
+  ]
+}

@@ -278,3 +278,32 @@ export async function confirmBotStock(branchId,productId,quantity){
   const {data,error}=await supabase.rpc("confirm_bot_stock",{p_branch_id:branchId,p_product_id:productId,p_available_qty:quantity});
   if(error)throw error;return data;
 }
+
+export async function uploadBotImage({kind,branch_id=null,product_id=null,task_id=null,caption},file){
+  if(isDemoMode)throw new Error('Las imágenes requieren conexión con la intranet.');
+  if(!file||!['image/jpeg','image/png'].includes(file.type)||file.size>5242880||!file.size)throw new Error('Selecciona una imagen JPG o PNG de hasta 5 MB.');
+  const path=`${kind}/${crypto.randomUUID()}.${file.type==='image/png'?'png':'jpg'}`;
+  const {error:uploadError}=await supabase.storage.from('bot-images').upload(path,file,{contentType:file.type,upsert:false});
+  if(uploadError)throw uploadError;
+  const {data,error}=await supabase.from('bot_media_assets').insert({kind,branch_id,product_id,task_id,caption:caption.trim(),storage_path:path,original_name:file.name,mime_type:file.type,size_bytes:file.size}).select().single();
+  if(error){await supabase.storage.from('bot-images').remove([path]);throw error;}return data;
+}
+export async function listBotImages(filters){
+  let q=supabase.from('bot_media_assets').select('*').eq('active',true).order('created_at');
+  for(const [key,value] of Object.entries(filters))q=q.eq(key,value);
+  const {data,error}=await q;if(error)throw error;return data;
+}
+export async function botImageUrl(path){const {data,error}=await supabase.storage.from('bot-images').createSignedUrl(path,300);if(error)throw error;return data.signedUrl;}
+export async function hideBotImage(id){const {error}=await supabase.from('bot_media_assets').update({active:false}).eq('id',id);if(error)throw error;}
+export async function campaignRequest(body){
+ const {data}=await supabase.auth.getSession();
+ const r=await fetch('/api/operator/campaigns',{method:body?'POST':'GET',headers:{authorization:`Bearer ${data.session?.access_token}`,...(body?{'content-type':'application/json'}:{})},...(body?{body:JSON.stringify(body)}:{})});
+ const result=await r.json();if(!r.ok)throw new Error(result.error||'No fue posible cargar las campañas.');return result;
+}
+export async function listCampaigns(){
+ const [campaigns,recipients,permissions,flyers]=await Promise.all([supabase.from('whatsapp_campaigns').select('*').order('created_at',{ascending:false}).limit(30),supabase.from('whatsapp_campaign_totals').select('*'),supabase.from('whatsapp_marketing_permissions').select('*'),listBotImages({kind:'flyer'})]);
+ for(const r of [campaigns,recipients,permissions])if(r.error)throw r.error;
+ return {campaigns:campaigns.data,totals:recipients.data,permissions:permissions.data,flyers};
+}
+
+export async function listCampaignRecipients(id){const {data,error}=await supabase.from('whatsapp_campaign_recipients').select('*').eq('campaign_id',id).order('phone_e164').limit(1000);if(error)throw error;return data;}

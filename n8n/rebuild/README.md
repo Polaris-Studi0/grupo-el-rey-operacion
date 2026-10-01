@@ -2,7 +2,7 @@
 
 Estado vigente y límites: [HANDOFF_N8N_WHATSAPP.md](../../HANDOFF_N8N_WHATSAPP.md).
 
-[Motor de atención](https://intranetelrey.app.n8n.cloud/workflow/pGxqUgjYE6NCyiwZ) publicado en `49590459-2789-4769-8efd-80ffa22cd0c5`; Worker `2a704ccc-26c6-48ab-a1de-4d8042b36416`. Solo el teléfono piloto autorizado; no activar al público automáticamente.
+[Motor de atención](https://intranetelrey.app.n8n.cloud/workflow/pGxqUgjYE6NCyiwZ) publicado en `f0414e5c-3466-4f57-88fc-4888e1f7c491`; Worker `893f2f57-9b39-4bdb-9e9e-205fe4eac419`. Solo el teléfono piloto autorizado; no activar al público automáticamente.
 
 ## Contrato y responsabilidades
 
@@ -32,7 +32,7 @@ npm run build
 npm run check:bot-commerce
 ```
 
-El último comando consume modelo/n8n con datos sintéticos y no envía mensajes a clientes. Claves leídas fuera del repositorio, sin imprimir valores. 49 pruebas Node comerciales y 12 grupos PostgreSQL aislados aprobados; cinco propuestas comerciales HTTP con modelo real aprobadas. Las pruebas del webhook simulan Meta/base, mientras que la confirmación real de sedes está documentada por separado.
+El último comando consume modelo/n8n con datos sintéticos y no envía mensajes a clientes. Claves leídas fuera del repositorio, sin imprimir valores. 51 pruebas Node comerciales y 12 grupos PostgreSQL aislados aprobados; cinco propuestas comerciales HTTP con modelo real aprobadas. Las pruebas del webhook simulan Meta/base, mientras que la confirmación real de sedes está documentada por separado.
 
 Otros casos/evidencia: `acceptance-cases.json` (no todos ejecutados), `attention-fixtures.mjs`, `pilot-evidence-20260929.json`, `clarification-evidence-20260929.json`, `commerce-evidence-20260929.json`, `sedes-evidence-20260929.json`. Los archivos anteriores conservan la versión/hora a la que corresponden.
 
@@ -40,7 +40,7 @@ Otros casos/evidencia: `acceptance-cases.json` (no todos ejecutados), `attention
 
 Samuel no quiere cargar promociones todavía; las subirá a la intranet cuando existan. No crear catálogo ficticio. Faltan compra real completa y QR por sede, horarios/recordatorios, lectura de medios, respuesta humana por WhatsApp citado y plantillas fuera de ventana. La ruta de otros números sigue heredada y presenta 404; resolverla antes de público, sin restaurar el bot antiguo.
 
-Migraciones 202609290001 a 202609290004 y 202609300001/002/003 aplicadas; v2 del 20/09 no aplicada. Limpieza manual de Samuel terminada: no repetirla. No commit/push automático. Información detallada, accesos y versiones en el traspaso principal.
+Migraciones 202609290001 a 202609290004 y 202609300001/002/003/004 aplicadas; v2 del 20/09 no aplicada. Limpieza manual de Samuel terminada: no repetirla. No commit/push automático. Información detallada, accesos y versiones en el traspaso principal.
 
 ## Selección después de la respuesta humana
 
@@ -53,3 +53,13 @@ La prueba aislada cubre desde aclaración hasta pedido. La propuesta con context
 `bot-checkout.js` interpreta datos inequívocos sin IA y recupera campos explícitos faltantes de la cotización actual. Nombres del perfil y compras previas no rellenan campos. n8n interpreta datos compuestos y consultas; una aclaración de compra incompleta usa preguntas de la transacción y no puede anunciar un envío listo. El nombre del comprador y el destinatario son distintos.
 
 La prueba de base aislada recorre las frases del incidente hasta confirmar datos completos y solicitar conteo. `node scripts/check-bot-checkout-continuity.mjs` verifica además dos rutas directas y tres propuestas con el modelo publicado. Evidencia en `checkout-continuity-evidence-20260930.json`. Falta nueva entrega real tras esta corrección; continuar en WhatsApp con dirección y barrio sin repetir nombre/teléfono.
+
+## Seguimiento y esperas naturales
+
+Pedido piloto REY-1003 registrado y recibido por Samuel, con aprobación manual de pago. `bot-orders.js` responde consultas claras de estado/llegada desde el pedido autorizado, usando `promised_at` en Colombia. La estimación no se reinicia; si venció o falta, solicita actualización humana. Esperas naturales: «Dame un momento y te confirmo». La confirmación inicial ya no afirma automáticamente que falta la hora. Pruebas aprobadas y reproducción de contexto real sin enviar mensajes; falta nueva entrega de esta corrección por WhatsApp.
+
+## Fotos y sesiones
+
+`product_images` contiene referencias autorizadas; n8n propone hasta dos `media_ids` y el servidor revalida y envía desde el bucket privado. El operador carga fotos en Inventario o Pendientes. Las sesiones nuevas se crean tras 24 horas sin mensajes del cliente, conservando pedidos/historial/control manual y sin arrastrar sede o carrito. Migraciones 202609300005/006/007 aplicadas. `node scripts/check-bot-product-images.mjs`: tres casos sintéticos con el modelo real aprobados, sin enviar mensajes; falta foto real cargada para la prueba de entrega.
+
+**Publicidad aplazada por Samuel.** Código preparatorio conservado y deshabilitado en interfaz, API y cron. No hay campañas enviadas. No habilitar ni seguir construyéndola hasta que él la retome.

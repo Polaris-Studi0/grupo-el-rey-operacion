@@ -16,7 +16,7 @@ async function scenario(options={},run){
   const now=new Date().toISOString(),trace=[],sent=[],events=[],tasks=[];
   const db={whatsapp_conversations:[{id:cid,contact_id:uid,branch_id:'b1',status:'open',consent_status:'granted',consented_at:now,consent_version:'v1',automation_paused:false,automation_control_version:2,updated_at:now,last_message_at:now,sales_state:{legacy:'preserved'}}],
     whatsapp_contacts:[{id:uid,phone_e164:'+'+env.BOT_PILOT_PHONE,preferred_name:'Ana'}],branches:[{id:'b1',name:'Sede real de prueba'}],whatsapp_messages:[{id:mid,direction:'inbound',sender_type:'customer',message_type:'text',body:'¿A qué hora cierran?',created_at:now}],
-    branch_knowledge:[{id:tid,category:'schedule',title:'Horario',content:'Cierra a las 20:00.'}],branch_inventory:[],branch_payment_qrs:[],whatsapp_attachments:[],whatsapp_operator_actions:[],orders:[],inventory_reservations:[],human_tasks:[],ai_runs:[],privacy_consents:[{granted:true}]};
+    branch_knowledge:[{id:tid,category:'schedule',title:'Horario',content:'Cierra a las 20:00.'}],bot_media_assets:[],branch_inventory:[],branch_payment_qrs:[],whatsapp_attachments:[],whatsapp_operator_actions:[],orders:[],inventory_reservations:[],human_tasks:[],ai_runs:[],privacy_consents:[{granted:true}]};
   options.setup?.(db);const original=globalThis.fetch;
   globalThis.fetch=async (url,init={})=>{
     const u=new URL(String(url));

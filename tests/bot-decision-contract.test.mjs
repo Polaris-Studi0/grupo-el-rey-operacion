@@ -123,3 +123,11 @@ test('unfinished checkout clarification cannot announce shipment or skip field p
  const question=guard(c,decision({intent:'information',reply_text:'Aceptamos transferencia.'}),['consultar_informacion']);
  assert.equal(question.decision.intent,'information','an unrelated informational question remains informational');
 });
+
+test('product images can only refer to scoped assets and never accompany payment QR',()=>{
+ const packet=attentionFixture('horario'),id='30000000-0000-4000-8000-000000000001';packet.snapshot.product_images=[{id,caption:'Producto de prueba'}];
+ const c=validate(packet).context;assert.equal(c.product_images[0].id,id);
+ const d=decision({intent:'information',reply_text:'Aquí puedes ver el producto.',media_ids:[id]});assert.equal(guard(c,d,['consultar_informacion']).decision.media_ids[0],id);
+ assert.equal(guard(c,{...d,media_ids:['private-receipt']},['consultar_informacion']).status,'unverified_image');
+ assert.equal(guard(c,{...d,media_ids:[id,id]},['consultar_informacion']).status,'unverified_image');
+});

@@ -16,10 +16,16 @@ Leer primero `HANDOFF_N8N_WHATSAPP.md`, actualizado el 30/09/2026, y `n8n/rebuil
 - Documentos en `docs/archivo/` son históricos.
 
 - Samuel indicó el 29/09 que aún NO se carguen promociones. Él las subirá a la intranet cuando estén disponibles. No sembrar productos ficticios en producción.
-- Migraciones nuevas 202609290001, 202609290002, 202609290003, 202609290004, 202609300001, 202609300002 y 202609300003 aplicadas por Management API, sin activar v2. La base no tiene tabla supabase_migrations.schema_migrations; no deducir estado del historial CLI ni ejecutar toda la carpeta.
+- Migraciones nuevas 202609290001, 202609290002, 202609290003, 202609290004, 202609300001, 202609300002, 202609300003 y 202609300004 aplicadas por Management API, sin activar v2. La base no tiene tabla supabase_migrations.schema_migrations; no deducir estado del historial CLI ni ejecutar toda la carpeta.
 
 - Incidente de sedes corregido y probado realmente el 29/09, 20:29 Colombia (Meta read y Samuel confirmó). Sedes directas sin IA; contexto comercial agrupado; un trabajo de recuperación por ejecución. No quitar esos límites ni volver a las lecturas separadas.
 
 - Corrección del 30/09: selección comercial desde una respuesta humana guardada como pending_selection, sin inventar stock. Conteo explícito en intranet antes del resumen/pago. Publicado, probado en base aislada y propuesta con contexto real; falta nueva entrega real por WhatsApp. Detalles y límites en HANDOFF.
 
 - Incidente posterior del 30/09: nombre confundido con destinatario y teléfono derivado. Corregido con captura directa de datos inequívocos, recuperación de campos explícitos de la cotización y preguntas progresivas. 49 pruebas Node/12 grupos DB y 5 casos de continuidad aprobados; falta nueva entrega real. No pedir repetir los datos ya dados: puede seguir con dirección y barrio.
+
+- 30/09: Samuel completó el pedido piloto REY-1003 con aprobación manual de pago; confirmado en captura y datos. Seguimiento directo conectado a promised_at y esperas naturales publicados. No reiniciar estimaciones ni inventar otra al vencer. Falta nueva entrega real de la corrección de ETA; no repetir la compra.
+
+- 30/09: imágenes de producto/aclaraciones y sesiones nuevas tras 24 horas sin escribir publicadas; migraciones 202609300005/006/007 aplicadas. **Samuel aplazó publicidad: no continuarla ni habilitarla.** Código preparatorio conservado; pestaña/API/cron deshabilitados, cero campañas enviadas. Ver HANDOFF para versiones y pruebas.
+
+- Nueva limpieza autorizada el 30/09: TODO el dato operativo, incluidos domiciliarios, personal de caja, chats, pendientes, PQRS, catálogo, inventario, conocimientos y QR. Conservar auth, profiles/permisos y branches. Samuel ejecutará personalmente `scripts/reset-all-business-data-20260930.sql` en SQL Editor. **Preparado y probado en base aislada; NO ejecutado en producción ni confirmado aún.** Respaldo privado nuevo elrey_reset_20260930, sin sobrescribir el del 29/09; Storage físico privado y secuencias conservados. No ejecutar por CLI ni asumir que ya está vacío. Esta autorización reemplaza el alcance de conservación de catálogo/QR de la limpieza anterior, únicamente para este SQL.

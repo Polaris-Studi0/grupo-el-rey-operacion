@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
 import { BRANCHES, formatDateTime } from './lib/constants.js';
-import { listConversationPage, listOperatorInstructions, operateWhatsappConversation, previewBotResponse } from './lib/api.js';
+import { botImageUrl, listConversationPage, listOperatorInstructions, operateWhatsappConversation, previewBotResponse } from './lib/api.js';
 import { mergeHistory, prepareOperatorRequest } from './lib/chat-history.js';
 
 export default function ConversationDrawer({conversation,onClose,onOpenAttachment,onRecoverAttachment,onChanged}){
+  async function openBotImage(path){const popup=window.open('about:blank','_blank');try{const url=await botImageUrl(path);if(popup)popup.location.href=url;}catch(e){popup?.close();setError(e.message);}}
   const storageKey=`whatsapp-action:${conversation.id}`;
   const [pending,setPending]=useState(()=>{try{return JSON.parse(sessionStorage.getItem(storageKey))||null;}catch{return null;}});
   const [draft,setDraft]=useState(pending?.body.text||'');
@@ -116,7 +117,7 @@ export default function ConversationDrawer({conversation,onClose,onOpenAttachmen
     <section className="chat-transcript">
       {hasMore&&<button disabled={loading} onClick={loadOlder}>{loading?'Cargando…':'Cargar mensajes anteriores'}</button>}
       {!messages.length&&<div className="empty compact"><h3>{loading?'Cargando conversación…':'Sin mensajes procesados'}</h3></div>}
-      {messages.map(message=>{const files=attachments.filter(file=>file.message_id===message.id);return <article key={message.id} className={`chat-message ${message.direction}`}><div><small>{message.sender_type==='customer'?'Cliente':message.sender_type==='human'?'Equipo':'Asistente'}</small><p>{message.body||`[${message.message_type}]`}</p>{files.map(file=><button className="chat-attachment" key={file.id} onClick={()=>onOpenAttachment(file.storage_path)}>Ver {file.original_name||'archivo adjunto'}</button>)}{message.direction==='inbound'&&message.media_id&&!files.length&&<button className="chat-attachment" onClick={()=>onRecoverAttachment(message.id)}>Recuperar archivo</button>}<span>{formatDateTime(message.created_at)} · {message.failure_reason==='manual_control_cancelled'?'Cancelado al tomar control':message.delivery_status}</span></div></article>;})}
+      {messages.map(message=>{const files=attachments.filter(file=>file.message_id===message.id);return <article key={message.id} className={`chat-message ${message.direction}`}><div><small>{message.sender_type==='customer'?'Cliente':message.sender_type==='human'?'Equipo':'Asistente'}</small><p>{message.body||`[${message.message_type}]`}</p>{message.message_type==='image'&&message.raw_payload?.storage_bucket==='bot-images'&&<button className="chat-attachment" onClick={()=>openBotImage(message.raw_payload.storage_path)}>Ver imagen enviada</button>}{files.map(file=><button className="chat-attachment" key={file.id} onClick={()=>onOpenAttachment(file.storage_path)}>Ver {file.original_name||'archivo adjunto'}</button>)}{message.direction==='inbound'&&message.media_id&&!files.length&&<button className="chat-attachment" onClick={()=>onRecoverAttachment(message.id)}>Recuperar archivo</button>}<span>{formatDateTime(message.created_at)} · {message.failure_reason==='manual_control_cancelled'?'Cancelado al tomar control':message.delivery_status}</span></div></article>;})}
     </section>
     {conversation.summary&&<section className="chat-summary"><small>RESUMEN OPERATIVO</small><p>{conversation.summary}</p></section>}
     <section className="operator-console"><header><div><small>CONTROL DEL EQUIPO</small><b>{conversation.automation_paused?'Atención manual activa':'Atención automática en mantenimiento'}</b></div><button disabled={Boolean(busy||pending)} onClick={()=>act('takeover',{paused:!conversation.automation_paused})}>{conversation.automation_paused?'Liberar control manual':'Tomar control'}</button></header>

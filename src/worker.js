@@ -1,3 +1,4 @@
+import {handleCampaigns,recoverCampaigns,recordMarketingOptOuts,withoutMarketingOptOuts} from "./whatsapp-campaigns.js";
 import { handleBotConnection } from "./bot-connection.js";
 import { handleBotPreview } from "./bot-preview.js";
 import { handlePilotStatus, partitionPilotWebhook, processPilotWebhook, pilotDeliveryEligible, resumePilotTask, recoverPilotTasks } from "./bot-pilot.js";
@@ -363,9 +364,10 @@ async function processClaimedWebhook(payload,eventKey,eventType,inbox,env){
     if(statuses.length)await persistMessageStatuses(payload,eventKey,env);
     const hasMessages=(payload.entry||[]).some(entry=>(entry.changes||[]).some(change=>Array.isArray(change.value?.messages)&&change.value.messages.length>0));
     if(hasMessages){
+      await recordMarketingOptOuts(payload,env,supabaseRpc);
       // Meta may batch delivery statuses and customer messages in one event.
       // Statuses are already persisted here; only messages need an n8n run.
-      const {pilot,legacy:messagePayload}=partitionPilotWebhook(payload,env);
+      const {pilot,legacy:messagePayload}=partitionPilotWebhook(withoutMarketingOptOuts(payload),env);
       if(pilot.entry.length)await processPilotWebhook(pilot,env,{rpc:supabaseRpc,persistMedia:persistInboundMedia,deliver:deliverQueuedWhatsAppMessage});
       let automationError;
       if(messagePayload.entry.length){
@@ -437,9 +439,9 @@ async function deliverQueuedWhatsAppMessage(messageId,env,pilotExpected=null){
     if(claim.type==="image"){
       const bucket=String(claim.storage_bucket||"");
       const storagePath=String(claim.storage_path||"");
-      if(bucket!=="payment-qrs"||!storagePath)throw new Error("El QR en cola no tiene un archivo válido");
+      if(!["payment-qrs","bot-images"].includes(bucket)||!storagePath)throw new Error("La imagen en cola no tiene un archivo válido");
       const objectResponse=await fetch(`${env.SUPABASE_URL}/storage/v1/object/${bucket}/${storagePath.split("/").map(encodeURIComponent).join("/")}`,{headers:supabaseHeaders(env)});
-      if(!objectResponse.ok)throw new Error(`No fue posible leer el QR (${objectResponse.status})`);
+      if(!objectResponse.ok)throw new Error(`No fue posible leer la imagen (${objectResponse.status})`);
       const mimeType=String(claim.mime_type||objectResponse.headers.get("content-type")||"image/png").split(";")[0];
       const form=new FormData();
       form.append("messaging_product","whatsapp");
@@ -447,7 +449,7 @@ async function deliverQueuedWhatsAppMessage(messageId,env,pilotExpected=null){
       form.append("file",new Blob([await objectResponse.arrayBuffer()],{type:mimeType}),`qr.${mediaExtension(mimeType,"image")}`);
       const uploadResponse=await fetch(`https://graph.facebook.com/${graphVersion}/${env.WHATSAPP_PHONE_NUMBER_ID}/media`,{method:"POST",headers:{authorization:`Bearer ${env.WHATSAPP_ACCESS_TOKEN}`},body:form});
       const uploaded=await uploadResponse.json().catch(()=>({}));
-      if(!uploadResponse.ok||!uploaded.id)throw new Error(uploaded?.error?.message||`Meta rechazó el QR (${uploadResponse.status})`);
+      if(!uploadResponse.ok||!uploaded.id)throw new Error(uploaded?.error?.message||`Meta rechazó la imagen (${uploadResponse.status})`);
       body.image={id:uploaded.id,caption:String(claim.caption||claim.text||"").slice(0,1024)};
     }
     result=await fetch(`https://graph.facebook.com/${graphVersion}/${env.WHATSAPP_PHONE_NUMBER_ID}/messages`,{method:"POST",headers:{authorization:`Bearer ${env.WHATSAPP_ACCESS_TOKEN}`,"content-type":"application/json"},body:JSON.stringify(body)});
@@ -698,12 +700,14 @@ export default {
     // then try human tasks on a later tick if the inbox is clear.
     context.waitUntil((async()=>{
       if(await recoverWebhookInbox(env))return;
+      if(new Date().getUTCMinutes()%2===0&&await recoverCampaigns(env,{rpc:supabaseRpc}))return;
       await recoverPilotTasks(env,{rpc:supabaseRpc,deliver:deliverQueuedWhatsAppMessage});
     })().catch(error=>console.error("WhatsApp recovery failed",error.message)));
   },
   async fetch(request,env,context){
     const url = new URL(request.url);
     if(url.pathname==="/api/bot/connection"||url.pathname==="/api/bot/connection/probe")return handleBotConnection(request,env);
+    if(url.pathname==="/api/operator/campaigns")return handleCampaigns(request,env,{authenticate:authenticatedOperator,rpc:supabaseRpc});
     if(url.pathname==="/api/operator/bot-preview")return handleBotPreview(request,env,authenticatedOperator);
     if(url.pathname==="/api/bot/pilot/status")return handlePilotStatus(request,env);
     if((url.pathname===PQRS_PATH||url.pathname===PQRS_STATUS_PATH||url.pathname.startsWith(`${PQRS_ADMIN_PATH}/`))&&request.method==="OPTIONS")return new Response(null,{status:204,headers:pqrsCorsHeaders(request)});

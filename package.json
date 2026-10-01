@@ -21,7 +21,7 @@
     "fix:auth": "node scripts/fix-auth-config.mjs",
     "test:whatsapp": "node --test tests/whatsapp-agent.test.mjs tests/whatsapp-information.test.mjs tests/whatsapp-commercial.test.mjs tests/whatsapp-ingress.test.mjs tests/whatsapp-transcript.test.mjs tests/whatsapp-shopping.test.mjs && node tests/whatsapp-database.mjs",
     "test:whatsapp-control": "node --test tests/whatsapp-control.test.mjs && node tests/whatsapp-control-database.mjs",
-    "test:bot-commerce": "node --test tests/bot-branches.test.mjs tests/bot-preview.test.mjs tests/bot-decision-contract.test.mjs tests/bot-pilot.test.mjs tests/bot-webhook.test.mjs && node tests/bot-commerce-database.mjs",
+    "test:bot-commerce": "node --test tests/bot-branches.test.mjs tests/bot-preview.test.mjs tests/bot-decision-contract.test.mjs tests/bot-pilot.test.mjs tests/bot-webhook.test.mjs tests/whatsapp-campaigns.test.mjs && node tests/bot-commerce-database.mjs",
     "check:bot-commerce": "node scripts/check-bot-commerce.mjs"
   },
   "dependencies": {

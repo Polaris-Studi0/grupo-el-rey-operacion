@@ -190,4 +190,41 @@ assert.match(await deliveryReply('Recibe Samuel'),/unidades disponibles/);assert
 assert.equal((await state(deliveryCid)).pending_selection.unit_price_cop,50000);assert.equal(lastDelivery.order_id,null);
 console.log('PASS real delivery wording -> persisted buyer name -> phone without escalation -> address -> sector -> recipient -> stock check, without premature shipment promises');
 
+// Session reset is driven by the last CUSTOMER message, even with recent outgoing activity.
+const resetCid=await chat('+570000000066');const resetCt=(await one('select contact_id from whatsapp_conversations where id=$1',[resetCid])).contact_id;
+await db.query("insert into whatsapp_messages(conversation_id,meta_message_id,direction,sender_type,message_type,body,created_at) values($1,'consent-reset','inbound','customer','text','ACEPTO',now()-interval '26 hours')",[resetCid]);
+await db.query("insert into privacy_consents(contact_id,conversation_id,policy_version,notice_text,customer_response,granted,meta_message_id) values($1,$2,'v1','test','ACEPTO',true,'consent-reset')",[resetCt,resetCid]);
+const resetMsg=await inbound(resetCid,'Old branch');await db.query("update whatsapp_messages set created_at=now()-interval '25 hours' where id=$1",[resetMsg]);
+await db.query("update whatsapp_conversations set last_message_at=now(),automation_paused=true where id=$1",[resetCid]);
+const ingest=async(phone,id)=> (await one("select ingest_whatsapp_message($1,$2,'Test',$3,'text','Hola',null,'{}','whatsapp',null) r",[phone,phone.slice(1),id])).r;
+const nextSession=await ingest('+570000000066','new-session-test');assert.notEqual(nextSession.conversation_id,resetCid);assert.equal(nextSession.branch_id,null);
+const freshSession=await one('select * from whatsapp_conversations where id=$1',[nextSession.conversation_id]);assert.equal(freshSession.automation_paused,true);assert.equal(freshSession.consent_status,'granted');assert.deepEqual(freshSession.sales_state,{});assert.equal(freshSession.previous_conversation_id,resetCid);
+assert.equal((await one('select session_closed_reason from whatsapp_conversations where id=$1',[resetCid])).session_closed_reason,'inactivity_24h');
+assert.equal((await ingest('+570000000066','new-session-test')).conversation_id,nextSession.conversation_id,'duplicate ingress keeps the same session');
+assert.equal((await ingest('+570000000066','new-session-second')).conversation_id,nextSession.conversation_id,'active chat does not reset');
+assert.ok(await one('select id from whatsapp_messages where id=$1',[resetMsg]),'history retained');
+console.log('PASS 24-hour inactivity resets branch/context, preserves consent/manual control and history; duplicate ingress does not fork sessions');
+
+const imageCid=await chat('+570000000067'),imageMid=await inbound(imageCid,'Foto del producto');
+const imageAsset=(await one("insert into bot_media_assets(branch_id,product_id,kind,storage_path,original_name,mime_type,size_bytes,caption) values('b1',$1,'product','product/synthetic.jpg','test.jpg','image/jpeg',123,'Vista frontal del producto') returning id",[pid])).id;
+const im=await commit(imageCid,{intent:'information',reply_text:'Esta es la foto.',media_ids:[imageAsset]},imageMid);assert.equal(im.message_ids.length,2);assert.equal((await one('select message_type from whatsapp_messages where id=$1',[im.message_ids[1]])).message_type,'image');
+assert.deepEqual((await commit(imageCid,{intent:'information',reply_text:'Esta es la foto.',media_ids:[imageAsset]},imageMid)).message_ids,im.message_ids);
+assert.equal((await one('select claim_outbound_whatsapp_message($1,gen_random_uuid()) r',[im.message_ids[1]])).r.storage_bucket,'bot-images');
+const im2=await commit(imageCid,{intent:'information',reply_text:'Otra vista.',media_ids:[imageAsset]});await db.query('update bot_media_assets set active=false where id=$1',[imageAsset]);assert.equal((await one('select claim_outbound_whatsapp_message($1,gen_random_uuid()) r',[im2.message_ids[1]])).r.reason,'image_context_changed');
+await assert.rejects(()=>commit(imageCid,{intent:'information',reply_text:'No debe salir.',media_ids:[proof]}),/Imagen no autorizada/);
+assert.equal((await one("select has_function_privilege('authenticated','queue_bot_images(uuid,uuid,integer,jsonb,text)','execute') ok")).ok,false);
+console.log('PASS product photos use trusted storage, atomic idempotent replies and send-time scope; receipt IDs are rejected');
+
+const flyer=(await one("insert into bot_media_assets(kind,storage_path,original_name,mime_type,size_bytes,caption) values('flyer','flyer/test.jpg','test.jpg','image/jpeg',100,'Flyer de prueba') returning id")).id;
+const template={name:'synthetic',language:{code:'es'},components:[],preview:'Prueba',footer:''};
+const draft=(await one("select prepare_whatsapp_campaign($1,'Prueba',$2,$3,$4,'Formulario autorizado de prueba') r",[uid,flyer,template,['+570000000077','+570000000077','+570000000078']])).r;assert.equal(draft.included,2);assert.equal(draft.status,'draft');assert.equal((await one('select claim_whatsapp_campaign() r')).r,null,'drafts never send');
+await db.query("select marketing_opt_out('+570000000078','Cliente pidió baja')");
+await db.query('select start_whatsapp_campaign($1,$2)',[draft.id,uid]);await db.query('select start_whatsapp_campaign($1,$2)',[draft.id,uid]);
+const batch=(await one('select claim_whatsapp_campaign() r')).r;assert.equal(batch.recipients.length,1);assert.equal(batch.recipients[0].phone_e164,'+570000000077');assert.equal((await one('select claim_whatsapp_campaign() r')).r.recipients.length,0,'sending claims never re-send');
+const blocked=(await one("select prepare_whatsapp_campaign($1,'Otra prueba',$2,$3,'[\"+570000000078\"]','Nueva lista de autorización') r",[uid,flyer,template])).r;assert.equal(blocked.included,0,'batch evidence cannot override a personal opt-out');
+await db.query("update whatsapp_campaign_recipients set meta_message_id='campaign-test',status='sent' where id=$1",[batch.recipients[0].id]);
+await db.query("select record_whatsapp_message_status('campaign-test','read',now(),'{}','campaign-read')");await db.query("select record_whatsapp_message_status('campaign-test','sent',now(),'{}','campaign-sent')");assert.equal((await one("select status from whatsapp_campaign_recipients where meta_message_id='campaign-test'")).status,'read');
+assert.equal((await one("select has_function_privilege('authenticated','start_whatsapp_campaign(uuid,uuid)','execute') ok")).ok,false);
+console.log('PASS campaigns draft-first, deduplicated recipients, permission required, opt-outs persist, claims not repeated and delivery status monotonic');
+
 }catch(e){console.error(e.message,e.where||'',e.detail||'');process.exitCode=1;}finally{await db.close();}

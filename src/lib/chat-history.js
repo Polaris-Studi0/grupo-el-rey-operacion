@@ -7,7 +7,7 @@ export function historyQuery(client,conversationId,{before=null,after=null}={}){
   if(!UUID.test(conversationId)||before&&after)throw new Error('Consulta de historial inválida.');
   const cursor=before||after;
   if(cursor&&(!UUID.test(cursor.id)||!TIMESTAMP.test(cursor.created_at)))throw new Error('Cursor de historial inválido.');
-  let query=client.from('whatsapp_messages').select('id,conversation_id,direction,sender_type,message_type,body,media_id,delivery_status,failure_reason,created_at')
+  let query=client.from('whatsapp_messages').select('id,conversation_id,direction,sender_type,message_type,body,media_id,raw_payload,delivery_status,failure_reason,created_at')
     .eq('conversation_id',conversationId);
   if(cursor){
     const op=before?'lt':'gt';
