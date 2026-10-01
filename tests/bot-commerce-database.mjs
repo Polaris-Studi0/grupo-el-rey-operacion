@@ -257,4 +257,10 @@ await db.query('update whatsapp_conversations set automation_paused=true where i
 assert.equal((await one("select next_public_bot_task('+570000000099') r")).r,null);
 console.log('PASS public recovery reaches a different customer and respects manual takeover');
 
+const privateChat=(await one("select ingest_whatsapp_message(null,'CO.TESTPRIVATE123','Prueba privada','private-ingress','text','Hola',null,'{}','whatsapp',null) r")).r;
+assert.equal(privateChat.phone_e164,null);assert.equal(privateChat.recipient_id,'CO.TESTPRIVATE123');
+const privateNotice=(await one("select queue_outbound_whatsapp_message($1,'privacy-notice:pilot:private-test','system','text','Responde ACEPTO','{}') r",[privateChat.conversation_id])).r;
+assert.equal((await one('select claim_outbound_whatsapp_message($1,gen_random_uuid()) r',[privateNotice.message_id])).r.to,'CO.TESTPRIVATE123');
+console.log('PASS private-identity ingress and real SQL outbound claim preserve recipient without a phone');
+
 }catch(e){console.error(e.message,e.where||'',e.detail||'');process.exitCode=1;}finally{await db.close();}

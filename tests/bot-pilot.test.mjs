@@ -197,3 +197,18 @@ test('public customer turn responds with the same permission and context checks 
  await processPilotWebhook(payload([{id:'external',from:'573000000008',type:'text',text:{body:'¿A qué hora cierran?'}}]),{...env,BOT_PUBLIC_ENABLED:'true'},s.dependencies);
  assert.ok(s.trace.includes('model'));assert.equal(s.sent.length,1);assert.equal(s.sent[0].expected.inbound_message_id,mid);
 }));
+
+test('a new private-identity customer receives consent notice without inventing a phone',async()=>scenario({setup:db=>{Object.assign(db.whatsapp_contacts[0],{phone_e164:null,whatsapp_id:'CO.TEST123456'});Object.assign(db.whatsapp_conversations[0],{consent_status:'pending',consented_at:null,consent_version:null});}},async s=>{
+ const msg={id:'private-new',from:'',from_user_id:'CO.TEST123456',type:'text',text:{body:'Hola'}};
+ const p=payload([msg]);p.entry[0].changes[0].value.contacts=[{user_id:'CO.UNRELATED123',profile:{name:'Otro'}},{user_id:'CO.TEST123456',profile:{name:'Prueba privada'}}];
+ await processPilotWebhook(p,{...env,BOT_PUBLIC_ENABLED:'true'},s.dependencies);
+ const ingest=s.events.find(e=>e.name==='ingest_whatsapp_message').body;
+ assert.equal(ingest.p_phone_e164,null);assert.equal(ingest.p_whatsapp_id,'CO.TEST123456');assert.equal(ingest.p_display_name,'Prueba privada');
+ assert.match(s.events.find(e=>e.name==='queue_outbound_whatsapp_message').body.p_body,/Responde ACEPTO/);assert.equal(s.sent.length,1);assert.ok(!s.trace.includes('model'));
+}));
+
+test('private identities stay outside owner-only pilot but enter public routing',()=>{
+ const p=payload([{id:'private',from_user_id:'CO.TEST123456',timestamp:String(Math.floor(Date.now()/1000))}]);
+ assert.equal(partitionPilotWebhook(p,env).pilot.entry.length,0);
+ assert.equal(partitionPilotWebhook(p,{...env,BOT_PUBLIC_ENABLED:'true'}).pilot.entry.length,1);
+});

@@ -1,3 +1,4 @@
+import {whatsappContactMatches} from './whatsapp-identity.js';
 import {handleWhatsappDemo} from "./whatsapp-demo.js";
 import {handleCampaigns,recoverCampaigns,recordMarketingOptOuts,withoutMarketingOptOuts} from "./whatsapp-campaigns.js";
 import { handleBotConnection } from "./bot-connection.js";
@@ -400,7 +401,7 @@ export function splitPublicWebhook(payload){
   const parts=[];
   for(const entry of payload.entry||[])for(const change of entry.changes||[]){
     const value=change.value||{};
-    for(const message of value.messages||[])parts.push({...payload,entry:[{...entry,changes:[{...change,value:{...value,statuses:[],messages:[message],contacts:(value.contacts||[]).filter(c=>c.wa_id===message.from)}}]}]});
+    for(const message of value.messages||[])parts.push({...payload,entry:[{...entry,changes:[{...change,value:{...value,statuses:[],messages:[message],contacts:(value.contacts||[]).filter(c=>whatsappContactMatches(c,message))}}]}]});
     for(const status of value.statuses||[])parts.push({...payload,entry:[{...entry,changes:[{...change,value:{...value,messages:[],contacts:[],statuses:[status]}}]}]});
   }
   return parts.length?parts:[payload];

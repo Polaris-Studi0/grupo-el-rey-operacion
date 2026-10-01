@@ -5,13 +5,23 @@ Actualizado el **01/10/2026, tarde de Colombia**. Este documento determina el es
 ## Publicado y autorizado
 
 - Aplicación real: `/Users/samuel/Desktop/Cowork for Grupo El Rey/Plataforma`. Samuel autorizó editar código y publicar el piloto. **No manejar pantalla; usar MCP/CLI. No commit/push**: Samuel usa GitHub Desktop. HEAD comprobado de Samuel: `bb00007 oct 1`; cambios de esta corrección sin commit.
-- Worker `grupo-el-rey-operacion`: **`12fbea86-6eba-4fbf-8380-4f0040a04dbb`**, 100%. Anterior verificada de Samuel: `b67eab0b-0989-4464-a669-1a88a8507afd`. Bindings anteriores y runtime preservados; solo se agregaron BOT_PUBLIC_ENABLED, BOT_PUBLIC_STARTED_AT y WHATSAPP_DEMO_ENABLED. Assets `index-BJ9dlxUb.css` / `index-CcI6mfBk.js`.
+- Worker `grupo-el-rey-operacion`: **`0f200912-4e6f-4388-b6a4-ce9630ddc788`**, 100%. Anterior verificada de Samuel: `9ddbed5f-3017-40d0-ad6a-18563a2f559e`. Bindings anteriores y runtime preservados; solo se agregaron BOT_PUBLIC_ENABLED, BOT_PUBLIC_STARTED_AT y WHATSAPP_DEMO_ENABLED. Assets `index-BJ9dlxUb.css` / `index-CcI6mfBk.js`.
 - [Motor nuevo de n8n](https://intranetelrey.app.n8n.cloud/workflow/pGxqUgjYE6NCyiwZ), 17 nodos, gpt-5-mini mediante Gateway. Publicado **`67d1cdbc-a5ee-4bc0-99f8-99f65d7fca07`**. Conserva la corrección de sedes y añade continuidad comercial después de una aclaración humana.
 - Webhook privado `POST /webhook/el-rey-assistant-turn-v1`. Solo propone: no envía ni escribe en la base. No guardar datos de ejecuciones exitosas/fallidas/manuales ni progreso.
 - **Samuel autorizó explícitamente abrir el bot a todos el 01/10. Publicado.** WhatsApp empresarial +57 314 789 9116; propietario/avisos +57 312 737 8289. BOT_PUBLIC_ENABLED=true; mensajes públicos desde `2026-10-01T19:39:54.198Z`. Se conservan consentimiento, sede, control manual, sesión tras 24 h de inactividad y validaciones comerciales.
 - Todos los teléfonos nuevos usan el motor nuevo. Ruta heredada suprimida en modo público; no se reactivó la IA antigua ni se reenvían eventos históricos. El comando PROBAR BOT solo puede quitar control manual al propietario, nunca a otros clientes.
 
 - Meta autenticado; contexto remoto legible. Durante el incidente, La Estrella tenía **0 productos activos y 0 QR activos**. El diagnóstico debe comprobar de nuevo la sede elegida y sus recursos. Samuel pidió no cargar promociones todavía; las subirá cuando existan. No sembrar productos ficticios.
+
+## Incidente público de identidad privada — 01/10, tarde
+
+Samuel probó desde otro número y no recibió respuesta. Los webhooks de las 19:43–19:44 UTC llegaron, pero tenían `messages[].from_user_id` y `contacts[].user_id`, sin `from`/`wa_id`. El filtro público exigía teléfono y los marcó procesados sin atender. **La afirmación previa de respuesta a cualquier número fue demasiado amplia: las pruebas solo cubrían teléfonos.**
+
+- `whatsapp-identity.js` normaliza teléfono y BSUID, admite campos vacíos y también identificador padre, sin inventar números. Vincula cada mensaje solo con su contacto explícito; no empareja undefined con undefined en lotes.
+- Ruta pública e ingreso admiten BSUID; controles previos al envío consultan también whatsapp_id. El ingreso SQL existente ya preserva teléfonos nulos y reconcilia identidades; el envío existente usa `recipient` para BSUID y `to` para teléfono. No hizo falta cambiar n8n ni SQL.
+- PROBAR BOT sigue reservado al teléfono del propietario; un BSUID sin teléfono no obtiene ese privilegio. Consentimiento, control manual, protección de identidad y corte de activación conservados.
+- 33 pruebas Node enfocadas y 18 grupos PostgreSQL aislados aprobados, lint/build aprobados. Cubre nuevo usuario sin teléfono que recibe consentimiento, envío real simulado por `recipient`, lotes y claim SQL sin número. Versión0f200912 desplegada al100%; bindings y runtime idénticos a la versión anterior de Samuel. HEAD de Samuel618d702; sin commit/push de Codex.
+- No se reprocesaron mensajes históricos. **Entrega real confirmada por Samuel desde el otro número**: nuevo ingreso19:49:37 UTC, aviso de consentimiento entregado/leído19:49:40, autorización guardada y menú leído19:49:56. Sin fallos de entrega. Esta evidencia confirma onboarding público por BSUID; no equivale a compra completa con ese usuario.
 
 ## Demo individual y apertura pública — 01/10
 

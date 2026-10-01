@@ -2,7 +2,7 @@
 
 Estado vigente y límites: [HANDOFF_N8N_WHATSAPP.md](../../HANDOFF_N8N_WHATSAPP.md).
 
-[Motor de atención](https://intranetelrey.app.n8n.cloud/workflow/pGxqUgjYE6NCyiwZ) publicado en `67d1cdbc-a5ee-4bc0-99f8-99f65d7fca07`; Worker `12fbea86-6eba-4fbf-8380-4f0040a04dbb`. Apertura pública y demo individual autorizados y publicados el 01/10; campañas completas aplazadas.
+[Motor de atención](https://intranetelrey.app.n8n.cloud/workflow/pGxqUgjYE6NCyiwZ) publicado en `67d1cdbc-a5ee-4bc0-99f8-99f65d7fca07`; Worker `0f200912-4e6f-4388-b6a4-ce9630ddc788`. Apertura pública y demo individual autorizados y publicados el 01/10; campañas completas aplazadas.
 
 ## Contrato y responsabilidades
 

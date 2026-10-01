@@ -1,3 +1,4 @@
+import {whatsappIdentity,whatsappContactMatches,validWhatsappIdentity} from './whatsapp-identity.js';
 import {campaignTemplates} from './whatsapp-campaigns.js';
 import {branchSelection,branchMenu,orderedBranches,asksForBranches,asksToChangeBranch} from './bot-branches.js';
 import {authenticates} from './bot-connection.js';
@@ -17,19 +18,19 @@ async function patch(env,table,filters,body){
 const normalize=value=>String(value||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').trim().toLowerCase();
 export function pilotPhone(env){const phone=String(env.BOT_PILOT_PHONE||'').replace(/^\+/,'');return PHONE.test(phone)?phone:null;}
 export const botEnabled=env=>env.BOT_PUBLIC_ENABLED==='true'||env.BOT_PILOT_ENABLED==='true';
-const allowedPhone=(phone,env)=>PHONE.test(phone||'')&&(env.BOT_PUBLIC_ENABLED==='true'||env.BOT_PILOT_ENABLED==='true'&&phone===pilotPhone(env));
+const allowedIdentity=(identity,env)=>env.BOT_PUBLIC_ENABLED==='true'?validWhatsappIdentity(identity):env.BOT_PILOT_ENABLED==='true'&&identity===pilotPhone(env);
 function afterPilotStart(message,env){const start=env.BOT_PUBLIC_ENABLED==='true'&&message.from!==pilotPhone(env)?env.BOT_PUBLIC_STARTED_AT:env.BOT_PILOT_STARTED_AT;return !start||Number(message.timestamp)*1000>=Date.parse(start);}
 export function partitionPilotWebhook(payload,env){
 
-  const select=pilot=>({...payload,entry:(payload.entry||[]).map(entry=>({...entry,changes:(entry.changes||[]).map(change=>({...change,value:{...change.value,statuses:[],messages:(change.value?.messages||[]).filter(m=>(allowedPhone(m.from,env)&&afterPilotStart(m,env))===pilot)}})).filter(change=>change.value.messages.length)})).filter(entry=>entry.changes.length)});
+  const select=pilot=>({...payload,entry:(payload.entry||[]).map(entry=>({...entry,changes:(entry.changes||[]).map(change=>({...change,value:{...change.value,statuses:[],messages:(change.value?.messages||[]).filter(m=>(allowedIdentity(whatsappIdentity(m).phone||whatsappIdentity(m).id,env)&&afterPilotStart(m,env))===pilot)}})).filter(change=>change.value.messages.length)})).filter(entry=>entry.changes.length)});
   return {pilot:select(true),legacy:env.BOT_PUBLIC_ENABLED==='true'?{...payload,entry:[]}:select(false)};
 }
 
 export async function pilotDeliveryEligible(env,expected){
   const c=(await readBotRows(env,'whatsapp_conversations',{id:`eq.${expected.conversation_id}`,select:'id,contact_id,status,consent_status,consented_at,consent_version,automation_paused,automation_control_version',limit:'1'}))[0];
   if(!c||c.status==='closed'||c.automation_paused||c.automation_control_version!==expected.control_version)return false;
-  const contact=(await readBotRows(env,'whatsapp_contacts',{id:`eq.${c.contact_id}`,select:'phone_e164',limit:'1'}))[0];
-  if(!allowedPhone(contact?.phone_e164?.replace(/^\+/,''),env))return false;
+  const contact=(await readBotRows(env,'whatsapp_contacts',{id:`eq.${c.contact_id}`,select:'phone_e164,whatsapp_id',limit:'1'}))[0];
+  if(!allowedIdentity(contact?.phone_e164?.replace(/^\+/,'')||contact?.whatsapp_id,env))return false;
   if(expected.require_consent&&!(c.consent_status==='granted'&&c.consented_at&&c.consent_version))return false;
   const latest=(await readBotRows(env,'whatsapp_messages',{conversation_id:`eq.${c.id}`,direction:'eq.inbound',sender_type:'eq.customer',select:'id,created_at',order:'created_at.desc,id.desc',limit:'1'}))[0];
   return latest?.id===expected.inbound_message_id&&Date.parse(latest.created_at)>Date.now()-23*60*60*1000;
@@ -39,10 +40,11 @@ export async function processPilotWebhook(payload,env,{rpc,persistMedia,deliver}
   if(!botEnabled(env)||!pilotPhone(env))throw Error('Bot no habilitado');
   const received=[];
   for(const entry of payload.entry||[])for(const change of entry.changes||[])for(const message of change.value?.messages||[]){
-    if(!allowedPhone(message.from,env)||!afterPilotStart(message,env))throw Error('Mensaje fuera de la atención habilitada');
-    const contact=(change.value.contacts||[]).find(c=>c.wa_id===message.from);
+    const identity=whatsappIdentity(message);
+    if(!allowedIdentity(identity.phone||identity.id,env)||!afterPilotStart(message,env))throw Error('Mensaje fuera de la atención habilitada');
+    const contact=(change.value.contacts||[]).find(c=>whatsappContactMatches(c,message));
     const body=message.text?.body??message[message.type]?.caption??message.button?.text??message.interactive?.button_reply?.title??message.interactive?.list_reply?.title??'';
-    const ingested=await rpc('ingest_whatsapp_message',{p_phone_e164:`+${message.from}`,p_whatsapp_id:message.from,p_display_name:contact?.profile?.name||null,p_meta_message_id:message.id,p_message_type:message.type,p_body:body,p_media_id:message[message.type]?.id||null,p_raw_payload:{message,contact:contact||{},metadata:change.value.metadata||{}},p_source:'whatsapp',p_branch_id:null},env);
+    const ingested=await rpc('ingest_whatsapp_message',{p_phone_e164:identity.phone?`+${identity.phone}`:null,p_whatsapp_id:identity.id,p_display_name:contact?.profile?.name||null,p_meta_message_id:message.id,p_message_type:message.type,p_body:body,p_media_id:message[message.type]?.id||null,p_raw_payload:{message,contact:contact||{},metadata:change.value.metadata||{}},p_source:'whatsapp',p_branch_id:null},env);
     received.push({...ingested,body,is_owner:message.from===pilotPhone(env),meta_message_id:message.id});
   }
   // The new route stores inbound messages before attempting their attachments.
