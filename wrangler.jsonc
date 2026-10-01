@@ -8,6 +8,9 @@
   "triggers": { "crons": ["* * * * *"] },
   "vars": {
     "BOT_PILOT_ENABLED": "true",
+    "BOT_PUBLIC_ENABLED": "true",
+    "BOT_PUBLIC_STARTED_AT": "2026-10-01T19:39:54.198Z",
+    "WHATSAPP_DEMO_ENABLED": "true",
     "BOT_PILOT_STARTED_AT": "2026-09-29T05:00:41.000Z",
     "BOT_PILOT_PHONE": "573127378289",
     "N8N_AUTOMATION_URL": "https://almaceneselrey.app.n8n.cloud/webhook/el-rey-whatsapp-automation",

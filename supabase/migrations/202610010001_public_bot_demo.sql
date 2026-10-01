@@ -66,4 +66,16 @@ begin
 end; $$;
 revoke all on function public.record_whatsapp_message_status(text,text,timestamptz,jsonb,text) from public,anon,authenticated;
 grant execute on function public.record_whatsapp_message_status(text,text,timestamptz,jsonb,text) to service_role;
+-- Public customers and the owner have independent WhatsApp reply windows.
+alter function public.prepare_whatsapp_order_notification(uuid,text) rename to prepare_whatsapp_order_notification_before_public;
+revoke all on function public.prepare_whatsapp_order_notification_before_public(uuid,text) from public,anon,authenticated,service_role;
+create function public.prepare_whatsapp_order_notification(p_receipt_id uuid,p_admin_phone text) returns jsonb
+language plpgsql security definer set search_path='' as $$
+begin
+ if not exists(select 1 from public.whatsapp_messages m join public.whatsapp_conversations c on c.id=m.conversation_id join public.whatsapp_contacts ct on ct.id=c.contact_id
+ where ct.phone_e164=p_admin_phone and m.direction='inbound' and m.sender_type='customer' and m.created_at>now()-interval '23 hours') then return null; end if;
+ return public.prepare_whatsapp_order_notification_before_public(p_receipt_id,p_admin_phone);
+end; $$;
+revoke all on function public.prepare_whatsapp_order_notification(uuid,text) from public,anon,authenticated;
+grant execute on function public.prepare_whatsapp_order_notification(uuid,text) to service_role;
 commit;

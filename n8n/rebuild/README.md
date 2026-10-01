@@ -1,8 +1,8 @@
-# Piloto de WhatsApp — 30/09/2026
+# Bot de WhatsApp — 01/10/2026
 
 Estado vigente y límites: [HANDOFF_N8N_WHATSAPP.md](../../HANDOFF_N8N_WHATSAPP.md).
 
-[Motor de atención](https://intranetelrey.app.n8n.cloud/workflow/pGxqUgjYE6NCyiwZ) publicado en `67d1cdbc-a5ee-4bc0-99f8-99f65d7fca07`; Worker `893f2f57-9b39-4bdb-9e9e-205fe4eac419`. Solo el teléfono piloto autorizado; no activar al público automáticamente.
+[Motor de atención](https://intranetelrey.app.n8n.cloud/workflow/pGxqUgjYE6NCyiwZ) publicado en `67d1cdbc-a5ee-4bc0-99f8-99f65d7fca07`; Worker `12fbea86-6eba-4fbf-8380-4f0040a04dbb`. Apertura pública y demo individual autorizados y publicados el 01/10; campañas completas aplazadas.
 
 ## Contrato y responsabilidades
 
@@ -38,7 +38,7 @@ Otros casos/evidencia: `acceptance-cases.json` (no todos ejecutados), `attention
 
 ## Pendientes
 
-Samuel no quiere cargar promociones todavía; las subirá a la intranet cuando existan. No crear catálogo ficticio. Faltan compra real completa y QR por sede, horarios/recordatorios, lectura de medios, respuesta humana por WhatsApp citado y plantillas fuera de ventana. La ruta de otros números sigue heredada y presenta 404; resolverla antes de público, sin restaurar el bot antiguo.
+Samuel no quiere cargar promociones todavía; las subirá a la intranet cuando existan. No crear catálogo ficticio. Faltan compra real completa y QR por sede, horarios/recordatorios, lectura de medios, respuesta humana por WhatsApp citado y plantillas fuera de ventana. Todos los números usan ahora el motor nuevo; no se restauró el bot antiguo. Ver límites de avisos fuera de ventana y recuperación en el traspaso.
 
 Migraciones 202609290001 a 202609290004 y 202609300001/002/003/004 aplicadas; v2 del 20/09 no aplicada. Limpieza manual de Samuel terminada: no repetirla. No commit/push automático. Información detallada, accesos y versiones en el traspaso principal.
 

@@ -160,7 +160,7 @@ async function deliverCommerceResult(result,conversationId,env,{rpc,deliver}){
   // Customer acknowledgement first; owner notifications also have cron recovery.
   for(const id of result.task_ids||[])await notifyPilotTask(id,env,{rpc,deliver});
   if(result.order_receipt_id){
-    // Owner-only pilot: the owner window equals this customer's verified window.
+    // SQL checks the owner's own reply window independently of the customer.
     const q=await rpc('prepare_whatsapp_order_notification',{p_receipt_id:result.order_receipt_id,p_admin_phone:`+${pilotPhone(env)}`},env);
     if(q?.message_id){const sent=await deliver(q.message_id,env);if(!sent.ok)throw Error('El aviso de compra quedó pendiente');}
   }
@@ -268,6 +268,8 @@ export async function handlePilotStatus(request,env){
     const phone=pilotPhone(env);
     if(!phone)return Response.json({ok:false,reason:'pilot_phone_missing'},{status:503});
     const requiredFunctions=['ingest_whatsapp_message','commit_bot_commerce_turn','bot_customer_orders','bot_context_snapshot','persist_whatsapp_commercial_response','create_human_task','claim_automation_event','prepare_whatsapp_automation_message','complete_automation_event','queue_outbound_whatsapp_message','claim_outbound_whatsapp_message'];
+    if(env.BOT_PUBLIC_ENABLED==='true')requiredFunctions.push('next_public_bot_task');
+    if(env.WHATSAPP_DEMO_ENABLED==='true')requiredFunctions.push('claim_whatsapp_demo');
     const api=await fetch(`${env.SUPABASE_URL}/rest/v1/`,{headers:{...dbHeaders(env),accept:'application/openapi+json'},redirect:'manual',signal:AbortSignal.timeout(10000)});
     const schema=api.ok?await api.json():null;
     const missingFunctions=requiredFunctions.filter(name=>!schema?.paths?.[`/rpc/${name}`]);
@@ -298,6 +300,6 @@ export async function handlePilotStatus(request,env){
       const ownEvents=events.filter(event=>(event.payload?.entry||[]).some(entry=>(entry.changes||[]).some(change=>(change.value?.messages||[]).some(message=>message.from===phone))));
       diagnostics={events:ownEvents.map(({payload,...event})=>({...event,messages:payload.entry.flatMap(entry=>entry.changes||[]).flatMap(change=>change.value?.messages||[]).filter(message=>message.from===phone).map(message=>({id:message.id,timestamp:message.timestamp,type:message.type}))})),messages:c?await readBotRows(env,'whatsapp_messages',{conversation_id:`eq.${c.id}`,select:'id,direction,sender_type,delivery_status,failure_reason,created_at,idempotency_key,send_started_at,meta_message_id',order:'created_at.desc,id.desc',limit:'10'}):[]};
     }
-    return Response.json({ok:!missingFunctions.length&&meta.ok,pilot_enabled:env.BOT_PILOT_ENABLED==='true',public_enabled:env.BOT_PUBLIC_ENABLED==='true',public_started_at:env.BOT_PUBLIC_STARTED_AT||null,schema_verified:!missingFunctions.length,missing_functions:missingFunctions,meta_connected:meta.ok,meta_error_code:metaData.error?.code||null,business_phone:meta.ok?metaData.display_phone_number:null,phone_suffix:phone.slice(-4),conversation:c?{id:c.id,branch_id:c.branch_id,consent_status:c.consent_status,manual_control:c.automation_paused,control_version:c.automation_control_version}:null,context:context||null,marketing,diagnostics},{headers:{'cache-control':'no-store'}});
+    return Response.json({ok:!missingFunctions.length&&meta.ok,pilot_enabled:env.BOT_PILOT_ENABLED==='true',public_enabled:env.BOT_PUBLIC_ENABLED==='true',public_started_at:env.BOT_PUBLIC_STARTED_AT||null,demo_enabled:env.WHATSAPP_DEMO_ENABLED==='true',schema_verified:!missingFunctions.length,missing_functions:missingFunctions,meta_connected:meta.ok,meta_error_code:metaData.error?.code||null,business_phone:meta.ok?metaData.display_phone_number:null,phone_suffix:phone.slice(-4),conversation:c?{id:c.id,branch_id:c.branch_id,consent_status:c.consent_status,manual_control:c.automation_paused,control_version:c.automation_control_version}:null,context:context||null,marketing,diagnostics},{headers:{'cache-control':'no-store'}});
   }catch(error){return Response.json({ok:false,error:error.message},{status:503});}
 }

@@ -227,4 +227,34 @@ await db.query("select record_whatsapp_message_status('campaign-test','read',now
 assert.equal((await one("select has_function_privilege('authenticated','start_whatsapp_campaign(uuid,uuid)','execute') ok")).ok,false);
 console.log('PASS campaigns draft-first, deduplicated recipients, permission required, opt-outs persist, claims not repeated and delivery status monotonic');
 
+// Demo only claims a single, opted-in participant inside their reply window.
+const demoPhone='+570000000088',demoCid=await chat(demoPhone),demoId='20000000-0000-4000-8000-000000000088';
+const demoClaim=async(id=demoId,phone=demoPhone)=>(await one('select claim_whatsapp_demo($1,$2,$3,$4) r',[uid,id,phone,flyer])).r;
+assert.match((await demoClaim()).error,/primero/);
+await inbound(demoCid);
+assert.equal((await demoClaim()).send,true);assert.equal((await demoClaim()).send,false);
+await assert.rejects(()=>demoClaim(demoId,'+570000000089'),/otro envío/);
+await db.query("update whatsapp_demo_sends set status='sent',meta_message_id='demo-test' where id=$1",[demoId]);
+await db.query("select record_whatsapp_message_status('demo-test','read',now(),'{}','demo-read')");
+await db.query("select record_whatsapp_message_status('demo-test','failed',now(),'{}','demo-failed')");
+assert.equal((await one('select status from whatsapp_demo_sends where id=$1',[demoId])).status,'read');
+await db.query("select marketing_opt_out($1,'Baja demo')",[demoPhone]);
+assert.match((await demoClaim('20000000-0000-4000-8000-000000000089')).error,/no recibir/);
+assert.equal((await one("select has_function_privilege('authenticated','claim_whatsapp_demo(uuid,uuid,text,uuid)','execute') ok")).ok,false);
+assert.equal((await one('select prepare_whatsapp_order_notification($1,$2) r',[order.message_ids[0],'+570000000099'])).r,null,'customer window never authorizes an owner alert');
+console.log('PASS demo window, opt-out, idempotency, status ordering, restricted permissions and separate owner window');
+
+// Only eligible new-engine tasks enter public recovery, across customer numbers.
+await db.query("update automation_outbox set status='processed'");
+const publicCid=await chat('+570000000091');await inbound(publicCid,'Consulta pública');
+const publicTask=(await one("select * from create_human_task($1,'public-test','general','normal','Consulta','Pregunta de prueba','{\"pilot_engine\":\"new-whatsapp-v1\"}',null,'+570000000099',null)",[publicCid]));
+const publicTid=Array.isArray(publicTask)?publicTask[0].id:publicTask.id;
+assert.ok(publicTid);
+assert.equal((await one("select next_public_bot_task('+570000000099') r")).r,null,'closed owner window must not starve completed customer replies');
+await db.query("select resolve_human_task($1,'resolved','{\"answer\":\"Respuesta pública\"}')",[publicTid]);
+assert.equal((await one("select next_public_bot_task('+570000000099') r")).r.id,publicTid);
+await db.query('update whatsapp_conversations set automation_paused=true where id=$1',[publicCid]);
+assert.equal((await one("select next_public_bot_task('+570000000099') r")).r,null);
+console.log('PASS public recovery reaches a different customer and respects manual takeover');
+
 }catch(e){console.error(e.message,e.where||'',e.detail||'');process.exitCode=1;}finally{await db.close();}

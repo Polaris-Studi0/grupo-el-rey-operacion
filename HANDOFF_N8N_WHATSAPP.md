@@ -1,16 +1,27 @@
 # Traspaso vigente — bot de Grupo Almacenes El Rey
 
-Actualizado el **01/10/2026, mañana de Colombia**. Este documento determina el estado real; los documentos de arquitectura describen el objetivo.
+Actualizado el **01/10/2026, tarde de Colombia**. Este documento determina el estado real; los documentos de arquitectura describen el objetivo.
 
 ## Publicado y autorizado
 
-- Aplicación real: `/Users/samuel/Desktop/Cowork for Grupo El Rey/Plataforma`. Samuel autorizó editar código y publicar el piloto. **No manejar pantalla; usar MCP/CLI. No commit/push**: Samuel usa GitHub Desktop. HEAD comprobado de Samuel: `3f46c9f test bot sep 30`; cambios de esta corrección sin commit.
-- Worker `grupo-el-rey-operacion`: **`893f2f57-9b39-4bdb-9e9e-205fe4eac419`**, 100%. Versión inmediatamente anterior: `eab9085d-1936-4476-ad01-97b1c5730c54`; antes de esta tarea, `08599e3e-0390-4027-bf0e-d5f7d7971835` (publicación de Samuel). Bindings y runtime comparados e iguales a esa versión. Assets `index-BJ9dlxUb.css` / `index-D8ggvs72.js`.
+- Aplicación real: `/Users/samuel/Desktop/Cowork for Grupo El Rey/Plataforma`. Samuel autorizó editar código y publicar el piloto. **No manejar pantalla; usar MCP/CLI. No commit/push**: Samuel usa GitHub Desktop. HEAD comprobado de Samuel: `bb00007 oct 1`; cambios de esta corrección sin commit.
+- Worker `grupo-el-rey-operacion`: **`12fbea86-6eba-4fbf-8380-4f0040a04dbb`**, 100%. Anterior verificada de Samuel: `b67eab0b-0989-4464-a669-1a88a8507afd`. Bindings anteriores y runtime preservados; solo se agregaron BOT_PUBLIC_ENABLED, BOT_PUBLIC_STARTED_AT y WHATSAPP_DEMO_ENABLED. Assets `index-BJ9dlxUb.css` / `index-CcI6mfBk.js`.
 - [Motor nuevo de n8n](https://intranetelrey.app.n8n.cloud/workflow/pGxqUgjYE6NCyiwZ), 17 nodos, gpt-5-mini mediante Gateway. Publicado **`67d1cdbc-a5ee-4bc0-99f8-99f65d7fca07`**. Conserva la corrección de sedes y añade continuidad comercial después de una aclaración humana.
 - Webhook privado `POST /webhook/el-rey-assistant-turn-v1`. Solo propone: no envía ni escribe en la base. No guardar datos de ejecuciones exitosas/fallidas/manuales ni progreso.
-- Piloto habilitado únicamente para **+57 312 737 8289**, inicio `2026-09-29T05:00:41.000Z`. WhatsApp empresarial **+57 314 789 9116**. No ampliar al público automáticamente. El piloto permite pruebas fuera del horario; no trasladar esa excepción a clientes.
-- Otros teléfonos conservan la ruta anterior. Hay eventos ajenos al piloto con `n8n respondió 404`: **no afirmar que esa ruta de mantenimiento funciona**, ni reactivar el bot viejo para resolverlo. Debe resolverse antes de abrir al público.
+- **Samuel autorizó explícitamente abrir el bot a todos el 01/10. Publicado.** WhatsApp empresarial +57 314 789 9116; propietario/avisos +57 312 737 8289. BOT_PUBLIC_ENABLED=true; mensajes públicos desde `2026-10-01T19:39:54.198Z`. Se conservan consentimiento, sede, control manual, sesión tras 24 h de inactividad y validaciones comerciales.
+- Todos los teléfonos nuevos usan el motor nuevo. Ruta heredada suprimida en modo público; no se reactivó la IA antigua ni se reenvían eventos históricos. El comando PROBAR BOT solo puede quitar control manual al propietario, nunca a otros clientes.
+
 - Meta autenticado; contexto remoto legible. Durante el incidente, La Estrella tenía **0 productos activos y 0 QR activos**. El diagnóstico debe comprobar de nuevo la sede elegida y sus recursos. Samuel pidió no cargar promociones todavía; las subirá cuando existan. No sembrar productos ficticios.
+
+## Demo individual y apertura pública — 01/10
+
+- Demo publicado en **WhatsApp e IA → Demo de envío**: un número y un JPG/PNG de hasta 5 MB. Solo administradores. El destinatario debe escribir primero al WhatsApp empresarial, dentro de 24 horas; sin una plantilla aprobada no puede iniciarse libremente el contacto. Respeta bajas de publicidad. Campañas masivas completas siguen deshabilitadas.
+- Imagen privada en bot-images; envío por servidor. `whatsapp_demo_sends` registra el identificador de solicitud, aceptación de Meta, entrega/lectura o incertidumbre. La misma solicitud no envía de nuevo; ante una respuesta incierta se indica verificar WhatsApp. No se creó ni envió un flyer real durante las pruebas.
+- Recuperación de aclaraciones humanas ahora abarca cualquier conversación elegible; una tarea de aviso con ventana del propietario cerrada no bloquea respuestas al cliente. SQL comprueba también la ventana independiente del propietario antes de un aviso de nueva compra. **Avisos libres al número personal requieren que el propietario haya escrito en las últimas 23 h (margen frente a 24 h de Meta); faltan plantillas para avisos fuera de ventana.** Los pendientes/pedidos permanecen en intranet. Un aviso de compra omitido por ventana cerrada no se reenvía automáticamente.
+- Lotes entrantes de Meta se separan en eventos durables por mensaje/estado para respetar límite de subsolicitudes. Se procesa inmediatamente el primero; cron recupera un evento por minuto. Bajo lotes/colas o generación lenta puede haber demora; no afirmar escalabilidad ilimitada. El límite waitUntil del Worker sigue existente.
+- Migración **202610010001_public_bot_demo.sql** aplicada específicamente tras pruebas; no ejecutar toda la carpeta. Copia privada previa de funciones en `~/.config/grupo-el-rey/attention-20260928/public-schema-before.json`. No hubo limpieza de datos. El SQL de limpieza completo anterior rechaza la nueva tabla por su lista explícita: debe revisarse si Samuel vuelve a pedir el reset.
+- **78 pruebas Node + 17 grupos PostgreSQL aislados**, lint/build aprobados. Incluye webhook firmado simulado de otro cliente, sesión/control, recuperación pública, ventana/baja/idempotencia demo, entrega incierta y preservación de estados. Diagnóstico del dominio publicado: HTTP200, Meta/esquema conectados, public_enabled=true y demo_enabled=true; API demo sin sesión devuelve401. Motor n8n verificado por MCP en versión67d1cdbc. No hubo pruebas de envío real con otro número ni del demo todavía.
+- Samuel hizo commit durante esta tarea (`bb00007`); los ajustes finales/pruebas/config/documentación quedan sin commit. No se hizo commit/push desde Codex.
 
 ## Continuidad después de descuento y talla — 01/10
 

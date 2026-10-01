@@ -3,10 +3,10 @@
 Leer primero `HANDOFF_N8N_WHATSAPP.md`, actualizado el 01/10/2026, y `n8n/rebuild/README.md`.
 
 - Aplicación real: esta carpeta Plataforma. La carpeta de chat en Documents es otro repositorio.
-- Samuel autorizó el piloto en WhatsApp con su número personal, además de la reconstrucción por MCP y las ediciones del proyecto. No pedir autorización otra vez para trabajo rutinario de ese alcance.
+- Samuel autorizó el 01/10 abrir el bot a TODOS los clientes entrantes y un demo de una imagen a un único número. Alcance publicado; no pedir autorización otra vez para trabajo rutinario. Campañas masivas completas siguen aplazadas.
 - Usar MCP de n8n. **No manejar la pantalla del PC**: esta es la preferencia más reciente. Se permiten archivos y CLI.
-- Piloto nuevo publicado para el contacto terminado en 8289 desde el 29/09. El resto mantiene la ruta anterior de mantenimiento. No reactivar la IA anterior ni ampliar el piloto automáticamente.
-- Piloto comercial nuevo implementado: carrito, conteo hasta cierre, tarifa humana de domicilio, resumen aceptado, reserva, QR, pago explícitamente aprobado y pedido idempotente. Consultar el traspaso para versiones y límites: falta probar una compra real cuando haya promociones; no abrir al público automáticamente.
+- Bot nuevo público desde el 01/10, con corte de mensajes nuevos 2026-10-01T19:39:54.198Z. El número terminado en 8289 sigue siendo responsable de avisos. No reactivar la IA anterior ni reenviar mensajes históricos.
+- Piloto comercial nuevo implementado: carrito, conteo hasta cierre, tarifa humana de domicilio, resumen aceptado, reserva, QR, pago explícitamente aprobado y pedido idempotente. Consultar el traspaso para versiones y límites: la compra REY-1003 fue probada por Samuel; apertura pública autorizada el 01/10.
 - Estado, versiones, evidencia y límites en el traspaso; comprobar el remoto antes de editar. Los workflows antiguos son de otra cuenta.
 - Excepción autorizada el 29/09: Samuel pidió vaciar historial de WhatsApp, pedidos/domicilios y PQRS con respaldo. Eligió ejecutar personalmente el SQL en Supabase; entregar `scripts/reset-operational-data-20260929.sql`, no ejecutarlo por CLI. Ejecución manual confirmada el 29/09: respaldo privado presente y pedidos/PQRS vacíos. No repetir la limpieza. Conservar usuarios, sedes, catálogo, inventario, QR y código/configuración de PQRS.
 - No copiar secretos al chat ni al repositorio. Referencias en `docs/ACCESOS.md`.
@@ -26,8 +26,10 @@ Leer primero `HANDOFF_N8N_WHATSAPP.md`, actualizado el 01/10/2026, y `n8n/rebuil
 
 - 30/09: Samuel completó el pedido piloto REY-1003 con aprobación manual de pago; confirmado en captura y datos. Seguimiento directo conectado a promised_at y esperas naturales publicados. No reiniciar estimaciones ni inventar otra al vencer. Falta nueva entrega real de la corrección de ETA; no repetir la compra.
 
-- 30/09: imágenes de producto/aclaraciones y sesiones nuevas tras 24 horas sin escribir publicadas; migraciones 202609300005/006/007 aplicadas. **Samuel aplazó publicidad: no continuarla ni habilitarla.** Código preparatorio conservado; pestaña/API/cron deshabilitados, cero campañas enviadas. Ver HANDOFF para versiones y pruebas.
+- 30/09: imágenes de producto/aclaraciones y sesiones nuevas tras 24 horas sin escribir publicadas; migraciones 202609300005/006/007 aplicadas. **Campañas masivas aplazadas; excepción del 01/10: demo individual de imagen autorizado y publicado.** Código preparatorio conservado; pestaña/API/cron deshabilitados, cero campañas enviadas. Ver HANDOFF para versiones y pruebas.
 
 - Nueva limpieza autorizada el 30/09: TODO el dato operativo, incluidos domiciliarios, personal de caja, chats, pendientes, PQRS, catálogo, inventario, conocimientos y QR. Conservar auth, profiles/permisos y branches. Samuel ejecutará personalmente `scripts/reset-all-business-data-20260930.sql` en SQL Editor. **Preparado y probado en base aislada; NO ejecutado en producción ni confirmado aún.** Respaldo privado nuevo elrey_reset_20260930, sin sobrescribir el del 29/09; Storage físico privado y secuencias conservados. No ejecutar por CLI ni asumir que ya está vacío. Esta autorización reemplaza el alcance de conservación de catálogo/QR de la limpieza anterior, únicamente para este SQL.
 
 - 01/10: n8n publicado en 67d1cdbc-a5ee-4bc0-99f8-99f65d7fca07. Continuidad tras descuento/tallas, fuente literal, nombre de perfil excluido del modelo y máximo dos intentos de generación sin efectos. El fallo original del 30/09 23:06 no tiene causa exacta guardada; sí se reprodujo un agent_unavailable intermitente en pruebas. Ver HANDOFF/evidencia y distinguir de entrega real. No reenviar mensajes históricos.
+
+- 01/10: Worker público `12fbea86-6eba-4fbf-8380-4f0040a04dbb` al 100%; migración 202610010001 aplicada específicamente. Demo exige admin, imagen privada y mensaje entrante del destinatario en últimas 24 h; respeta bajas y no repite envíos inciertos. 78 pruebas Node/17 grupos DB, lint/build y diagnóstico remoto aprobados. Falta envío real del demo por Samuel. SQL de limpieza anterior ahora rechaza la tabla nueva por diseño; NO ejecutarlo sin actualizar y revisar su alcance.
