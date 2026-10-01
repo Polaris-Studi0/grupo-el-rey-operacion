@@ -7,7 +7,7 @@ import {checkoutReply,recoveredCheckoutFields} from './bot-checkout.js';
 import {orderStatusReply} from './bot-orders.js';
 
 const PHONE=/^[1-9]\d{7,14}$/;
-const NOTICE='Soy el asistente virtual con IA de Almacenes El Rey. Para atender tu consulta y gestionar una posible compra, necesitamos tu autorización para tratar los datos de esta conversación. Consulta nuestra política: https://intranet.almaceneselrey.co/privacidad . Responde ACEPTO para continuar o NO ACEPTO para finalizar la atención automatizada.';
+const NOTICE='Soy el asistente virtual con IA de ALMACENES EL REY S.A.S. Para atender tu consulta y gestionar una posible compra, necesitamos tu autorización para tratar los datos de esta conversación. Puedes conocer, corregir o solicitar la eliminación de tus datos en admin@almaceneselrey.co. Consulta nuestra política: https://almaceneselrey.co/privacidad . Responde ACEPTO para continuar o NO ACEPTO para finalizar la atención automatizada.';
 function dbHeaders(env){const key=env.SUPABASE_SECRET_KEY||env.SUPABASE_SERVICE_ROLE_KEY;return {apikey:key,'content-type':'application/json',prefer:'return=representation',...(!key?.startsWith('sb_secret_')?{authorization:`Bearer ${key}`}:{})};}
 async function patch(env,table,filters,body){
   const url=new URL(`/rest/v1/${table}`,env.SUPABASE_URL);url.search=new URLSearchParams(filters).toString();
@@ -71,7 +71,7 @@ async function processTurn(inbound,env,{rpc,deliver}){
     if(!rows.length)return;c=rows[0];
   }
   if(['no acepto','no autorizo'].includes(normalize(inbound.body))){
-    await rpc('record_whatsapp_consent',{p_conversation_id:c.id,p_policy_version:c.consent_version||'2026-09-01',p_notice_text:NOTICE,p_customer_response:inbound.body,p_meta_message_id:inbound.meta_message_id},env);
+    await rpc('record_whatsapp_consent',{p_conversation_id:c.id,p_policy_version:c.consent_version||'2026-10-01',p_notice_text:NOTICE,p_customer_response:inbound.body,p_meta_message_id:inbound.meta_message_id},env);
     return;
   }
   if(c.automation_paused)return;
@@ -87,7 +87,7 @@ async function processTurn(inbound,env,{rpc,deliver}){
   }
   if(c.consent_status!=='granted'||!c.consented_at||!c.consent_version){
     const notices=await readBotRows(env,'whatsapp_messages',{conversation_id:`eq.${c.id}`,direction:'eq.outbound',idempotency_key:'like.privacy-notice:pilot:*',delivery_status:'in.(sent,delivered,read)',select:'id',limit:'1'});
-    const consent=notices.length?await rpc('record_whatsapp_consent',{p_conversation_id:c.id,p_policy_version:'2026-09-01',p_notice_text:NOTICE,p_customer_response:inbound.body,p_meta_message_id:inbound.meta_message_id},env):null;
+    const consent=notices.length?await rpc('record_whatsapp_consent',{p_conversation_id:c.id,p_policy_version:'2026-10-01',p_notice_text:NOTICE,p_customer_response:inbound.body,p_meta_message_id:inbound.meta_message_id},env):null;
     if(consent?.recognized&&!consent.granted)return;
     if(!consent?.granted){await sendFixed(NOTICE,true);return;}
     c=(await readBotRows(env,'whatsapp_conversations',{id:`eq.${c.id}`,select:'*',limit:'1'}))[0];
