@@ -4,6 +4,8 @@ import { BRANCHES, STATUS, PAYMENT, formatMoney, formatDateTime } from "./lib/co
 import { getPaymentReceiptUrl, getProfile, listCouriers, listEvents, listOrders, listStaff, saveCourier, saveOrder, saveStaff, signIn, signOut, subscribeToOrders, transitionOrder, uploadPaymentReceipt } from "./lib/api.js";
 import ChatbotHub from "./ChatbotHub.jsx";
 import PqrsHub from "./PqrsHub.jsx";
+import BranchChat from "./BranchChat.jsx";
+import useBranchChat from "./useBranchChat.js";
 
 const demoProfiles = {
   admin: { id:"demo-admin", full_name:"Samuel Ceballos", role:"admin", branch_id:null, branch:null },
@@ -44,15 +46,15 @@ function StatusPill({ status }){
   return <span className={`status-pill ${value.tone}`}><i />{value.label}</span>;
 }
 
-function Sidebar({ profile, page, setPage, onLogout }){
+function Sidebar({ profile, page, setPage, onLogout, chatUnread }){
   const admin = profile.role === "admin";
   const items = admin
-    ? [["orders","Pedidos","01"],["new","Nuevo pedido","02"],["chatbot","WhatsApp e IA","03"],["pqrs","PQRS","04"],["staff","Personal de caja","05"],["couriers","Domiciliarios","06"],["audit","Trazabilidad","07"]]
-    : [["orders","Pedidos de sede","01"],["ready","Por despacho","02"],["history","Historial","03"]];
+    ? [["orders","Pedidos","01"],["new","Nuevo pedido","02"],["chatbot","WhatsApp e IA","03"],["pqrs","PQRS","04"],["staff","Personal de caja","05"],["couriers","Domiciliarios","06"],["audit","Trazabilidad","07"],["internalChat","Chat con sedes","08"]]
+    : [["orders","Pedidos de sede","01"],["ready","Por despacho","02"],["history","Historial","03"],["internalChat","Administración","04"]];
   return <aside className="sidebar">
     <div className="brand"><img src="/elreylogo.png" alt="Almacenes El Rey"/><div><strong>OPERACIÓN</strong><small>Centro de pedidos</small></div></div>
     <p className="workspace-label">{admin ? "ADMINISTRACIÓN" : "OPERACIÓN DE CAJA"}</p>
-    <nav>{items.map(([id,label,index])=><button key={id} className={page===id?"active":""} onClick={()=>setPage(id)}><i>{index}</i>{label}</button>)}</nav>
+    <nav>{items.map(([id,label,index])=><button key={id} className={page===id?"active":""} onClick={()=>setPage(id)}><i>{index}</i>{label}{id==="internalChat"&&chatUnread>0&&<span className="chat-unread">{chatUnread}</span>}</button>)}</nav>
     <div className="sidebar-footer"><div className="live"><i/><span><b>Sistema activo</b><small>Sincronización en vivo</small></span></div><button className="logout" onClick={onLogout}>Cerrar sesión</button></div>
   </aside>;
 }
@@ -299,6 +301,9 @@ function App(){
   const [staff,setStaff] = useState([]);
   const [events,setEvents] = useState([]);
   const [page,setPage] = useState("orders");
+  const [internalBranch,setInternalBranch]=useState(null);
+  const openInternalChat=useCallback(branch=>{setInternalBranch(branch);setPage("internalChat");},[]);
+  const chat=useBranchChat(profile,profile?.role==="cashier"?profile.branch_id:internalBranch,page==="internalChat",openInternalChat);
   const [search,setSearch] = useState("");
   const [branchFilter,setBranchFilter] = useState("all");
   const [statusFilter,setStatusFilter] = useState("active");
@@ -373,9 +378,9 @@ function App(){
     : page==="history"
       ? filtered.filter(order=>["dispatched","delivered","cancelled"].includes(order.status))
       : filtered.filter(order=>statusFilter==="all"||(statusFilter==="active"?["preparing","ready","dispatched"].includes(order.status):order.status===statusFilter));
-  return <div className={`app-shell ${profile.role==="cashier"?"cashier-shell":"admin-shell"}`}><Sidebar profile={profile} page={page} setPage={setPage} onLogout={logout}/><main className="main"><Header profile={profile} onLogout={logout}/>{error&&<div className="error-banner"><span>{error}</span><button onClick={()=>setError("")}>×</button></div>}
+  return <div className={`app-shell ${profile.role==="cashier"?"cashier-shell":"admin-shell"}`}><Sidebar profile={profile} page={page} setPage={setPage} onLogout={logout} chatUnread={chat.unread}/><main className="main"><Header profile={profile} onLogout={logout}/>{error&&<div className="error-banner"><span>{error}</span><button onClick={()=>setError("")}>×</button></div>}
     {page==="orders"||page==="ready"||page==="history"?<><Summary orders={orders}/><section className="orders-section"><div className="section-title"><div><p className="eyebrow">{profile.role==="admin"?"TODAS LAS SEDES":"COLA EN TIEMPO REAL"}</p><h2>{page==="history"?"Historial":page==="ready"?"Pendientes por despacho":"Pedidos"} <span>{effectiveOrders.length}</span></h2></div>{profile.role==="admin"&&<button className="primary" onClick={()=>setEditor(false)}>+ Nuevo pedido</button>}</div><div className="filters"><label className="search"><span>⌕</span><input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Buscar pedido, cliente o producto"/></label>{profile.role==="admin"&&<select value={branchFilter} onChange={e=>setBranchFilter(e.target.value)}><option value="all">Todas las sedes</option>{BRANCHES.map(item=><option key={item.id} value={item.id}>{item.name}</option>)}</select>}{page==="orders"&&<select value={statusFilter} onChange={e=>setStatusFilter(e.target.value)}><option value="active">Activos</option><option value="all">Todos los estados</option>{Object.entries(STATUS).map(([value,item])=><option key={value} value={value}>{item.label}</option>)}</select>}</div>{profile.role==="cashier"?<CashierOrders orders={effectiveOrders} couriers={couriers} onOpen={setDetail} onTransition={handleTransition} onHandoff={(order,action)=>setHandoff({order,action})}/>:<OrdersTable orders={effectiveOrders} couriers={couriers} profile={profile} onOpen={setDetail} onEdit={setEditor} onAssign={setAssignment} onTransition={handleTransition}/>}</section></>:null}
-    {page==="chatbot"&&profile.role==="admin"&&<ChatbotHub/>} {page==="pqrs"&&profile.role==="admin"&&<PqrsHub/>} {page==="staff"&&profile.role==="admin"&&<StaffManager staff={staff} onSave={handleStaff}/>} {page==="couriers"&&profile.role==="admin"&&<CourierManager couriers={couriers} onSave={handleCourier}/>} {page==="audit"&&profile.role==="admin"&&<AuditLog events={events} orders={orders} couriers={couriers} onOpenReceipt={handleOpenReceipt}/>}<footer><span>Polaris Studio · Grupo Almacenes El Rey</span><span>{isDemoMode?"Modo demostración":"Datos protegidos y sincronizados"}</span></footer></main>
+    {page==="internalChat"&&<BranchChat profile={profile} branch={profile.role==="cashier"?profile.branch_id:internalBranch} onBranch={setInternalBranch} chat={chat}/>} {page==="chatbot"&&profile.role==="admin"&&<ChatbotHub/>} {page==="pqrs"&&profile.role==="admin"&&<PqrsHub/>} {page==="staff"&&profile.role==="admin"&&<StaffManager staff={staff} onSave={handleStaff}/>} {page==="couriers"&&profile.role==="admin"&&<CourierManager couriers={couriers} onSave={handleCourier}/>} {page==="audit"&&profile.role==="admin"&&<AuditLog events={events} orders={orders} couriers={couriers} onOpenReceipt={handleOpenReceipt}/>}<footer><span>Polaris Studio · Grupo Almacenes El Rey</span><span>{isDemoMode?"Modo demostración":"Datos protegidos y sincronizados"}</span></footer></main>
     {detail&&<OrderDetail order={orders.find(item=>item.id===detail.id)||detail} couriers={couriers} profile={profile} onClose={()=>setDetail(null)} onEdit={order=>{setDetail(null);setEditor(order);}} onAssign={order=>{setDetail(null);setAssignment(order);}} onTransition={handleTransition} onHandoff={(order,action)=>{setDetail(null);setHandoff({order,action});}} onReceipt={handleReceipt} onOpenReceipt={handleOpenReceipt}/>} {editor!==null&&<OrderEditor order={editor||null} onClose={()=>setEditor(null)} onSave={handleSaveOrder}/>} {assignment&&<AssignmentModal order={assignment} couriers={couriers} onClose={()=>setAssignment(null)} onSave={handleAssign}/>} {handoff&&<HandoffModal order={handoff.order} action={handoff.action} staff={staff} onClose={()=>setHandoff(null)} onConfirm={handleTransition}/>} {toast&&<div className="toast">✓ {toast}</div>}
   </div>;
 }
