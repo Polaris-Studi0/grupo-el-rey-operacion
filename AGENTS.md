@@ -41,3 +41,5 @@ Leer primero `HANDOFF_N8N_WHATSAPP.md`, actualizado el 01/10/2026, y `n8n/rebuil
 - Incidente de login 01/10 noche: la tabla internal_chat_reads crea una segunda relación profiles↔branches. Mantener el hint explícito `branches!profiles_branch_id_fkey` en getProfile. Error de acceso visible/reintentable y callback Auth síncrono; Worker584367da publicado. Ingreso real de Samuel confirmado después de recargar. Ver HANDOFF para evidencia y límites.
 
 - Chat de caja 01/10 noche: mantener color oscuro explícito y color-scheme light en .branch-chat-room para que no herede el texto claro de .cashier-shell. Corrección CSS977b626a publicada y comprobada en caja/admin y móvil. Captura de Samuel confirma acceso de caja y mensajes; aviso nativo aún sin prueba de entrega.
+
+- Manual de marca público 01/10 noche: https://almaceneselrey.co/manual-de-marca, Worker web cd0ecb97. Fuente fuera de Git en carpeta hermana `Landing page/manual-de-marca/`; kit original con licencias, fuentes locales, sin Analytics. Conservar logo PNG sin alteraciones y excluir dashboard antiguo al publicar la web. Ver HANDOFF; sin cambios de bot/base/Auth ni commit/push de Codex.

@@ -13,6 +13,14 @@ Actualizado el **01/10/2026, tarde de Colombia**. Este documento determina el es
 
 - Meta autenticado; contexto remoto legible. Durante el incidente, La Estrella tenía **0 productos activos y 0 QR activos**. El diagnóstico debe comprobar de nuevo la sede elegida y sus recursos. Samuel pidió no cargar promociones todavía; las subirá cuando existan. No sembrar productos ficticios.
 
+## Manual de marca público — 01/10, noche Colombia
+
+- Publicado por solicitud expresa de Samuel en https://almaceneselrey.co/manual-de-marca, también www. Worker público `almacenes-el-rey-web`, versión **cd0ecb97-3f94-4d18-b002-69d37e71a47a** al100%; anterior e1846717. Runtime, bindings, dominios y páginas existentes preservados. Solo se añadió el manual y su enlace en el pie de la portada; sin cambios de bot, Auth ni base de datos.
+- Fuente fuera de Git en `/Users/samuel/Desktop/Cowork for Grupo El Rey/Landing page/manual-de-marca/`. HTML/CSS/JS estáticos, nueve capítulos: esencia, logo, color, tipografía, composición, fotografía, voz, aplicaciones y recursos. Diseño responsive con navegación, códigos de color copiables, prueba tipográfica y opción de impresión del navegador. Sin Analytics ni fuentes externas.
+- Logo PNG idéntico al original de web/intranet; no se reconstruyó un vector. Montserrat/DM Sans descargadas del repositorio oficial Google Fonts; TTF y WOFF2 con licencias originales. Paleta basada en la línea existente. Área de protección, tamaños mínimos y proporción60/30/10 son recomendaciones de esta guía. Los ejemplos de piezas y WhatsApp son ilustrativos, sin ofertas ni existencias reales.
+- Kit ZIP validado con diez archivos: PNG original, paleta SVG, tokens CSS, guía y las dos fuentes en TTF/WOFF2 con licencias. Todas las descargas públicas funcionan. Al actualizar estos recursos, regenerar el ZIP. La impresión usa el navegador; no se ofrece una descarga de PDF independiente.
+- Navegador aislado local y publicado: anchos1440/768/390/320, sin desbordamiento ni errores JS/HTTP; fuentes locales, menú móvil/Escape, HEX/RGB y portapapeles, prueba tipográfica, impresión y cuatro recursos aprobados. Portada/pie verificados a1440/390. Rutas públicas de ambos dominios y hashes de recursos comprobados; privacidad/eliminación presentes y dashboard antiguo404. Evidencia privada `~/.config/grupo-el-rey/privacy-20261001/brand-*`. No commit/push de Codex ni control de pantalla.
+
 ## Privacidad pública y chat interno — 01/10, noche Colombia
 
 - **Publicados**, autorización expresa de Samuel. Política y solicitudes de eliminación en https://almaceneselrey.co/privacidad y /eliminacion-de-datos; también www. Sitio público Worker `almacenes-el-rey-web`, versión **e1846717-a56b-4fcf-92aa-6b9a07ff5322** al100%, anterior original42633ed1 (intermedia2a051e29). Dominio público y assets existentes verificados; dashboard antiguo continúa excluido (404). Fuente fuera de Git en carpeta hermana `Landing page`.
