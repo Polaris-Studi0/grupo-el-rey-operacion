@@ -2,7 +2,7 @@
 
 Estado vigente y límites: [HANDOFF_N8N_WHATSAPP.md](../../HANDOFF_N8N_WHATSAPP.md).
 
-[Motor de atención](https://intranetelrey.app.n8n.cloud/workflow/pGxqUgjYE6NCyiwZ) publicado en `67d1cdbc-a5ee-4bc0-99f8-99f65d7fca07`; Worker `0f200912-4e6f-4388-b6a4-ce9630ddc788`. Apertura pública y demo individual autorizados y publicados el 01/10; campañas completas aplazadas.
+[Motor de atención](https://intranetelrey.app.n8n.cloud/workflow/pGxqUgjYE6NCyiwZ) publicado en `67d1cdbc-a5ee-4bc0-99f8-99f65d7fca07`; Worker `85efc235-f216-49ee-9834-903a8e65c0cf`. Apertura pública y demo individual autorizados y publicados el 01/10; campañas completas aplazadas.
 
 ## Contrato y responsabilidades
 
@@ -69,3 +69,5 @@ Pedido piloto REY-1003 registrado y recibido por Samuel, con aprobación manual 
 Se pregunta la talla pendiente entre varias opciones, conservando producto/precio después de negar un descuento. Selección humana literal y stock contado siguen siendo cosas distintas. Agente: máximo dos intentos de generación; las validaciones posteriores y el envío idempotente se conservan. Nombre del perfil omitido del prompt para evitar tratarlo como comprador confirmado. Error clasificado sin exponer contenido ni guardar ejecuciones.
 
 Prueba con modelo sin envíos: `node scripts/check-bot-size-discount.mjs`. Evidencia: `size-discount-evidence-20261001.json`. Contrato/contexto: 28 pruebas aprobadas. Falta prueba real de Samuel; no atribuir una causa exacta al fallo original sin evidencia.
+
+Privacidad vigente pública: https://almaceneselrey.co/privacidad. Aviso nuevo/version2026-10-01; autorizaciones anteriores conservadas. Chat interno de sedes es independiente de n8n/WhatsApp; estado y límites de avisos en HANDOFF.
