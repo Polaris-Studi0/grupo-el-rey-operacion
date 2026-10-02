@@ -1,0 +1,33 @@
+import {PGlite} from '@electric-sql/pglite';
+import {readFile} from 'node:fs/promises';import assert from 'node:assert/strict';
+const db=new PGlite();
+try{
+ await db.exec(`create role anon;create role authenticated;create role service_role;create schema auth;create table auth.users(id uuid primary key,email text,raw_user_meta_data jsonb);create function auth.uid() returns uuid language sql as $$select nullif(current_setting('test.user',true),'')::uuid$$;grant usage on schema auth to authenticated;create publication supabase_realtime;`);
+ for(const f of ['202609030001_initial.sql','202610010002_internal_branch_chat.sql'])await db.exec((await readFile(new URL('../supabase/migrations/'+f,import.meta.url),'utf8')).replace('create extension if not exists pgcrypto;',''));
+ const admin='10000000-0000-4000-8000-000000000001',cashier='10000000-0000-4000-8000-000000000002',other='10000000-0000-4000-8000-000000000003';
+ await db.exec(`insert into auth.users(id,email) values('${admin}','a@example.invalid'),('${cashier}','b@example.invalid'),('${other}','c@example.invalid');update profiles set role='admin',full_name='Admin' where id='${admin}';update profiles set branch_id='b1',full_name='Caja A' where id='${cashier}';update profiles set branch_id='b2' where id='${other}';`);
+ const one=async(sql,args=[]) => (await db.query(sql,args)).rows[0];
+ const as=async id=>{await db.exec('reset role');await db.query("select set_config('test.user',$1,false)",[id||'']);await db.exec('set role authenticated');};
+ const send=async(branch,body,key='20000000-0000-4000-8000-000000000001')=>(await one('select send_internal_chat($1,$2,$3) r',[branch,body,key])).r;
+ await as(admin);assert.equal((await one('select internal_chat_overview() r')).r.length,10);
+ const a=await send('b1','Primer mensaje');assert.equal(a.sender_id,admin);assert.equal(a.sender_name,'Admin');
+ assert.equal((await send('b1','Primer mensaje')).id,a.id);await assert.rejects(()=>send('b2','Primer mensaje'),/otro mensaje/);
+ await send('b2','Privado B','20000000-0000-4000-8000-000000000002');
+ await as(cashier);assert.equal((await one('select internal_chat_overview() r')).r.length,1);assert.equal((await one('select internal_chat_overview() r')).r[0].unread,1);
+ assert.equal((await db.query('select * from internal_chat_messages')).rows.length,1,'RLS excludes other branches');
+ await assert.rejects(()=>send('b2','No permitido'),/acceso/);await assert.rejects(()=>db.exec("insert into internal_chat_messages(branch_id,sender_id,sender_name,sender_role,body,request_id) values('b1','"+admin+"','Falso','admin','Falso',gen_random_uuid())"),/permission denied/);
+ await assert.rejects(()=>db.exec("update internal_chat_messages set body='Cambiar'"),/permission denied/);
+ await db.query('select mark_internal_chat_read($1,$2)',['b1',a.id]);assert.equal((await one('select internal_chat_overview() r')).r[0].unread,0);
+ await assert.rejects(()=>db.query('select mark_internal_chat_read($1,$2)',['b2',a.id]),/acceso/);
+ const reply=await send('b1','Respuesta de sede');assert.equal(reply.sender_role,'cashier');
+ await as(admin);let ov=(await one('select internal_chat_overview() r')).r;assert.equal(ov.find(b=>b.branch_id==='b1').unread,1);
+ await db.query('select mark_internal_chat_read($1,$2)',['b1',reply.id]);await db.query('select mark_internal_chat_read($1,$2)',['b1',a.id]);assert.equal((await one("select last_read_id from internal_chat_reads where branch_id='b1'")).last_read_id,reply.id);
+ await db.query('select mark_internal_chat_read($1,$2)',['b1',999999]);assert.equal((await one("select last_read_id from internal_chat_reads where branch_id='b1'")).last_read_id,reply.id);
+ await assert.rejects(()=>send('b1','   ','20000000-0000-4000-8000-000000000010'),/4000/);
+ await as(other);assert.equal((await db.query('select * from internal_chat_messages')).rows.length,1);
+ await db.exec('reset role');await db.query('update profiles set active=false where id=$1',[other]);await as(other);
+ assert.deepEqual((await one('select internal_chat_overview() r')).r,[]);assert.equal((await db.query('select * from internal_chat_messages')).rows.length,0);
+ await assert.rejects(()=>send('b2','No permitido'),/acceso/);await assert.rejects(()=>db.query('select mark_internal_chat_read($1,$2)',['b2',a.id]),/acceso/);
+ await db.exec('reset role;set role anon');await assert.rejects(()=>db.exec('select * from internal_chat_messages'),/permission denied/);await assert.rejects(()=>db.exec('select internal_chat_overview()'),/permission denied/);
+ console.log('PASS admin/branch boundaries, active profiles, anonymous/direct-write denial, sender authenticity, retry, unread and monotonic read markers');
+}catch(e){console.error(e.message,e.where||'');process.exitCode=1;}finally{await db.close();}

@@ -5,10 +5,10 @@ export default function useBranchChat(profile,branch,open,onOpen){
  const [overview,setOverview]=useState([]),[messages,setMessages]=useState([]),[error,setError]=useState(''),[busy,setBusy]=useState(false);
  const [permission,setPermission]=useState(()=>typeof Notification==='undefined'?'unsupported':Notification.permission);
  const context=useRef({}),lastSeen=useRef(new Map()),notified=useRef(new Set()),running=useRef(false),resync=useRef(false),loaded=useRef(false);
- context.current={branch,open,onOpen,profile};
+ context.current={branch,open,onOpen,profile,overview};
  const announce=useCallback((m,branches)=>{
-  const c=context.current;if(!m||m.sender_id===c.profile?.id||notified.current.has(m.id))return;
-  notified.current.add(m.id);if(notified.current.size>1000)notified.current.delete(notified.current.values().next().value);
+  const c=context.current;if(!c.profile||!m||m.sender_id===c.profile?.id||notified.current.has(String(m.id)))return;
+  notified.current.add(String(m.id));if(notified.current.size>1000)notified.current.delete(notified.current.values().next().value);
   if(c.open&&c.branch===m.branch_id&&document.visibilityState==='visible'&&document.hasFocus())return;
   if(typeof Notification==='undefined'||Notification.permission!=='granted')return;
   try{const n=new Notification(branches.find(b=>b.branch_id===m.branch_id)?.name||'Chat de sedes',{body:`${m.sender_name||'Equipo'} envió un mensaje. Abre la intranet para leerlo.`,icon:'/elreylogo.png',tag:'internal-chat-'+m.id});n.onclick=()=>{window.focus();c.onOpen(m.branch_id);n.close();};}catch{/* The unread counter remains available on unsupported devices. */}
@@ -20,10 +20,10 @@ export default function useBranchChat(profile,branch,open,onOpen){
    for(const b of items){const prior=lastSeen.current.get(b.branch_id)||0;if(loaded.current&&b.last_message?.id>prior)announce({...b.last_message,branch_id:b.branch_id},items);lastSeen.current.set(b.branch_id,b.last_message?.id||0);}
    loaded.current=true;setOverview(items);
    const c=context.current;if(c.open&&c.branch){
-    const next=await chatMessages(c.branch);if(context.current.branch!==c.branch||!context.current.open)return;
+    const next=await chatMessages(c.branch);if(context.current.profile?.id!==profile.id||context.current.branch!==c.branch||!context.current.open)return;
     setMessages(old=>mergeChatMessages(old.filter(m=>m.branch_id===c.branch),next));
     const through=next.at(-1)?.id;
-    if(through&&document.visibilityState==='visible'&&document.hasFocus()&&items.find(b=>b.branch_id===c.branch)?.unread>0){await markChatRead(c.branch,through);setOverview(await chatOverview());}
+    if(through&&document.visibilityState==='visible'&&document.hasFocus()&&items.find(b=>b.branch_id===c.branch)?.unread>0){await markChatRead(c.branch,through);const updated=await chatOverview();if(context.current.profile?.id===profile.id)setOverview(updated);}
    }
    setError('');
   }catch{if(context.current.profile?.id===profile.id)setError('No se pudo sincronizar el chat. Volveremos a intentar en unos segundos.');}
@@ -32,9 +32,10 @@ export default function useBranchChat(profile,branch,open,onOpen){
  useEffect(()=>{
   lastSeen.current=new Map();notified.current=new Set();loaded.current=false;setOverview([]);setMessages([]);
   if(!profile||isDemoMode)return;
-  refresh();const stop=watchChat(profile,m=>{if(m)announce(m,[]);refresh();});
-  const timer=setInterval(refresh,10000);window.addEventListener('focus',refresh);document.addEventListener('visibilitychange',refresh);
-  return()=>{stop();clearInterval(timer);window.removeEventListener('focus',refresh);document.removeEventListener('visibilitychange',refresh);};
+  refresh();const stop=watchChat(profile,m=>{if(context.current.profile?.id!==profile.id)return;if(m)announce(m,context.current.overview);refresh();});
+  const focus=()=>{if(typeof Notification!=='undefined')setPermission(Notification.permission);refresh();};
+  const timer=setInterval(refresh,10000);window.addEventListener('focus',focus);document.addEventListener('visibilitychange',refresh);
+  return()=>{stop();clearInterval(timer);window.removeEventListener('focus',focus);document.removeEventListener('visibilitychange',refresh);};
  },[profile,refresh,announce]);
  useEffect(()=>{setMessages([]);refresh();},[branch,open,refresh]);
  async function send(body,requestId){

@@ -1,5 +1,5 @@
 import {supabase,isDemoMode} from './supabase.js';
-export async function chatOverview(){if(isDemoMode)return [];const {data,error}=await supabase.rpc('internal_chat_overview');if(error)throw error;return data;}
+export async function chatOverview(){if(isDemoMode)return [];const {data,error}=await supabase.rpc('internal_chat_overview');if(error)throw error;return data.sort((a,b)=>a.branch_id.localeCompare(b.branch_id,'es',{numeric:true}));}
 export async function chatMessages(branch,before=null){
  if(isDemoMode)return [];let q=supabase.from('internal_chat_messages').select('*').eq('branch_id',branch).order('id',{ascending:false}).limit(50);if(before)q=q.lt('id',before);const {data,error}=await q;if(error)throw error;return data.reverse();
 }
