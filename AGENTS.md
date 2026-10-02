@@ -1,6 +1,6 @@
 # Instrucciones para continuar Grupo El Rey
 
-Leer primero `HANDOFF_N8N_WHATSAPP.md`, actualizado el 01/10/2026, y `n8n/rebuild/README.md`.
+Leer primero `HANDOFF_N8N_WHATSAPP.md`, actualizado el 02/10/2026, y `n8n/rebuild/README.md`.
 
 - Aplicación real: esta carpeta Plataforma. La carpeta de chat en Documents es otro repositorio.
 - Samuel autorizó el 01/10 abrir el bot a TODOS los clientes entrantes y un demo de una imagen a un único número. Alcance publicado; no pedir autorización otra vez para trabajo rutinario. Campañas masivas completas siguen aplazadas.
@@ -43,3 +43,5 @@ Leer primero `HANDOFF_N8N_WHATSAPP.md`, actualizado el 01/10/2026, y `n8n/rebuil
 - Chat de caja 01/10 noche: mantener color oscuro explícito y color-scheme light en .branch-chat-room para que no herede el texto claro de .cashier-shell. Corrección CSS977b626a publicada y comprobada en caja/admin y móvil. Captura de Samuel confirma acceso de caja y mensajes; aviso nativo aún sin prueba de entrega.
 
 - Manual de marca público 01/10 noche: https://almaceneselrey.co/manual-de-marca, Worker web cd0ecb97. Fuente fuera de Git en carpeta hermana `Landing page/manual-de-marca/`; kit original con licencias, fuentes locales, sin Analytics. Conservar logo PNG sin alteraciones y excluir dashboard antiguo al publicar la web. Ver HANDOFF; sin cambios de bot/base/Auth ni commit/push de Codex.
+
+- 02/10: revisión de siete conversaciones/155 mensajes y captura conjunta de domicilio publicadas. Worker d1f6d76b, n8n7a0006c7, migración específica202610020001 aplicada. Mantener formulario de faltantes y datos de la cotización actual; no pedir de nuevo nombre/teléfono guardados, no usar perfil, no volver a seleccionar un producto al recibir dirección. Audio pide texto sin transcripción. 87 pruebas Node/20 grupos DB y ocho propuestas sintéticas verificadas; falta nueva entrega real de estos cambios. Ver HANDOFF y docs/BOT_REVIEW_20261002.md para pendientes, sin prometer bot perfecto.

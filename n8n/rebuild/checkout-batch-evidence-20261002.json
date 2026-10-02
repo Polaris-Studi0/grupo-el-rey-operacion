@@ -1,0 +1,215 @@
+{
+  "checked_at": "2026-10-02T22:25:06.194Z",
+  "workflow_version": "7a0006c7-ab76-4738-ad65-b3aeebb427fa",
+  "scope": "published_model_synthetic_decisions_only_no_sends_or_commits",
+  "results": [
+    {
+      "name": "lista_sin_etiquetas",
+      "status": "decision_ready",
+      "duration_ms": 7318,
+      "passed": true,
+      "decision": {
+        "media_ids": [],
+        "intent": "checkout",
+        "reply_text": "Continúo con tu selección y los datos que indicas. El resumen y el pago requieren las comprobaciones de la compra.",
+        "offered_product_ids": [],
+        "quote": null,
+        "actions": [],
+        "checkout": {
+          "customer_name": "Ana Pérez",
+          "recipient_name": "Ana Pérez",
+          "recipient_phone": "3001234567",
+          "fulfillment_type": "delivery",
+          "delivery_address": "Calle 10 # 20-30, apto 402",
+          "delivery_zone": "Aures",
+          "payment_method": ""
+        },
+        "confirmed_item": null,
+        "accept_summary": false,
+        "cancel_cart": false
+      }
+    },
+    {
+      "name": "frase_comprador_distinto",
+      "status": "decision_ready",
+      "duration_ms": 4596,
+      "passed": true,
+      "decision": {
+        "media_ids": [],
+        "intent": "checkout",
+        "reply_text": "Continúo con tu selección y los datos que indicas. El resumen y el pago requieren las comprobaciones de la compra.",
+        "offered_product_ids": [],
+        "quote": null,
+        "actions": [],
+        "checkout": {
+          "customer_name": "Juan Pérez",
+          "recipient_name": "Luisa Díaz",
+          "recipient_phone": "3001234567",
+          "fulfillment_type": "delivery",
+          "delivery_address": "Calle 10 # 20-30, apartamento 402",
+          "delivery_zone": "Aures",
+          "payment_method": ""
+        },
+        "confirmed_item": null,
+        "accept_summary": false,
+        "cancel_cart": false
+      }
+    },
+    {
+      "name": "recibo_yo_con_direccion",
+      "status": "decision_ready",
+      "duration_ms": 4609,
+      "passed": true,
+      "decision": {
+        "media_ids": [],
+        "intent": "checkout",
+        "reply_text": "Continúo con tu selección y los datos que indicas. El resumen y el pago requieren las comprobaciones de la compra.",
+        "offered_product_ids": [],
+        "quote": null,
+        "actions": [],
+        "checkout": {
+          "customer_name": "Ana Pérez",
+          "recipient_name": "Ana Pérez",
+          "recipient_phone": "3001234567",
+          "fulfillment_type": "delivery",
+          "delivery_address": "Calle 10 # 20-30, apto 402",
+          "delivery_zone": "Aures",
+          "payment_method": ""
+        },
+        "confirmed_item": null,
+        "accept_summary": false,
+        "cancel_cart": false
+      }
+    },
+    {
+      "name": "respuesta_parcial",
+      "status": "decision_ready",
+      "duration_ms": 7729,
+      "passed": true,
+      "decision": {
+        "media_ids": [],
+        "intent": "checkout",
+        "reply_text": "Continúo con tu selección y los datos que indicas. El resumen y el pago requieren las comprobaciones de la compra.",
+        "offered_product_ids": [],
+        "quote": null,
+        "actions": [],
+        "checkout": {
+          "customer_name": "",
+          "recipient_name": "",
+          "recipient_phone": "",
+          "fulfillment_type": "",
+          "delivery_address": "Calle 10 # 20-30, apartamento 402",
+          "delivery_zone": "",
+          "payment_method": ""
+        },
+        "confirmed_item": null,
+        "accept_summary": false,
+        "cancel_cart": false
+      }
+    },
+    {
+      "name": "correccion_direccion",
+      "status": "decision_ready",
+      "duration_ms": 7919,
+      "passed": true,
+      "decision": {
+        "media_ids": [],
+        "intent": "checkout",
+        "reply_text": "Continúo con tu selección y los datos que indicas. El resumen y el pago requieren las comprobaciones de la compra.",
+        "offered_product_ids": [],
+        "quote": null,
+        "actions": [],
+        "checkout": {
+          "customer_name": "Ana Pérez",
+          "recipient_name": "Luisa Díaz",
+          "recipient_phone": "3001234567",
+          "fulfillment_type": "delivery",
+          "delivery_address": "Calle 10 # 20-30, apto 402",
+          "delivery_zone": "Prado",
+          "payment_method": ""
+        },
+        "confirmed_item": null,
+        "accept_summary": false,
+        "cancel_cart": false
+      }
+    },
+    {
+      "name": "producto_sin_catalogo",
+      "status": "decision_ready",
+      "duration_ms": 8008,
+      "passed": true,
+      "decision": {
+        "media_ids": [],
+        "intent": "handoff",
+        "reply_text": "Dame un momento y te confirmo.",
+        "offered_product_ids": [],
+        "quote": null,
+        "actions": [
+          {
+            "type": "propose_human_task",
+            "reason": "missing_information",
+            "question": "¿Tienen medias para mujer en la Sede de prueba?",
+            "related_message_id": "TEST-MSG-producto_sin_catalogo"
+          }
+        ],
+        "checkout": {
+          "customer_name": "",
+          "recipient_name": "",
+          "recipient_phone": "",
+          "fulfillment_type": "",
+          "delivery_address": "",
+          "delivery_zone": "",
+          "payment_method": ""
+        },
+        "confirmed_item": null,
+        "accept_summary": false,
+        "cancel_cart": false
+      }
+    },
+    {
+      "name": "interes_sin_compra",
+      "status": "decision_ready",
+      "duration_ms": 7616,
+      "passed": true,
+      "decision": {
+        "media_ids": [],
+        "intent": "clarification",
+        "reply_text": "¿Quieres que te lo reserve o prefieres más información sobre el peluche?",
+        "offered_product_ids": [],
+        "quote": null,
+        "actions": [],
+        "checkout": {
+          "customer_name": "",
+          "recipient_name": "",
+          "recipient_phone": "",
+          "fulfillment_type": "",
+          "delivery_address": "",
+          "delivery_zone": "",
+          "payment_method": ""
+        },
+        "confirmed_item": null,
+        "accept_summary": false,
+        "cancel_cart": false
+      }
+    },
+    {
+      "name": "audio_sin_transcripcion",
+      "status": "decision_ready",
+      "duration_ms": 3966,
+      "passed": true,
+      "decision": {
+        "media_ids": [],
+        "intent": "clarification",
+        "reply_text": "¿Me lo puedes escribir, por favor? Así seguimos con tu consulta.",
+        "offered_product_ids": [],
+        "quote": null,
+        "actions": [],
+        "checkout": {},
+        "confirmed_item": null,
+        "accept_summary": false,
+        "cancel_cart": false
+      }
+    }
+  ],
+  "assertions_verified_at": "2026-10-02T22:26:44.157Z"
+}

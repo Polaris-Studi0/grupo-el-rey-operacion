@@ -141,7 +141,7 @@ assert.equal(chosen.task_ids.length,0);assert.match((await body(chosen)).body,/d
 assert.equal((await state(humanCid)).pending_selection.source_task_id,humanTask);assert.equal((await state(humanCid)).cart.length,0);
 assert.equal(Number((await one('select count(*) n from products')).n),previousProducts);
 const fulfillment=await commit(humanCid,{intent:'checkout',checkout:{fulfillment_type:'pickup'}});
-assert.match((await body(fulfillment)).body,/nombre/);assert.equal(fulfillment.task_ids.length,0);
+assert.match((await body(fulfillment)).body,/nombre/i);assert.equal(fulfillment.task_ids.length,0);
 const named=await commit(humanCid,{intent:'checkout',checkout:{customer_name:'Cliente de prueba'}});
 assert.equal(named.task_ids.length,1);const stockTask=named.task_ids[0];const stockQuestion=(await one('select question from human_tasks where id=$1',[stockTask])).question;
 assert.doesNotMatch(stockQuestion,/product_id|otras sedes/);assert.match(stockQuestion,/ya confirmados/);
@@ -179,16 +179,51 @@ async function deliveryReply(text,modelFields=null){
  lastDelivery=await commit(deliveryCid,decision,id);await sent(lastDelivery);
  const reply=(await body(lastDelivery)).body;assert.doesNotMatch(reply,/listo para enviar|super man|50\.000/i);return reply;
 }
-assert.match(await deliveryReply('a domicilio'),/nombre/);
-assert.match(await deliveryReply('A nombre de Samuel porfa'),/dirección/);
+assert.match(await deliveryReply('a domicilio'),/nombre/i);
+assert.match(await deliveryReply('A nombre de Samuel porfa'),/dirección/i);
 assert.equal((await state(deliveryCid)).customer_name,'Samuel');
-assert.match(await deliveryReply('3127378289'),/dirección/);
+assert.match(await deliveryReply('3127378289'),/dirección/i);
 assert.equal((await state(deliveryCid)).recipient_phone,'3127378289');assert.equal(lastDelivery.task_ids.length,0);
-assert.match(await deliveryReply('Calle 10 # 20-30',{delivery_address:'Calle 10 # 20-30'}),/barrio/);
-assert.match(await deliveryReply('Barrio Robledo',{delivery_zone:'Robledo'}),/Quién recibe|quién recibe/);
+assert.match(await deliveryReply('Calle 10 # 20-30',{delivery_address:'Calle 10 # 20-30'}),/barrio/i);
+assert.match(await deliveryReply('Barrio Robledo',{delivery_zone:'Robledo'}),/nombre de quien recibe/i);
 assert.match(await deliveryReply('Recibe Samuel'),/unidades disponibles/);assert.equal(lastDelivery.task_ids.length,1);
 assert.equal((await state(deliveryCid)).pending_selection.unit_price_cop,50000);assert.equal(lastDelivery.order_id,null);
 console.log('PASS real delivery wording -> persisted buyer name -> phone without escalation -> address -> sector -> recipient -> stock check, without premature shipment promises');
+
+// Batch data from a human-confirmed item uses the same missing-data form as a
+// catalogue cart. A repeat of the inbound message must not ask twice or create
+// a second inventory task.
+const batchCid=await chat('+570000000032'),batchAsk=await inbound(batchCid,'Quiero el artículo confirmado');
+const batchTask=(await one("select (create_human_task($1,'batch-delivery-test','product_lookup','normal','Disfraces','Artículo confirmado',jsonb_build_object('pilot_engine','new-whatsapp-v1','inbound_message_id',$2::text),null,'+570000000999',null)).id id",[batchCid,batchAsk])).id;
+await db.query("select resolve_human_task($1,'resolved',$2)",[batchTask,savedAnswer]);
+await commit(batchCid,{confirmed_item:{...selection,source_task_id:batchTask}});
+const batchForm=await commit(batchCid,{checkout:{fulfillment_type:'delivery'}}),batchText=(await body(batchForm)).body;
+for(const field of ['Nombre para la compra y de quien recibe','Número de contacto','Dirección completa','Barrio o sector'])assert.ok(batchText.includes('• '+field),field);
+assert.match(batchText,/datos juntos/);assert.equal(batchForm.task_ids.length,0);
+const batchMid=await inbound(batchCid,'Nombre: Ana Pérez\nTeléfono: 3001234567\nDirección: Calle 10 # 20-30, apto 402\nBarrio: Aures');
+const batchDecision=checkoutReply({snapshot:{message:{id:batchMid,kind:'text',text:'Nombre: Ana Pérez\nTeléfono: 3001234567\nDirección: Calle 10 # 20-30, apto 402\nBarrio: Aures'},checkout:await state(batchCid),history:[{role:'assistant',text:batchText}]}});
+const batchSaved=await commit(batchCid,batchDecision,batchMid),batchState=await state(batchCid);
+assert.equal(batchState.customer_name,'Ana Pérez');assert.equal(batchState.recipient_name,'Ana Pérez');assert.equal(batchState.recipient_phone,'3001234567');
+assert.equal(batchState.delivery_address,'Calle 10 # 20-30, apto 402');assert.equal(batchState.delivery_zone,'Aures');
+assert.equal(batchSaved.task_ids.length,1);assert.equal(batchSaved.order_id,null);assert.match((await body(batchSaved)).body,/unidades disponibles/);
+const batchRepeat=await commit(batchCid,batchDecision,batchMid);assert.equal(batchRepeat.duplicate,true);assert.deepEqual(batchRepeat.message_ids,batchSaved.message_ids);
+assert.equal(Number((await one("select count(*) n from human_tasks where conversation_id=$1 and context#>>'{commerce,kind}'='confirmed_item'",[batchCid])).n),1);
+assert.equal((await one("select has_function_privilege('authenticated','public.bot_checkout_data_prompt(jsonb,boolean)','execute') ok")).ok,false);
+console.log('PASS batch delivery form -> all fields persisted at once -> one stock task -> idempotent duplicate, no early order');
+
+await db.query('update branch_inventory set available_qty=20,stock_confirmed_at=now() where product_id=$1',[pid]);
+const partialCid=await chat('+570000000033');
+const partialForm=await commit(partialCid,{intent:'quote',quote:cart.quote,checkout:{fulfillment_type:'delivery'}});
+assert.match((await body(partialForm)).body,/datos juntos/);
+const partial=await commit(partialCid,{checkout:{customer_name:'Juan',recipient_name:'Luisa',recipient_phone:'3001234567'}});
+const partialText=(await body(partial)).body;
+assert.match(partialText,/Solo me falta:/);assert.match(partialText,/• Dirección completa/);assert.match(partialText,/• Barrio o sector/);
+assert.doesNotMatch(partialText,/Nombre|Número de contacto/);assert.equal(partial.task_ids.length,0);
+const finalFields=await commit(partialCid,{checkout:{delivery_address:'Calle 12 # 34-56, apto 5',delivery_zone:'Prado'}});
+assert.equal(finalFields.task_ids.length,1);assert.equal(finalFields.order_id,null);
+const partialSaved=await state(partialCid);assert.equal(partialSaved.customer_name,'Juan');assert.equal(partialSaved.recipient_name,'Luisa');assert.equal(partialSaved.delivery_address,'Calle 12 # 34-56, apto 5');
+assert.equal((await one('select task_type from human_tasks where id=$1',[finalFields.task_ids[0]])).task_type,'delivery_quote');
+console.log('PASS catalogue delivery batch -> partial data preserved -> only missing fields -> one tariff confirmation, distinct recipient');
 
 // Session reset is driven by the last CUSTOMER message, even with recent outgoing activity.
 const resetCid=await chat('+570000000066');const resetCt=(await one('select contact_id from whatsapp_conversations where id=$1',[resetCid])).contact_id;

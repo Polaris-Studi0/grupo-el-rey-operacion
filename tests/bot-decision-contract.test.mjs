@@ -89,6 +89,8 @@ test('human-confirmed selection is grounded in a scoped literal fact and never a
  const continued=guard(c,{...d,reply_text:'Ya está listo para recoger.',checkout:{fulfillment_type:'pickup'}},['consultar_informacion']);
  assert.equal(continued.status,'decision_ready');assert.equal(continued.decision.confirmed_item,null);
  assert.equal(continued.decision.checkout.fulfillment_type,'pickup');assert.doesNotMatch(continued.decision.reply_text,/listo para recoger/i);
+ const redundant=guard(c,{...d,confirmed_item:{...item,source_excerpt:'Una paráfrasis innecesaria del artículo ya seleccionado'},checkout:{delivery_address:'Calle sintética 10'}},[]);
+ assert.equal(redundant.status,'decision_ready');assert.equal(redundant.decision.confirmed_item,null);assert.equal(redundant.decision.checkout.delivery_address,'Calle sintética 10');
  const changed=guard(c,{...d,confirmed_item:{...item,quantity:2}},['consultar_informacion']);
  assert.equal(changed.decision.confirmed_item.quantity,2);
 });
@@ -122,6 +124,25 @@ test('unfinished checkout clarification cannot announce shipment or skip field p
  }
  const question=guard(c,decision({intent:'information',reply_text:'Aceptamos transferencia.'}),['consultar_informacion']);
  assert.equal(question.decision.intent,'information','an unrelated informational question remains informational');
+});
+
+test('untranscribed audio does not advance checkout or invent delivery fields',()=>{
+ const c=validate(attentionFixture('horario')).context;c.message.kind='audio';
+ c.checkout={stage:'collecting',pending_selection:{name:'Artículo confirmado'}};
+ const r=guard(c,decision({intent:'checkout',checkout:{customer_name:'Nombre supuesto',delivery_address:'Dirección supuesta'},accept_summary:true,cancel_cart:true}));
+ assert.equal(r.status,'decision_ready');assert.equal(r.decision.intent,'clarification');
+ assert.match(r.decision.reply_text,/puedes escribir/);assert.doesNotMatch(r.decision.reply_text,/transcrib|escuchar/i);
+ assert.deepEqual(r.decision.checkout,{});assert.deepEqual(r.decision.actions,[]);assert.equal(r.decision.confirmed_item,null);
+ assert.equal(r.decision.accept_summary,false);assert.equal(r.decision.cancel_cart,false);noEffects(r);
+});
+
+test('explicit self-receipt in a compound message uses this purchase name and keeps other data',()=>{
+ const c=validate(attentionFixture('horario')).context;c.checkout={stage:'collecting',customer_name:'Ana',pending_selection:{name:'Artículo confirmado'}};
+ c.message.text='Lo recibo yo en Calle sintética 10, barrio Aures, celular 3001234567.';
+ const r=guard(c,decision({intent:'checkout',checkout:{delivery_address:'Calle sintética 10',delivery_zone:'Aures',recipient_phone:'3001234567'}}));
+ assert.equal(r.status,'decision_ready');assert.equal(r.decision.checkout.recipient_name,'Ana');assert.equal(r.decision.checkout.delivery_zone,'Aures');
+ c.message.text='Lo recibo yo, pero mejor recibe Luisa';
+ assert.equal(guard(c,decision({intent:'checkout',checkout:{recipient_name:'Luisa'}})).decision.checkout.recipient_name,'Luisa');
 });
 
 test('product images can only refer to scoped assets and never accompany payment QR',()=>{

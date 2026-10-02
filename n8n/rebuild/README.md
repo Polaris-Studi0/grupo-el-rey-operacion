@@ -1,8 +1,14 @@
-# Bot de WhatsApp — 01/10/2026
+# Bot de WhatsApp — 02/10/2026
 
 Estado vigente y límites: [HANDOFF_N8N_WHATSAPP.md](../../HANDOFF_N8N_WHATSAPP.md).
 
-[Motor de atención](https://intranetelrey.app.n8n.cloud/workflow/pGxqUgjYE6NCyiwZ) publicado en `67d1cdbc-a5ee-4bc0-99f8-99f65d7fca07`; Worker `85efc235-f216-49ee-9834-903a8e65c0cf`. Apertura pública y demo individual autorizados y publicados el 01/10; campañas completas aplazadas.
+[Motor de atención](https://intranetelrey.app.n8n.cloud/workflow/pGxqUgjYE6NCyiwZ) publicado en `7a0006c7-ab76-4738-ad65-b3aeebb427fa`; Worker `d1f6d76b-30cc-4593-b4fc-93439ce67543`. Apertura pública y demo individual autorizados y publicados el 01/10; campañas completas aplazadas.
+
+## Datos de domicilio juntos — 02/10
+
+Revisión de siete conversaciones/155 mensajes. Formulario único para catálogo/selección humana; captura de listas y frases, comprador/receptor compartido solo cuando corresponde, datos parciales y recordatorio únicamente de faltantes. Audio solicita texto y no avanza compra. Migración específica 202610020001 aplicada; no volver a ejecutarla ni aplicar todas las migraciones. Detalles y pendientes en [revisión](../../docs/BOT_REVIEW_20261002.md).
+
+87 pruebas Node/20 grupos DB y ocho propuestas del modelo sintético verificadas, lint/build y diagnóstico remoto aprobados. Falta nueva entrega real por WhatsApp; no enviar ni reproducir mensajes históricos para comprobarlo. `node scripts/check-bot-checkout-batch.mjs` genera decisiones sintéticas; `--verify-saved` revalida la evidencia existente sin llamadas al modelo.
 
 ## Contrato y responsabilidades
 
