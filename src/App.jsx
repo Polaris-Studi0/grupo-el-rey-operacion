@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { supabase, isDemoMode } from "./lib/supabase.js";
 import { BRANCHES, STATUS, PAYMENT, formatMoney, formatDateTime } from "./lib/constants.js";
 import { getPaymentReceiptUrl, getProfile, listCouriers, listEvents, listOrders, listStaff, saveCourier, saveOrder, saveStaff, signIn, signOut, subscribeToOrders, transitionOrder, uploadPaymentReceipt } from "./lib/api.js";
@@ -6,13 +6,14 @@ import ChatbotHub from "./ChatbotHub.jsx";
 import PqrsHub from "./PqrsHub.jsx";
 import BranchChat from "./BranchChat.jsx";
 import useBranchChat from "./useBranchChat.js";
+import { observeAuthProfile } from "./lib/auth-profile.js";
 
 const demoProfiles = {
   admin: { id:"demo-admin", full_name:"Samuel Ceballos", role:"admin", branch_id:null, branch:null },
   cashier: { id:"demo-cashier", full_name:"Laura Morales", role:"cashier", branch_id:"b1", branch:BRANCHES[0] }
 };
 
-function Login({ onDemoLogin }){
+function Login({ onDemoLogin, accessError, onRetry }){
   const [email,setEmail] = useState("");
   const [password,setPassword] = useState("");
   const [error,setError] = useState("");
@@ -34,7 +35,8 @@ function Login({ onDemoLogin }){
       </div> : <form onSubmit={submit}>
         <label>Correo<input type="email" value={email} onChange={e=>setEmail(e.target.value)} autoComplete="email" required /></label>
         <label>Contraseña<input type="password" value={password} onChange={e=>setPassword(e.target.value)} autoComplete="current-password" required /></label>
-        {error && <p className="form-error">{error}</p>}
+        {(error||accessError) && <p className="form-error" role="alert">{error||accessError}</p>}
+        {accessError&&onRetry&&<button type="button" className="secondary" onClick={onRetry}>Volver a intentar cargar mi acceso</button>}
         <button className="primary" disabled={busy}>{busy ? "Ingresando…" : "Ingresar"}<span>→</span></button>
       </form>}
     </section>
@@ -296,6 +298,8 @@ function AuditLog({ events, orders, couriers, onOpenReceipt }){
 function App(){
   const [profile,setProfile] = useState(null);
   const [loading,setLoading] = useState(!isDemoMode);
+  const [accessError,setAccessError]=useState("");
+  const authObserver=useRef(null);
   const [orders,setOrders] = useState([]);
   const [couriers,setCouriers] = useState([]);
   const [staff,setStaff] = useState([]);
@@ -316,14 +320,13 @@ function App(){
 
   useEffect(()=>{
     if(isDemoMode) return;
-    let alive=true;
-    async function setUser(user){
-      if(!user){if(alive){setProfile(null);setLoading(false);}return;}
-      try{const found=await getProfile(user.id);if(alive)setProfile(found);}catch(authError){if(alive)setError(`No fue posible cargar el perfil: ${authError.message}`);}finally{if(alive)setLoading(false);}
-    }
-    supabase.auth.getSession().then(({data})=>setUser(data.session?.user));
-    const {data:listener}=supabase.auth.onAuthStateChange((_event,session)=>setUser(session?.user));
-    return ()=>{alive=false;listener.subscription.unsubscribe();};
+    const observer=observeAuthProfile({
+      auth:supabase.auth,
+      loadProfile:getProfile,
+      onState:state=>{setProfile(state.profile);setLoading(state.loading);setAccessError(state.error);}
+    });
+    authObserver.current=observer;
+    return ()=>{observer.stop();authObserver.current=null;};
   },[]);
 
   const refresh = useCallback(async()=>{
@@ -372,7 +375,7 @@ function App(){
   async function logout(){await signOut();setProfile(null);setOrders([]);setPage("orders");}
 
   if(loading) return <div className="loading"><span>♛</span><p>Cargando operación…</p></div>;
-  if(!profile) return <Login onDemoLogin={setProfile}/>;
+  if(!profile) return <Login onDemoLogin={setProfile} accessError={accessError} onRetry={()=>authObserver.current?.retry()}/>;
   const effectiveOrders=page==="ready"
     ? filtered.filter(order=>order.status==="ready")
     : page==="history"

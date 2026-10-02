@@ -10,8 +10,10 @@ export async function signIn(email, password){
   return data;
 }
 export async function signOut(){ if(!isDemoMode) await supabase.auth.signOut(); }
-export async function getProfile(userId){
-  const { data, error } = await supabase.from("profiles").select("*, branch:branches(id,name)").eq("id",userId).single();
+export async function getProfile(userId,signal){
+  let query=supabase.from("profiles").select("*, branch:branches(id,name)").eq("id",userId).single();
+  if(signal)query=query.abortSignal(signal);
+  const { data, error } = await query;
   if(error) throw error; return data;
 }
 export async function listOrders(profile){
