@@ -11,7 +11,7 @@ export async function signIn(email, password){
 }
 export async function signOut(){ if(!isDemoMode) await supabase.auth.signOut(); }
 export async function getProfile(userId,signal){
-  let query=supabase.from("profiles").select("*, branch:branches(id,name)").eq("id",userId).single();
+  let query=supabase.from("profiles").select("*, branch:branches!profiles_branch_id_fkey(id,name)").eq("id",userId).single();
   if(signal)query=query.abortSignal(signal);
   const { data, error } = await query;
   if(error) throw error; return data;
