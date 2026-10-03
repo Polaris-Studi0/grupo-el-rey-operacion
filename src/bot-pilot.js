@@ -1,3 +1,4 @@
+import {hoursEnabled,serviceWindow,closedNotice,deferServiceTurn} from './bot-hours.js';
 import {whatsappIdentity,whatsappContactMatches,validWhatsappIdentity} from './whatsapp-identity.js';
 import {campaignTemplates} from './whatsapp-campaigns.js';
 import {branchSelection,branchMenu,orderedBranches,asksForBranches,asksToChangeBranch} from './bot-branches.js';
@@ -7,7 +8,7 @@ import {checkoutReply,recoveredCheckoutFields} from './bot-checkout.js';
 import {orderStatusReply} from './bot-orders.js';
 
 const PHONE=/^[1-9]\d{7,14}$/;
-const NOTICE='Soy el asistente virtual con IA de ALMACENES EL REY S.A.S. Para atender tu consulta y gestionar una posible compra, necesitamos tu autorización para tratar los datos de esta conversación. Puedes conocer, corregir o solicitar la eliminación de tus datos en admin@almaceneselrey.co. Consulta nuestra política: https://almaceneselrey.co/privacidad . Responde ACEPTO para continuar o NO ACEPTO para finalizar la atención automatizada.';
+const NOTICE='Soy el asistente virtual con IA de ALMACENES EL REY S.A.S. Para atender tu consulta y gestionar una posible compra, necesitamos tu autorización para tratar los datos de esta conversación. Puedes conocer, corregir o solicitar la eliminación de tus datos en admin@almaceneselrey.co. Consulta nuestra política: https://almaceneselrey.co/privacidad . Responde SÍ o ACEPTO para continuar o NO ACEPTO para finalizar la atención automatizada.';
 function dbHeaders(env){const key=env.SUPABASE_SECRET_KEY||env.SUPABASE_SERVICE_ROLE_KEY;return {apikey:key,'content-type':'application/json',prefer:'return=representation',...(!key?.startsWith('sb_secret_')?{authorization:`Bearer ${key}`}:{})};}
 async function patch(env,table,filters,body){
   const url=new URL(`/rest/v1/${table}`,env.SUPABASE_URL);url.search=new URLSearchParams(filters).toString();
@@ -16,6 +17,7 @@ async function patch(env,table,filters,body){
   return result.json();
 }
 const normalize=value=>String(value||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').trim().toLowerCase();
+const withdrawsConsent=value=>['no acepto','no autorizo'].includes(normalize(value).replace(/[^a-z0-9]+/g,' ').trim());
 export function pilotPhone(env){const phone=String(env.BOT_PILOT_PHONE||'').replace(/^\+/,'');return PHONE.test(phone)?phone:null;}
 export const botEnabled=env=>env.BOT_PUBLIC_ENABLED==='true'||env.BOT_PILOT_ENABLED==='true';
 const allowedIdentity=(identity,env)=>env.BOT_PUBLIC_ENABLED==='true'?validWhatsappIdentity(identity):env.BOT_PILOT_ENABLED==='true'&&identity===pilotPhone(env);
@@ -56,6 +58,7 @@ async function processTurn(inbound,env,{rpc,deliver}){
   let c=(await readBotRows(env,'whatsapp_conversations',{id:`eq.${inbound.conversation_id}`,select:'*',limit:'1'}))[0];
   if(!c||c.status==='closed')return;
   const expected=()=>({conversation_id:c.id,inbound_message_id:inbound.message_id,control_version:c.automation_control_version,require_consent:c.consent_status==='granted'});
+  if(!withdrawsConsent(inbound.body)&&hoursEnabled(env)&&!serviceWindow().attention_open&&!c.automation_paused&&c.consent_status==='granted'&&c.consented_at&&c.consent_version){await deferServiceTurn(c,inbound,'attention',env,{rpc,deliver});return;}
   const committed=(await readBotRows(env,'ai_runs',{run_key:`eq.pilot-commerce:${inbound.message_id}`,select:'output',limit:'1'}))[0];
   if(committed){await deliverCommerceResult(committed.output,c.id,env,{rpc,deliver});return;}
   const queued=await readBotRows(env,'whatsapp_messages',{conversation_id:`eq.${c.id}`,idempotency_key:`in.(assistant-reply:${inbound.message_id},pilot-onboarding:${inbound.message_id},privacy-notice:pilot:${inbound.message_id})`,select:'id,delivery_status,meta_message_id,raw_payload',limit:'3'});
@@ -70,7 +73,7 @@ async function processTurn(inbound,env,{rpc,deliver}){
     const rows=await patch(env,'whatsapp_conversations',{id:`eq.${c.id}`,automation_control_version:`eq.${c.automation_control_version}`},{automation_paused:false,automation_control_version:c.automation_control_version+1});
     if(!rows.length)return;c=rows[0];
   }
-  if(['no acepto','no autorizo'].includes(normalize(inbound.body))){
+  if(withdrawsConsent(inbound.body)){
     await rpc('record_whatsapp_consent',{p_conversation_id:c.id,p_policy_version:c.consent_version||'2026-10-01',p_notice_text:NOTICE,p_customer_response:inbound.body,p_meta_message_id:inbound.meta_message_id},env);
     return;
   }
@@ -82,16 +85,18 @@ async function processTurn(inbound,env,{rpc,deliver}){
   }
   async function sendFixed(text,privacy=false,metadata={}){
     if(!await pilotDeliveryEligible(env,expected()))return;
-    const q=await rpc('queue_outbound_whatsapp_message',{p_conversation_id:c.id,p_idempotency_key:`${privacy?'privacy-notice:pilot':'pilot-onboarding'}:${inbound.message_id}`,p_sender_type:'system',p_message_type:'text',p_body:text,p_payload:{pilot:true,inbound_message_id:inbound.message_id,control_version:c.automation_control_version,...metadata}},env);
-    await deliver(q.message_id,env,expected());
+    const q=await rpc('queue_outbound_whatsapp_message',{p_conversation_id:c.id,p_idempotency_key:`${privacy?'privacy-notice:pilot':'pilot-onboarding'}:${inbound.message_id}`,p_sender_type:'system',p_message_type:'text',p_body:text,p_payload:{pilot:true,inbound_message_id:inbound.message_id,control_version:c.automation_control_version,hours_guard:!privacy&&hoursEnabled(env),...metadata}},env);
+    const sent=await deliver(q.message_id,env,expected());
+    if(!privacy&&!sent.ok){const detail=await sent.json().catch(()=>({}));if(detail.reason==='outside_attention_hours')await deferServiceTurn(c,inbound,'attention',env,{rpc,deliver});}
   }
   if(c.consent_status!=='granted'||!c.consented_at||!c.consent_version){
-    const notices=await readBotRows(env,'whatsapp_messages',{conversation_id:`eq.${c.id}`,direction:'eq.outbound',idempotency_key:'like.privacy-notice:pilot:*',delivery_status:'in.(sent,delivered,read)',select:'id',limit:'1'});
-    const consent=notices.length?await rpc('record_whatsapp_consent',{p_conversation_id:c.id,p_policy_version:'2026-10-01',p_notice_text:NOTICE,p_customer_response:inbound.body,p_meta_message_id:inbound.meta_message_id},env):null;
+    const notices=await readBotRows(env,'whatsapp_messages',{conversation_id:`eq.${c.id}`,direction:'eq.outbound',idempotency_key:'like.privacy-notice:pilot:*',delivery_status:'in.(sent,delivered,read)',select:'id,body',order:'created_at.desc',limit:'1'});
+    const consent=notices.length?await rpc('record_whatsapp_consent',{p_conversation_id:c.id,p_policy_version:'2026-10-02',p_notice_text:notices[0].body||NOTICE,p_customer_response:inbound.body,p_meta_message_id:inbound.meta_message_id},env):null;
     if(consent?.recognized&&!consent.granted)return;
-    if(!consent?.granted){await sendFixed(NOTICE,true);return;}
+    if(!consent?.granted){await sendFixed(NOTICE+(hoursEnabled(env)&&!serviceWindow().attention_open?'\n\n'+closedNotice().replace('te escribiré para continuar','podremos continuar cuando autorices el uso de tus datos'):''),true);return;}
     c=(await readBotRows(env,'whatsapp_conversations',{id:`eq.${c.id}`,select:'*',limit:'1'}))[0];
   }
+  if(hoursEnabled(env)&&!serviceWindow().attention_open){await deferServiceTurn(c,inbound,'attention',env,{rpc,deliver});return;}
   if(asksForBranches(inbound.body)){
     const list=orderedBranches(await readBotRows(env,'branches',{active:'eq.true',select:'id,name',limit:'20'}));
     await sendFixed(branchMenu(list),false,{branch_options:list.map(b=>b.id)});return;
@@ -140,11 +145,14 @@ async function processTurn(inbound,env,{rpc,deliver}){
   }
 
   if(decision.decision.intent==='checkout')decision.decision.checkout={...recoveredCheckoutFields(context),...Object.fromEntries(Object.entries(decision.decision.checkout||{}).filter(([,value])=>value))};
+  if(hoursEnabled(env)&&!serviceWindow().attention_open){await deferServiceTurn(c,inbound,'attention',env,{rpc,deliver});return;}
   const current=await loadPreviewContext(env,{role:'admin'},c.id,c.automation_control_version);
   if(current.context_fingerprint!==context.context_fingerprint)return;
   if(!await pilotDeliveryEligible(env,expected()))return;
-  const saved=await rpc('commit_bot_commerce_turn',{p_conversation_id:c.id,p_inbound_message_id:inbound.message_id,p_control_version:c.automation_control_version,p_commerce_version:context.commerce_version||0,p_decision:decision.decision,p_owner_phone:`+${pilotPhone(env)}`,p_task_id:null},env);
+  const saved=await rpc('commit_bot_commerce_turn',{p_conversation_id:c.id,p_inbound_message_id:inbound.message_id,p_control_version:c.automation_control_version,p_commerce_version:context.commerce_version||0,p_decision:{...decision.decision,service_hours_enforced:hoursEnabled(env)},p_owner_phone:`+${pilotPhone(env)}`,p_task_id:null},env);
+  if(saved.reason==='outside_attention_hours'){await deferServiceTurn(c,inbound,'attention',env,{rpc,deliver});return;}
   await deliverCommerceResult(saved,c.id,env,{rpc,deliver});
+  if(saved.delivery_deferred)await deferServiceTurn(c,inbound,'delivery',env,{rpc,deliver},false);
 }
 
 async function deliverCommerceResult(result,conversationId,env,{rpc,deliver}){
@@ -155,6 +163,7 @@ async function deliverCommerceResult(result,conversationId,env,{rpc,deliver}){
       const detail=await sent.json().catch(()=>({}));
       // A new message or manual takeover intentionally invalidates the old turn.
       // Retrying it ten times cannot make it eligible again.
+      if(['outside_attention_hours','outside_delivery_hours'].includes(detail.reason)){await deferServiceTurn({id:conversationId,automation_control_version:result.control_version},{message_id:result.inbound_message_id},detail.reason==='outside_delivery_hours'?'delivery':'attention',env,{rpc,deliver});return;}
       if(detail.state==='pilot_context_changed'||['commerce_context_changed','conversation_unavailable'].includes(detail.reason))return;
       throw Error('La respuesta de la compra quedó pendiente de entrega');
     }
@@ -192,6 +201,7 @@ export async function notifyPilotTask(taskId,env,{rpc,deliver}){
 }
 
 export async function resumePilotTask(taskId,env,{rpc,deliver}){
+  if(hoursEnabled(env)&&!serviceWindow().attention_open)return {ok:true,deferred:true,reason:'outside_attention_hours'};
   const task=(await readBotRows(env,'human_tasks',{id:`eq.${taskId}`,'context->>pilot_engine':'eq.new-whatsapp-v1',select:'*',limit:'1'}))[0];
   if(!task)return null;
   if(!['resolved','rejected'].includes(task.status)||(!task.context?.commerce&&!task.resolution?.answer))return {ok:true,deferred:true,reason:'answer_required'};
@@ -204,8 +214,10 @@ export async function resumePilotTask(taskId,env,{rpc,deliver}){
   const event=(await rpc('claim_automation_event',{p_task_id:task.id,p_topic:'human_task.completed'},env))?.[0];if(!event)return {ok:true,already_claimed:true};
   try{
     if(task.context?.commerce){
-      const saved=await rpc('commit_bot_commerce_turn',{p_conversation_id:c.id,p_inbound_message_id:latest.id,p_control_version:c.automation_control_version,p_commerce_version:c.sales_state?.pilot_commerce?.version||0,p_decision:{},p_owner_phone:`+${pilotPhone(env)}`,p_task_id:task.id},env);
+      const saved=await rpc('commit_bot_commerce_turn',{p_conversation_id:c.id,p_inbound_message_id:latest.id,p_control_version:c.automation_control_version,p_commerce_version:c.sales_state?.pilot_commerce?.version||0,p_decision:{service_hours_enforced:hoursEnabled(env)},p_owner_phone:`+${pilotPhone(env)}`,p_task_id:task.id},env);
+      if(saved.reason==='outside_attention_hours')throw Error('Retomar en horario de atención');
       await deliverCommerceResult(saved,c.id,env,{rpc,deliver});
+      if(saved.delivery_deferred)await deferServiceTurn(c,{message_id:latest.id},'delivery',env,{rpc,deliver},false);
       await rpc('complete_automation_event',{p_id:event.id,p_lease_id:event.lease_id,p_error:null},env);
       return {ok:true,pilot:true,task_id:task.id,skipped:!!saved.skipped};
     }
@@ -232,7 +244,7 @@ export async function resumePilotTask(taskId,env,{rpc,deliver}){
       const fresh=(await readBotRows(env,'human_tasks',{id:`eq.${task.id}`,select:'status,resolution,branch_id',limit:'1'}))[0];
       if(current.context_fingerprint!==context.context_fingerprint||fresh?.status!==task.status||fresh?.resolution?.answer!==task.resolution.answer||fresh?.branch_id!==c.branch_id)throw Error('La conversación o la aclaración cambió durante la respuesta');
       if(!await pilotDeliveryEligible(env,expected))throw Error('La conversación cambió antes de enviar la aclaración');
-      const saved=await rpc('queue_outbound_whatsapp_message',{p_conversation_id:c.id,p_idempotency_key:key,p_sender_type:'assistant',p_message_type:'text',p_body:body,p_payload:{human_task_id:task.id,pilot:true,answer_style:style,control_version:expected.control_version,inbound_message_id:expected.inbound_message_id}},env);
+      const saved=await rpc('queue_outbound_whatsapp_message',{p_conversation_id:c.id,p_idempotency_key:key,p_sender_type:'assistant',p_message_type:'text',p_body:body,p_payload:{human_task_id:task.id,pilot:true,hours_guard:hoursEnabled(env),answer_style:style,control_version:expected.control_version,inbound_message_id:expected.inbound_message_id}},env);
       queued={id:saved.message_id,raw_payload:{control_version:expected.control_version,inbound_message_id:expected.inbound_message_id}};
     }
     const response=await deliver(queued.id,env,{...expected,control_version:queued.raw_payload?.control_version??expected.control_version,inbound_message_id:queued.raw_payload?.inbound_message_id??expected.inbound_message_id});
@@ -270,6 +282,7 @@ export async function handlePilotStatus(request,env){
     const phone=pilotPhone(env);
     if(!phone)return Response.json({ok:false,reason:'pilot_phone_missing'},{status:503});
     const requiredFunctions=['ingest_whatsapp_message','commit_bot_commerce_turn','bot_customer_orders','bot_context_snapshot','persist_whatsapp_commercial_response','create_human_task','claim_automation_event','prepare_whatsapp_automation_message','complete_automation_event','queue_outbound_whatsapp_message','claim_outbound_whatsapp_message'];
+    if(hoursEnabled(env))requiredFunctions.push('defer_bot_service_turn','prepare_next_bot_service_reminder','finish_bot_service_reminder');
     if(env.BOT_PUBLIC_ENABLED==='true')requiredFunctions.push('next_public_bot_task');
     if(env.WHATSAPP_DEMO_ENABLED==='true')requiredFunctions.push('claim_whatsapp_demo');
     const api=await fetch(`${env.SUPABASE_URL}/rest/v1/`,{headers:{...dbHeaders(env),accept:'application/openapi+json'},redirect:'manual',signal:AbortSignal.timeout(10000)});
@@ -302,6 +315,6 @@ export async function handlePilotStatus(request,env){
       const ownEvents=events.filter(event=>(event.payload?.entry||[]).some(entry=>(entry.changes||[]).some(change=>(change.value?.messages||[]).some(message=>message.from===phone))));
       diagnostics={events:ownEvents.map(({payload,...event})=>({...event,messages:payload.entry.flatMap(entry=>entry.changes||[]).flatMap(change=>change.value?.messages||[]).filter(message=>message.from===phone).map(message=>({id:message.id,timestamp:message.timestamp,type:message.type}))})),messages:c?await readBotRows(env,'whatsapp_messages',{conversation_id:`eq.${c.id}`,select:'id,direction,sender_type,delivery_status,failure_reason,created_at,idempotency_key,send_started_at,meta_message_id',order:'created_at.desc,id.desc',limit:'10'}):[]};
     }
-    return Response.json({ok:!missingFunctions.length&&meta.ok,pilot_enabled:env.BOT_PILOT_ENABLED==='true',public_enabled:env.BOT_PUBLIC_ENABLED==='true',public_started_at:env.BOT_PUBLIC_STARTED_AT||null,demo_enabled:env.WHATSAPP_DEMO_ENABLED==='true',schema_verified:!missingFunctions.length,missing_functions:missingFunctions,meta_connected:meta.ok,meta_error_code:metaData.error?.code||null,business_phone:meta.ok?metaData.display_phone_number:null,phone_suffix:phone.slice(-4),conversation:c?{id:c.id,branch_id:c.branch_id,consent_status:c.consent_status,manual_control:c.automation_paused,control_version:c.automation_control_version}:null,context:context||null,marketing,diagnostics},{headers:{'cache-control':'no-store'}});
+    return Response.json({ok:!missingFunctions.length&&meta.ok,pilot_enabled:env.BOT_PILOT_ENABLED==='true',public_enabled:env.BOT_PUBLIC_ENABLED==='true',public_started_at:env.BOT_PUBLIC_STARTED_AT||null,demo_enabled:env.WHATSAPP_DEMO_ENABLED==='true',service_hours:hoursEnabled(env)?{timezone:'America/Bogota',attention:'09:00-20:00',delivery:'09:00-19:00',...serviceWindow()}:null,schema_verified:!missingFunctions.length,missing_functions:missingFunctions,meta_connected:meta.ok,meta_error_code:metaData.error?.code||null,business_phone:meta.ok?metaData.display_phone_number:null,phone_suffix:phone.slice(-4),conversation:c?{id:c.id,branch_id:c.branch_id,consent_status:c.consent_status,manual_control:c.automation_paused,control_version:c.automation_control_version}:null,context:context||null,marketing,diagnostics},{headers:{'cache-control':'no-store'}});
   }catch(error){return Response.json({ok:false,error:error.message},{status:503});}
 }

@@ -298,4 +298,89 @@ const privateNotice=(await one("select queue_outbound_whatsapp_message($1,'priva
 assert.equal((await one('select claim_outbound_whatsapp_message($1,gen_random_uuid()) r',[privateNotice.message_id])).r.to,'CO.TESTPRIVATE123');
 console.log('PASS private-identity ingress and real SQL outbound claim preserve recipient without a phone');
 
+// New v1 hours are tested with an isolated clock; production always uses now().
+for(const [at,attention,delivery] of [['2026-10-02T13:59:59Z',false,false],['2026-10-02T14:00:00Z',true,true],['2026-10-03T00:00:00Z',true,false],['2026-10-03T01:00:00Z',false,false]]){
+ const win=(await one('select bot_service_window($1) r',[at])).r;assert.equal(win.attention_open,attention);assert.equal(win.delivery_open,delivery);
+}
+for(const fn of ['defer_bot_service_turn(uuid,uuid,integer,text,boolean)','prepare_next_bot_service_reminder()','finish_bot_service_reminder(uuid)'])assert.equal((await one("select has_function_privilege('authenticated',$1,'execute') ok",['public.'+fn])).ok,false);
+const pendingCid=await chat('+570000000201');
+await db.query("update whatsapp_conversations set consent_status='pending',consented_at=null,consent_version=null where id=$1",[pendingCid]);
+const consentMsg=async(cid,body)=>{const id=await inbound(cid,body);await db.query('update whatsapp_messages set meta_message_id=$2 where id=$1',[id,'consent-'+id]);return id;};
+const record=async(cid,id,text)=>(await one("select record_whatsapp_consent($1,'2026-10-02','Aviso sintético',$2,$3) r",[cid,text,'consent-'+id])).r;
+const beforeNotice=await consentMsg(pendingCid,'sí');assert.equal((await record(pendingCid,beforeNotice,'sí')).recognized,false);
+const notice=(await one("select queue_outbound_whatsapp_message($1,'privacy-notice:pilot:test-consent','system','text','Aviso sintético','{}') r",[pendingCid])).r;
+await db.query("update whatsapp_messages set delivery_status='sent',sent_at=now()-interval '1 second' where id=$1",[notice.message_id]);
+const vague=await consentMsg(pendingCid,'Si tienen domicilios?');assert.equal((await record(pendingCid,vague,'Si tienen domicilios?')).recognized,false);
+const yes=await consentMsg(pendingCid,'Sí!');assert.equal((await record(pendingCid,yes,'Sí!')).granted,true);
+assert.equal((await one('select customer_response from privacy_consents where conversation_id=$1',[pendingCid])).customer_response,'Sí!');
+const ordinaryYes=await consentMsg(pendingCid,'si');assert.equal((await record(pendingCid,ordinaryYes,'si')).recognized,false);
+assert.equal((await record(pendingCid,yes,'Sí!')).duplicate,true);
+const noCid=await chat('+570000000202');await db.query("update whatsapp_conversations set consent_status='pending',consented_at=null,consent_version=null where id=$1",[noCid]);
+const noNotice=(await one("select queue_outbound_whatsapp_message($1,'privacy-notice:pilot:test-no','system','text','Aviso sintético','{}') r",[noCid])).r;
+await db.query("update whatsapp_messages set delivery_status='sent',sent_at=now()-interval '1 second' where id=$1",[noNotice.message_id]);
+const no=await consentMsg(noCid,'No');assert.equal((await record(noCid,no,'No')).granted,false);assert.equal((await one('select status from whatsapp_conversations where id=$1',[noCid])).status,'closed');
+console.log('PASS exact SI/ACEPTO consent after notice; preserves literal evidence, rejects vague/before-notice SI and respects NO');
+
+await db.exec(`alter function public.bot_service_window(timestamptz) rename to bot_service_window_real;
+ create function public.bot_service_window(p_at timestamptz default now()) returns jsonb language sql stable as $$select public.bot_service_window_real(coalesce(nullif(current_setting('test.service_clock',true),'')::timestamptz,p_at))$$;`);
+const clock=async(at)=>db.query("select set_config('test.service_clock',$1,false)",[at]);
+const defer=async(cid,mid,kind='attention',notify=true)=>(await one('select defer_bot_service_turn($1,$2,(select automation_control_version from whatsapp_conversations where id=$1),$3,$4) r',[cid,mid,kind,notify])).r;
+await clock('2026-10-03T01:00:00Z');
+const waitCid=await chat('+570000000203'),waitMid=await inbound(waitCid,'Consulta fuera de horario');
+const wait=await defer(waitCid,waitMid);assert.ok(wait.wait_id);assert.equal(Date.parse(wait.due_at),Date.parse('2026-10-03T14:00:00Z'));
+assert.equal((await defer(waitCid,waitMid)).message_id,wait.message_id);
+const newerWaitMid=await inbound(waitCid,'Otra consulta durante el cierre');const newerWait=await defer(waitCid,newerWaitMid);assert.equal(newerWait.wait_id,wait.wait_id);assert.equal(newerWait.message_id,wait.message_id);
+const ack=(await one('select claim_outbound_whatsapp_message($1,gen_random_uuid()) r',[wait.message_id])).r;assert.equal(ack.send,true);
+await db.query("update whatsapp_messages set meta_message_id='test-hours-ack',delivery_status='sent' where id=$1",[wait.message_id]);
+assert.equal((await one('select prepare_next_bot_service_reminder() r')).r,null);
+const afterClosing=await commit(waitCid,{service_hours_enforced:true,intent:'information',reply_text:'No se debe enviar.'},newerWaitMid);assert.equal(afterClosing.reason,'outside_attention_hours');
+assert.equal((await one('select count(*)::int n from ai_runs where message_id=$1',[newerWaitMid])).n,0);
+await db.query("update bot_service_waits set due_at=now()-interval '1 minute' where id=$1",[wait.wait_id]);
+await clock('2026-10-03T14:00:00Z');
+const reminder=(await one('select prepare_next_bot_service_reminder() r')).r;assert.equal(reminder.wait_id,wait.wait_id);assert.ok(reminder.message_id);
+assert.equal((await one('select prepare_next_bot_service_reminder() r')).r.message_id,reminder.message_id);
+const openingClaim=(await one('select claim_outbound_whatsapp_message($1,gen_random_uuid()) r',[reminder.message_id])).r;assert.equal(openingClaim.send,true);
+await db.query("update whatsapp_messages set meta_message_id='test-hours-opening',delivery_status='sent' where id=$1",[reminder.message_id]);await db.query('select finish_bot_service_reminder($1)',[wait.wait_id]);
+assert.equal((await one('select status from bot_service_waits where id=$1',[wait.wait_id])).status,'notified');assert.equal((await one('select prepare_next_bot_service_reminder() r')).r,null);
+console.log('PASS outside-hours no AI/order, one notice per burst, one durable opening reminder and confirmed-only completion');
+
+for(const mode of ['manual','new_message','expired','denied','control']){
+ await clock('2026-10-03T01:00:00Z');
+ const cid=await chat('+570000000'+(210+['manual','new_message','expired','denied','control'].indexOf(mode))),mid=await inbound(cid);const w=await defer(cid,mid);
+ await db.query("update bot_service_waits set due_at=now()-interval '1 minute' where id=$1",[w.wait_id]);
+ if(mode==='manual')await db.query('update whatsapp_conversations set automation_paused=true where id=$1',[cid]);
+ if(mode==='new_message')await inbound(cid);
+ if(mode==='expired')await db.query("update whatsapp_messages set created_at=now()-interval '24 hours' where id=$1",[mid]);
+ if(mode==='denied')await db.query("update whatsapp_conversations set consent_status='denied' where id=$1",[cid]);
+ if(mode==='control')await db.query('update whatsapp_conversations set automation_control_version=automation_control_version+1 where id=$1',[cid]);
+ await clock('2026-10-03T14:00:00Z');const result=(await one('select prepare_next_bot_service_reminder() r')).r;
+ assert.equal(result.wait_id,w.wait_id);assert.equal(result.message_id,undefined);assert.equal((await one('select status from bot_service_waits where id=$1',[w.wait_id])).status,mode==='expired'?'expired':'cancelled');
+}
+console.log('PASS opening recovery cancels stale/manual/revoked/control-changed chats and does not send expired free text');
+await clock('2026-10-03T00:00:00Z');
+await db.query('update branch_inventory set available_qty=20');await db.query('update branch_inventory set stock_confirmed_at=now(),stock_confirmed_by=$1',[uid]);
+const cutoffCid=await chat('+570000000220');const cutoff=await commit(cutoffCid,{...cart,service_hours_enforced:true});
+assert.equal(cutoff.delivery_deferred,true);assert.equal(cutoff.task_ids.length,0);assert.equal(cutoff.order_id,null);assert.match((await body(cutoff)).body,/7:00 p\. m\./);
+assert.equal((await state(cutoffCid)).delivery_address,cart.checkout.delivery_address);assert.equal((await state(cutoffCid)).recipient_phone,cart.checkout.recipient_phone);
+const deliveryWait=await defer(cutoffCid,cutoff.mid,'delivery',false);assert.equal(deliveryWait.message_id,null);
+const latePickupCid=await chat('+570000000221');const latePickup=await commit(latePickupCid,{...cart,checkout:{customer_name:'Ana',fulfillment_type:'pickup'},service_hours_enforced:true});assert.equal(latePickup.delivery_deferred,false);assert.match((await body(latePickup)).body,/Recogida en sede/);
+const infoAt19=await commit(latePickupCid,{intent:'information',reply_text:'Seguimos atendiendo consultas.',service_hours_enforced:true});assert.equal((await body(infoAt19)).body,'Seguimos atendiendo consultas.');
+// A pre-closing reply is checked again immediately before its send lease.
+await clock('2026-10-03T01:00:00Z');const lateClaim=(await one('select claim_outbound_whatsapp_message($1,gen_random_uuid()) r',[infoAt19.message_ids[0]])).r;assert.equal(lateClaim.reason,'outside_attention_hours');assert.equal((await one('select send_started_at from whatsapp_messages where id=$1',[infoAt19.message_ids[0]])).send_started_at,null);
+console.log('PASS 19:00 cutoff preserves delivery data, creates no order/tariff/payment, allows pickup/info until 20:00; send-time guard blocks a late reply');
+
+await clock('2026-10-02T23:59:00Z');
+const paidLateCid=await chat('+570000000222');const feeLate=await commit(paidLateCid,{...cart,service_hours_enforced:true});await sent(feeLate);
+await db.query("select resolve_bot_commerce_task($1,'resolved','{\"delivery_fee\":10000}')",[feeLate.task_ids[0]]);
+const summaryLate=await commit(paidLateCid,{service_hours_enforced:true},feeLate.mid,feeLate.task_ids[0]);await sent(summaryLate);
+const qrLate=await commit(paidLateCid,{accept_summary:true,checkout:{payment_method:'transfer'},service_hours_enforced:true});
+await clock('2026-10-03T00:00:00Z');const deliveryClaim=(await one('select claim_outbound_whatsapp_message($1,gen_random_uuid()) r',[qrLate.message_ids[0]])).r;assert.equal(deliveryClaim.reason,'outside_delivery_hours');
+await clock('2026-10-02T23:59:00Z');await sent(qrLate);
+const paidLateMid=await inbound(paidLateCid,'Comprobante sintético');await db.query("insert into whatsapp_attachments(conversation_id,message_id,meta_media_id,storage_path,mime_type,size_bytes) values($1,$2,'late-proof','test/late-proof.png','image/png',120)",[paidLateCid,paidLateMid]);
+const paidLateReview=await commit(paidLateCid,{intent:'handoff',actions:[{type:'propose_human_task',reason:'payment_review'}],service_hours_enforced:true},paidLateMid);await sent(paidLateReview);
+await db.query("select resolve_bot_commerce_task($1,'resolved','{\"approved\":true,\"amount\":260000}')",[paidLateReview.task_ids[0]]);
+await clock('2026-10-03T00:00:00Z');const holdApproved=await commit(paidLateCid,{service_hours_enforced:true},paidLateMid,paidLateReview.task_ids[0]);assert.equal(holdApproved.delivery_deferred,true);assert.equal(holdApproved.order_id,null);assert.equal((await state(paidLateCid)).approved_payment_task_id,paidLateReview.task_ids[0]);assert.match((await body(holdApproved)).body,/no hagas otra transferencia/);
+console.log('PASS 19:00 dispatch lease blocks a late QR; late payment approval retains proof and approval without an order or another payment');
+
+
 }catch(e){console.error(e.message,e.where||'',e.detail||'');process.exitCode=1;}finally{await db.close();}

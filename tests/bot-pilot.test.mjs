@@ -32,6 +32,7 @@ async function scenario(options={},run){
     if(table==='privacy_consents')for(const item of (u.searchParams.get('order')||'').split(',').filter(Boolean))assert.ok(consentColumns.has(item.split('.')[0]),`Unknown privacy_consents column: ${item}`);
     if(init.method==='PATCH'){const body=JSON.parse(init.body);Object.assign(db[table][0],body);trace.push('patch');return Response.json(db[table]);}
     if(table==='whatsapp_messages'&&u.searchParams.get('idempotency_key')?.startsWith('eq.human-task-response:'))return Response.json(options.cachedResolution?[{id:tid,raw_payload:{control_version:1,inbound_message_id:mid}}]:[]);
+    if(table==='whatsapp_messages'&&u.searchParams.get('idempotency_key')==='like.privacy-notice:pilot:*')return Response.json(db[table].filter(m=>m.direction==='outbound'&&m.idempotency_key?.startsWith('privacy-notice:pilot:')&&['sent','delivered','read'].includes(m.delivery_status)));
     if(table==='whatsapp_messages'&&u.searchParams.has('idempotency_key'))return Response.json(options.cached?[{id:tid,delivery_status:'queued'}]:[]);
     if(table==='whatsapp_messages'&&u.searchParams.get('direction')==='eq.outbound')return Response.json(db[table].filter(m=>m.direction==='outbound'&&['sent','delivered','read'].includes(m.delivery_status)&&!m.raw_payload?.internal_notification).slice(0,1));
     if(table==='whatsapp_messages'&&u.searchParams.get('direction')==='eq.inbound')return Response.json(db[table].filter(m=>m.direction==='inbound').slice(0,1));
@@ -50,7 +51,8 @@ async function scenario(options={},run){
     if(name==='prepare_whatsapp_automation_message')return {message_id:uid};
     if(name==='complete_automation_event')return true;
     if(name==='queue_outbound_whatsapp_message')return {message_id:tid};
-    if(name==='record_whatsapp_consent')return {recognized:true,granted:false};
+    if(name==='defer_bot_service_turn')return {wait_id:uid,message_id:tid};
+    if(name==='record_whatsapp_consent'){if(options.grantConsent)Object.assign(db.whatsapp_conversations[0],{consent_status:'granted',consented_at:now,consent_version:'2026-10-01'});return {recognized:true,granted:!!options.grantConsent};}
     throw Error('Unexpected RPC '+name);
   };
   const dependencies={rpc,persistMedia:async()=>trace.push('media'),deliver:async(id,_env,expected)=>{trace.push('deliver');sent.push({id,expected});if(options.staleDelivery)return Response.json({state:'pilot_context_changed'},{status:409});return Response.json({}, {status:options.deliveryFails?502:200});}};
@@ -204,11 +206,50 @@ test('a new private-identity customer receives consent notice without inventing 
  await processPilotWebhook(p,{...env,BOT_PUBLIC_ENABLED:'true'},s.dependencies);
  const ingest=s.events.find(e=>e.name==='ingest_whatsapp_message').body;
  assert.equal(ingest.p_phone_e164,null);assert.equal(ingest.p_whatsapp_id,'CO.TEST123456');assert.equal(ingest.p_display_name,'Prueba privada');
- assert.match(s.events.find(e=>e.name==='queue_outbound_whatsapp_message').body.p_body,/Responde ACEPTO/);assert.equal(s.sent.length,1);assert.ok(!s.trace.includes('model'));
+ assert.match(s.events.find(e=>e.name==='queue_outbound_whatsapp_message').body.p_body,/Responde SÍ o ACEPTO/);assert.equal(s.sent.length,1);assert.ok(!s.trace.includes('model'));
 }));
 
 test('private identities stay outside owner-only pilot but enter public routing',()=>{
  const p=payload([{id:'private',from_user_id:'CO.TEST123456',timestamp:String(Math.floor(Date.now()/1000))}]);
  assert.equal(partitionPilotWebhook(p,env).pilot.entry.length,0);
  assert.equal(partitionPilotWebhook(p,{...env,BOT_PUBLIC_ENABLED:'true'}).pilot.entry.length,1);
+});
+
+
+test('outside service hours persists a wait without AI, branch selection or human escalation',async t=>{
+ t.mock.timers.enable({apis:['Date'],now:Date.parse('2026-10-03T01:00:00Z')});
+ await scenario({},async s=>{await processPilotWebhook(payload(),{...env,BOT_SERVICE_HOURS_ENABLED:'true'},s.dependencies);
+  assert.equal(s.trace.includes('model'),false);assert.equal(s.trace.includes('commit_bot_commerce_turn'),false);
+  assert.equal(s.events.find(e=>e.name==='defer_bot_service_turn').body.p_kind,'attention');assert.equal(s.sent.length,1);assert.equal(s.tasks.length,0);
+ });
+});
+test('consent is the first notice at night; no followup is scheduled without authorization',async t=>{
+ t.mock.timers.enable({apis:['Date'],now:Date.parse('2026-10-03T02:00:00Z')});
+ await scenario({setup:db=>Object.assign(db.whatsapp_conversations[0],{consent_status:'pending',consented_at:null,consent_version:null})},async s=>{
+  await processPilotWebhook(payload(),{...env,BOT_SERVICE_HOURS_ENABLED:'true'},s.dependencies);
+  const q=s.events.find(e=>e.name==='queue_outbound_whatsapp_message').body;assert.match(q.p_body,/^Soy el asistente/);assert.match(q.p_body,/SÍ o ACEPTO/);assert.match(q.p_body,/fuera de horario/);
+  assert.equal(q.p_payload.hours_guard,false);assert.equal(s.trace.includes('defer_bot_service_turn'),false);assert.equal(s.trace.includes('record_whatsapp_consent'),false);
+ });
+});
+test('SI after a delivered privacy notice authorizes the next opening notification',async t=>{
+ t.mock.timers.enable({apis:['Date'],now:Date.parse('2026-10-03T02:00:00Z')});
+ await scenario({grantConsent:true,setup:db=>{Object.assign(db.whatsapp_conversations[0],{consent_status:'pending',consented_at:null,consent_version:null});db.whatsapp_messages.push({id:tid,direction:'outbound',idempotency_key:'privacy-notice:pilot:previous',delivery_status:'sent'});}},async s=>{
+  await processPilotWebhook(payload([{id:'wamid.accept',from:env.BOT_PILOT_PHONE,type:'text',text:{body:'sí'}}]),{...env,BOT_SERVICE_HOURS_ENABLED:'true'},s.dependencies);
+  assert.equal(s.events.find(e=>e.name==='record_whatsapp_consent').body.p_customer_response,'sí');assert.equal(s.trace.includes('defer_bot_service_turn'),true);assert.equal(s.trace.includes('model'),false);
+ });
+});
+test('explicit consent withdrawal still works outside service hours',async t=>{
+ t.mock.timers.enable({apis:['Date'],now:Date.parse('2026-10-03T02:00:00Z')});
+ await scenario({},async s=>{await processPilotWebhook(payload([{id:'wamid.no',from:env.BOT_PILOT_PHONE,type:'text',text:{body:'NO ACEPTO'}}]),{...env,BOT_SERVICE_HOURS_ENABLED:'true'},s.dependencies);
+ assert.equal(s.trace.includes('record_whatsapp_consent'),true);assert.equal(s.trace.includes('defer_bot_service_turn'),false);assert.equal(s.sent.length,0);});
+});
+test('at 9am directory replies normally and unresolved manual control stays in charge at night',async t=>{
+ t.mock.timers.enable({apis:['Date'],now:Date.parse('2026-10-02T14:00:00Z')});
+ await scenario({},async s=>{await processPilotWebhook(payload([{id:'wamid.sedes',from:env.BOT_PILOT_PHONE,type:'text',text:{body:'muéstrame las sedes'}}]),{...env,BOT_SERVICE_HOURS_ENABLED:'true'},s.dependencies);assert.equal(s.trace.includes('defer_bot_service_turn'),false);assert.equal(s.sent.length,1);});
+ t.mock.timers.setTime(Date.parse('2026-10-03T02:00:00Z'));
+ await scenario({setup:db=>db.whatsapp_conversations[0].automation_paused=true},async s=>{await processPilotWebhook(payload(),{...env,BOT_SERVICE_HOURS_ENABLED:'true'},s.dependencies);assert.equal(s.trace.includes('defer_bot_service_turn'),false);assert.equal(s.sent.length,0);});
+});
+test('human resolution is deferred at night before claiming its recovery event',async t=>{
+ t.mock.timers.enable({apis:['Date'],now:Date.parse('2026-10-03T02:00:00Z')});
+ await scenario({setup:resolved},async s=>{assert.equal((await resumePilotTask(tid,{...env,BOT_SERVICE_HOURS_ENABLED:'true'},s.dependencies)).reason,'outside_attention_hours');assert.equal(s.events.length,0);assert.equal(s.sent.length,0);});
 });

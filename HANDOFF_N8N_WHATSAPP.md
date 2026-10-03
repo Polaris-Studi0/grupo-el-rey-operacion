@@ -209,3 +209,11 @@ Claves de reconstrucción fuera de Git: `~/.config/grupo-el-rey/n8n-rebuild-secr
 - Faltan horarios operativos/recordatorio, interpretación de audio/imágenes/PDF, respuesta humana mediante aviso citado en WhatsApp, envío de imagen de producto y plantillas de aviso fuera de 23 horas. El responsable hoy contesta desde intranet.
 - La ejecución de IA sigue sujeta al límite de tiempo del trabajo de fondo HTTP; el inbox durable recupera turnos interrumpidos. Antes de público conviene separar ejecución prolongada en cola. El arreglo de sedes es directo y no depende de ese tiempo de IA.
 - No afirmar «perfecto» ni «listo para público». La siguiente prueba es preguntar de nuevo por el tiempo del pedido, con la estimación vigente en la intranet. No pedir repetir la compra para probar el seguimiento.
+
+## Horarios y consentimiento — 02/10/2026 noche
+
+Samuel fijó atención09:00–20:00 y domicilios09:00–19:00, America/Bogota. Horarios diarios implementados con cortes exclusivos, aviso fuera de horario y reapertura desde09:00 para chats autorizados. Checkout a domicilio tras19:00 conserva los datos/pago y permite recogida hasta20:00; no genera un domicilio nuevo. Privacidad al inicio acepta SI/SÍ/ACEPTO tras aviso entregado, guardando el texto literal; no confundir con un sí de compra.
+
+Worker6b15ebaf-04d6-4dd3-8ace-12fdf3826134 al100%; migración202610020002 aplicada específicamente con guardas sobre las definiciones remotas. n8n7a0006c7 sin cambios. Nuevos `src/bot-hours.js`, tabla `bot_service_waits`, funciones de reloj/espera/reapertura y `BOT_SERVICE_HOURS_ENABLED=true`. SQL valida otra vez al guardar y enviar. Recuperación: un trabajo por invocación, aviso idempotente, solo confirmación Meta completa el trabajo; control manual, mensaje nuevo o baja cancelan, ventana de respuesta vencida queda expired sin envío libre. Conservadas vinculaciones/runtime y cambios de Auth/PQRS/chat.
+
+95 pruebas Node/25 grupos DB, lint/build y diagnóstico remoto aprobados. Falta observar la siguiente reapertura en un chat real, no reenviar historial para simularla. Evidencia y límites en `docs/BOT_SERVICE_HOURS_20261002.md`. Respaldo privado `~/.config/grupo-el-rey/hours-20261002/`. Limpieza manual anterior no ejecutada: nueva tabla requiere revisar aquel SQL; no correrlo por CLI. Sin commit/push de Codex.

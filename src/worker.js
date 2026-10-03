@@ -1,3 +1,4 @@
+import {recoverServiceWaits} from './bot-hours.js';
 import {whatsappContactMatches} from './whatsapp-identity.js';
 import {handleWhatsappDemo} from "./whatsapp-demo.js";
 import {handleCampaigns,recoverCampaigns,recordMarketingOptOuts,withoutMarketingOptOuts} from "./whatsapp-campaigns.js";
@@ -674,6 +675,7 @@ export default {
     // Cron recovery shares one invocation budget. Process one durable job,
     // then try human tasks on a later tick if the inbox is clear.
     context.waitUntil((async()=>{
+      if(await recoverServiceWaits(env,{rpc:supabaseRpc,deliver:deliverQueuedWhatsAppMessage}))return;
       if(await recoverWebhookInbox(env))return;
       if(new Date().getUTCMinutes()%2===0&&await recoverCampaigns(env,{rpc:supabaseRpc}))return;
       await recoverPilotTasks(env,{rpc:supabaseRpc,deliver:deliverQueuedWhatsAppMessage});

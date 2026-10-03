@@ -77,3 +77,7 @@ Se pregunta la talla pendiente entre varias opciones, conservando producto/preci
 Prueba con modelo sin envíos: `node scripts/check-bot-size-discount.mjs`. Evidencia: `size-discount-evidence-20261001.json`. Contrato/contexto: 28 pruebas aprobadas. Falta prueba real de Samuel; no atribuir una causa exacta al fallo original sin evidencia.
 
 Privacidad vigente pública: https://almaceneselrey.co/privacidad. Aviso nuevo/version2026-10-01; autorizaciones anteriores conservadas. Chat interno de sedes es independiente de n8n/WhatsApp; estado y límites de avisos en HANDOFF.
+
+### Horarios — 02/10 noche
+
+Atención diaria09:00–20:00 y domicilios09:00–19:00, hora Colombia, aplicados por Worker/SQL con `BOT_SERVICE_HOURS_ENABLED`. n8n recibe los horarios como información confirmada y mantiene versión7a0006c7. Las esperas y mensajes desde la siguiente apertura están en `bot_service_waits`, con un trabajo por cron, autorización vigente y sin duplicar envíos inciertos. Privacidad inicial reconoce SI/SÍ/ACEPTO tras aviso entregado. Ver `docs/BOT_SERVICE_HOURS_20261002.md`; no activar v2 ni repetir la limpieza.
