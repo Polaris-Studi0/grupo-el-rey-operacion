@@ -28,6 +28,6 @@ Worker **6b15ebaf-04d6-4dd3-8ace-12fdf3826134**, publicado al100%. Conserva las2
 - **95 pruebas Node y25 grupos de base aislada**: límites de horas/mes, privacidad antes de aceptación, aceptación natural, control manual, ráfagas, reapertura idempotente, ventana vencida, nuevo mensaje, cierre, recogida, datos del domicilio y aprobación de pago tardía. El reloj simulado se limita a la base aislada.
 - ESLint y compilación aprobados. Se conserva la advertencia previa de tamaño del paquete web.
 - SQL remoto confirma permisos, RLS, guardas y cortes horarios. Diagnóstico del candidato y producción confirma Meta conectado, esquema completo y horario correcto; sin enviar mensajes a clientes como prueba.
-- **Pendiente de observar por WhatsApp real**: aviso fuera de horario seguido del aviso de la siguiente apertura. Estas pruebas no son evidencia de entrega real.
+- **Entrega real observada el03/10**: aviso fuera de horario a las08:55 Colombia y aviso de la siguiente apertura a las09:01, ambos con estado Meta `read`. La consulta real fue observada durante la revisión; no se reprodujeron mensajes antiguos ni se enviaron pruebas a clientes. Evidencia privada en `~/.config/grupo-el-rey/review-20261003/` y explicación en `docs/BOT_REVIEW_20261003.md`.
 
 No se borraron datos ni se reactivó v2. No se ejecutó la limpieza pendiente. El SQL antiguo de limpieza rechaza tablas desconocidas, incluida ahora `bot_service_waits`; requiere una nueva revisión de alcance antes de que Samuel lo ejecute. Sin commit/push de Codex.

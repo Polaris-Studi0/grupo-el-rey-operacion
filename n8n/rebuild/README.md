@@ -1,8 +1,12 @@
-# Bot de WhatsApp — 02/10/2026
+# Bot de WhatsApp — 03/10/2026
 
 Estado vigente y límites: [HANDOFF_N8N_WHATSAPP.md](../../HANDOFF_N8N_WHATSAPP.md).
 
-[Motor de atención](https://intranetelrey.app.n8n.cloud/workflow/pGxqUgjYE6NCyiwZ) publicado en `7a0006c7-ab76-4738-ad65-b3aeebb427fa`; Worker `d1f6d76b-30cc-4593-b4fc-93439ce67543`. Apertura pública y demo individual autorizados y publicados el 01/10; campañas completas aplazadas.
+[Motor de atención](https://intranetelrey.app.n8n.cloud/workflow/pGxqUgjYE6NCyiwZ), última versión conocida `7a0006c7-ab76-4738-ad65-b3aeebb427fa`; Worker vigente `48b10c7d-10f1-4218-ac4c-da55618fc25f`. El03/10 MCP nativo requirió autenticación y el plugin devolvió error interno; no se modificó ni revalidó el workflow ese día. Apertura pública y demo individual autorizados y publicados el01/10; campañas completas aplazadas.
+
+## Categorías generales y avisos internos — 03/10
+
+Las seis líneas confirmadas por Samuel están en conocimiento general activo, sin afirmar existencias: hogar, aseo, cosméticos, electrodomésticos, belleza y juguetería. Una pregunta general clara usa directamente esa fuente. La consulta real09:24 creó un pendiente sin intentar aviso por el corte prematuro de23h; el responsable llevaba23h20. Ventana del responsable ampliada a23h55 y revalidada antes de enviar, cliente intacto. Migración específica202610030001 aplicada; no reenviar el pendiente antiguo.99 pruebas Node/26 grupos DB y diagnóstico publicados aprobados. Fuera de24h todavía falta plantilla interna adecuada. Detalles en [revisión del03/10](../../docs/BOT_REVIEW_20261003.md).
 
 ## Datos de domicilio juntos — 02/10
 

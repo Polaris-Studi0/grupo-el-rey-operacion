@@ -253,3 +253,13 @@ test('human resolution is deferred at night before claiming its recovery event',
  t.mock.timers.enable({apis:['Date'],now:Date.parse('2026-10-03T02:00:00Z')});
  await scenario({setup:resolved},async s=>{assert.equal((await resumePilotTask(tid,{...env,BOT_SERVICE_HOURS_ENABLED:'true'},s.dependencies)).reason,'outside_attention_hours');assert.equal(s.events.length,0);assert.equal(s.sent.length,0);});
 });
+
+test('the last general product question is answered from confirmed business knowledge without a human task or AI',async()=>scenario({setup:db=>{db.whatsapp_messages[0].body='y que venden alla';db.branch_knowledge=[{id:'58b54750-c012-4ae0-a890-2febce5eaa1c',category:'general',title:'Líneas de productos',content:'En Almacenes El Rey vendemos productos para el hogar, aseo, cosméticos, electrodomésticos, belleza y juguetería.\nLa disponibilidad de cada referencia se verifica aparte.',active:true}];}},async s=>{
+ await processPilotWebhook(payload([{id:'wamid.lines',from:env.BOT_PILOT_PHONE,type:'text',text:{body:'y que venden alla'}}]),env,s.dependencies);
+ assert.equal(s.trace.includes('model'),false);assert.equal(s.tasks.length,0);assert.match(s.events.find(e=>e.name==='commit_bot_commerce_turn').body.p_decision.reply_text,/electrodomésticos, belleza y juguetería/);assert.equal(s.sent.length,1);
+}));
+test('owner alerts remain eligible at 23h20m and expire only at 23h55m, independently of customer windows',async()=>{
+ for(const [age,eligible] of [[23*60+20,true],[23*60+54,true],[24*60,false]])await scenario({setup:db=>db.whatsapp_messages[0].created_at=new Date(Date.now()-age*60*1000).toISOString()},async s=>{
+  await notifyPilotTask(tid,env,s.dependencies);assert.equal(s.trace.includes('claim_automation_event'),eligible);assert.equal(s.sent.length,eligible?1:0);
+ });
+});

@@ -1,6 +1,7 @@
+import {businessOverviewReply,OWNER_REPLY_WINDOW_MS} from './bot-business.js';
 import {hoursEnabled,serviceWindow,closedNotice,deferServiceTurn} from './bot-hours.js';
 import {whatsappIdentity,whatsappContactMatches,validWhatsappIdentity} from './whatsapp-identity.js';
-import {campaignTemplates} from './whatsapp-campaigns.js';
+import {campaignTemplates,ownerNotificationTemplates} from './whatsapp-campaigns.js';
 import {branchSelection,branchMenu,orderedBranches,asksForBranches,asksToChangeBranch} from './bot-branches.js';
 import {authenticates} from './bot-connection.js';
 import {loadPreviewContext,readBotRows,requestBotDecision} from './bot-preview.js';
@@ -138,7 +139,7 @@ async function processTurn(inbound,env,{rpc,deliver}){
   const context=await loadPreviewContext(env,{role:'admin'},c.id,c.automation_control_version);
   if(context.snapshot.message.id!==inbound.message_id)return;
   let decision;
-  try{const direct=orderStatusReply(context)||checkoutReply(context);decision=direct?{decision:direct}:await requestBotDecision(env,context,'pilot',inbound.message_id);}
+  try{const direct=businessOverviewReply(context)||orderStatusReply(context)||checkoutReply(context);decision=direct?{decision:direct}:await requestBotDecision(env,context,'pilot',inbound.message_id);}
   catch(error){
     console.error('Pilot decision unavailable',JSON.stringify({code:error.code||'request_failed',status:error.upstream_status||null}));
     decision={decision:{intent:'handoff',reply_text:'Dame un momento y te confirmo.',actions:[{type:'propose_human_task',reason:'missing_information',question:`Revisar la consulta porque la respuesta automática no estuvo disponible: ${String(inbound.body).slice(0,650)}`}]}};
@@ -190,7 +191,7 @@ export async function notifyPilotTask(taskId,env,{rpc,deliver}){
   const owner=(await readBotRows(env,'whatsapp_contacts',{phone_e164:`eq.+${pilotPhone(env)}`,select:'id',limit:'1'}))[0];if(!owner)return;
   const chats=await readBotRows(env,'whatsapp_conversations',{contact_id:`eq.${owner.id}`,select:'id',order:'created_at.desc',limit:'20'});if(!chats.length)return;
   const latest=(await readBotRows(env,'whatsapp_messages',{conversation_id:`in.(${chats.map(c=>c.id).join(',')})`,direction:'eq.inbound',sender_type:'eq.customer',select:'created_at',order:'created_at.desc',limit:'1'}))[0];
-  if(!latest||Date.parse(latest.created_at)<=Date.now()-23*60*60*1000)return;
+  if(!latest||Date.parse(latest.created_at)<=Date.now()-OWNER_REPLY_WINDOW_MS)return;
   const event=(await rpc('claim_automation_event',{p_task_id:taskId,p_topic:'human_task.created'},env))?.[0];if(!event)return;
   try{
     const queued=await rpc('prepare_whatsapp_automation_message',{p_outbox_id:event.id,p_lease_id:event.lease_id,p_admin_phone:`+${pilotPhone(env)}`},env);
@@ -309,12 +310,14 @@ export async function handlePilotStatus(request,env){
       try{const templates=await campaignTemplates(env);marketing={connected:true,compatible_templates:templates.map(t=>({name:t.name,language:t.language,variables:t.variables}))};}
       catch(e){marketing={connected:false,error:e.message};}
     }
+    let notification_templates;
+    if(new URL(request.url).searchParams.get('notifications')==='true')notification_templates=await ownerNotificationTemplates(env);
     let diagnostics;
     if(new URL(request.url).searchParams.get('diagnostics')==='true'){
       const events=await readBotRows(env,'whatsapp_webhook_inbox',{select:'id,event_type,received_at,processed_at,processing_started_at,attempts,last_error,dead_lettered_at,payload',order:'received_at.desc',limit:'20'});
       const ownEvents=events.filter(event=>(event.payload?.entry||[]).some(entry=>(entry.changes||[]).some(change=>(change.value?.messages||[]).some(message=>message.from===phone))));
       diagnostics={events:ownEvents.map(({payload,...event})=>({...event,messages:payload.entry.flatMap(entry=>entry.changes||[]).flatMap(change=>change.value?.messages||[]).filter(message=>message.from===phone).map(message=>({id:message.id,timestamp:message.timestamp,type:message.type}))})),messages:c?await readBotRows(env,'whatsapp_messages',{conversation_id:`eq.${c.id}`,select:'id,direction,sender_type,delivery_status,failure_reason,created_at,idempotency_key,send_started_at,meta_message_id',order:'created_at.desc,id.desc',limit:'10'}):[]};
     }
-    return Response.json({ok:!missingFunctions.length&&meta.ok,pilot_enabled:env.BOT_PILOT_ENABLED==='true',public_enabled:env.BOT_PUBLIC_ENABLED==='true',public_started_at:env.BOT_PUBLIC_STARTED_AT||null,demo_enabled:env.WHATSAPP_DEMO_ENABLED==='true',service_hours:hoursEnabled(env)?{timezone:'America/Bogota',attention:'09:00-20:00',delivery:'09:00-19:00',...serviceWindow()}:null,schema_verified:!missingFunctions.length,missing_functions:missingFunctions,meta_connected:meta.ok,meta_error_code:metaData.error?.code||null,business_phone:meta.ok?metaData.display_phone_number:null,phone_suffix:phone.slice(-4),conversation:c?{id:c.id,branch_id:c.branch_id,consent_status:c.consent_status,manual_control:c.automation_paused,control_version:c.automation_control_version}:null,context:context||null,marketing,diagnostics},{headers:{'cache-control':'no-store'}});
+    return Response.json({ok:!missingFunctions.length&&meta.ok,pilot_enabled:env.BOT_PILOT_ENABLED==='true',public_enabled:env.BOT_PUBLIC_ENABLED==='true',public_started_at:env.BOT_PUBLIC_STARTED_AT||null,demo_enabled:env.WHATSAPP_DEMO_ENABLED==='true',service_hours:hoursEnabled(env)?{timezone:'America/Bogota',attention:'09:00-20:00',delivery:'09:00-19:00',...serviceWindow()}:null,schema_verified:!missingFunctions.length,missing_functions:missingFunctions,meta_connected:meta.ok,meta_error_code:metaData.error?.code||null,business_phone:meta.ok?metaData.display_phone_number:null,phone_suffix:phone.slice(-4),conversation:c?{id:c.id,branch_id:c.branch_id,consent_status:c.consent_status,manual_control:c.automation_paused,control_version:c.automation_control_version}:null,context:context||null,marketing,diagnostics,notification_templates},{headers:{'cache-control':'no-store'}});
   }catch(error){return Response.json({ok:false,error:error.message},{status:503});}
 }

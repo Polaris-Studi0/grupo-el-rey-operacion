@@ -1,17 +1,32 @@
 # Traspaso vigente — bot de Grupo Almacenes El Rey
 
-Actualizado el **02/10/2026**. Este documento determina el estado real; los documentos de arquitectura describen el objetivo.
+Actualizado el **03/10/2026**. Este documento determina el estado real; los documentos de arquitectura describen el objetivo.
 
 ## Publicado y autorizado
 
 - Aplicación real: `/Users/samuel/Desktop/Cowork for Grupo El Rey/Plataforma`. Samuel autorizó editar código y publicar mejoras del bot. **No manejar pantalla; usar MCP/CLI. No commit/push**: Samuel usa GitHub Desktop. HEAD inicial de Samuel: `70f33f9 manual marca`; durante la revisión Samuel creó `5f7900d oct 2`, que ya incluye las mejoras y la evidencia. Codex no hizo commit/push.
-- Worker `grupo-el-rey-operacion`: **`d1f6d76b-30cc-4593-b4fc-93439ce67543`**, 100%, captura conjunta/parcial de datos de domicilio. Base remota de Samuel comprobada `ed061a58-4cca-48f5-8ff0-afab1067411c`; versiones intermedias de esta publicación ecec3907 (solo candidato), 134fe0f3 (publicada). Bindings y runtime íntegramente preservados. Assets `index-Iq7gY27r.css` / `index-_khj3s92.js`; conserva acceso, contraste de caja, privacidad y chat interno. Codex no hizo commit/push.
+- Worker `grupo-el-rey-operacion`: **`48b10c7d-10f1-4218-ac4c-da55618fc25f`**, 100%, categorías generales y ventana de avisos del responsable corregida. Anterior inmediata de Samuel `f597c87b-ff3e-48f5-a810-5060343af349`. Las25 vinculaciones y configuración de ejecución íntegramente preservadas. Conserva captura conjunta de domicilio, horarios, acceso, contraste de caja, privacidad y chat interno. Codex no hizo commit/push.
 - [Motor nuevo de n8n](https://intranetelrey.app.n8n.cloud/workflow/pGxqUgjYE6NCyiwZ), 17 nodos, gpt-5-mini mediante Gateway. Publicado **`7a0006c7-ab76-4738-ad65-b3aeebb427fa`**. Datos de domicilio en listas/frases, recordatorios de faltantes, continuidad de selección y audio sin transcripción. Conexiones, credenciales y configuración de privacidad intactas.
 - Webhook privado `POST /webhook/el-rey-assistant-turn-v1`. Solo propone: no envía ni escribe en la base. No guardar datos de ejecuciones exitosas/fallidas/manuales ni progreso.
 - **Samuel autorizó explícitamente abrir el bot a todos el 01/10. Publicado.** WhatsApp empresarial +57 314 789 9116; propietario/avisos +57 312 737 8289. BOT_PUBLIC_ENABLED=true; mensajes públicos desde `2026-10-01T19:39:54.198Z`. Se conservan consentimiento, sede, control manual, sesión tras 24 h de inactividad y validaciones comerciales.
 - Todos los teléfonos nuevos usan el motor nuevo. Ruta heredada suprimida en modo público; no se reactivó la IA antigua ni se reenvían eventos históricos. El comando PROBAR BOT solo puede quitar control manual al propietario, nunca a otros clientes.
 
 - Meta autenticado; contexto remoto legible. Durante el incidente, La Estrella tenía **0 productos activos y 0 QR activos**. El diagnóstico debe comprobar de nuevo la sede elegida y sus recursos. Samuel pidió no cargar promociones todavía; las subirá cuando existan. No sembrar productos ficticios.
+
+## SEO local de la web pública — 03/10
+
+- Samuel pidió posicionar sedes en Antioquia y distinguir la marca de España. Publicado solo en web `almacenes-el-rey-web`: **b1217ee7-a482-49f5-8e96-0a2562d9082a**, anterior47e4b213. Directorio `/sedes/`, diez páginas, HTML estático, títulos/descripciones/canonical, JSON-LD, sitemap/robots y fuentes locales optimizadas. Logo/lema, PQRS, privacidad, eliminación y manual preservados; sin cambios de bot/intranet/base ni commit/push.
+- Fuente fuera de Git en carpeta hermana `Landing page`; `content/locations.json`, generador `scripts/build-seo.mjs`, publicación whitelist `scripts/publish-web.mjs` y guía `SEO_LEEME.md`. No subir carpeta completa ni dashboard antiguo. Detalles/límites en [docs/SEO_WEB_20261003.md](docs/SEO_WEB_20261003.md).
+- Samuel administra Google Maps de La Estrella y San Gabriel, Itagüí; ambas identidades enlazadas, ninguna ficha editada. Falta poner URL específica de sede en las fichas, reclamar las ocho restantes y verificar Search Console/enviar sitemap. No garantizar primer puesto ni afirmar indexación/posiciones medidas. Direcciones mantenidas; coordenadas aproximadas excluidas de schema y horario de WhatsApp distinguido del físico.
+
+## Consulta general y aviso al responsable — 03/10
+
+- Consulta real de las09:24 Colombia: «y que venden alla». Se creó pendiente y la espera fue leída, pero el aviso tuvo cero intentos. El responsable había escrito hacía23h20 y nuestro corte a23h impidió el envío antes de vencer la ventana de Meta.
+- Samuel confirmó hogar, aseo, cosméticos, electrodomésticos, belleza y juguetería. Conocimiento general global activo y respuesta directa a preguntas generales claras. No certifica stock, marcas, precios ni promociones por sede. Registro canónico58b54750-c012-4ae0-a890-2febce5eaa1c; no cargar productos ficticios.
+- Ventana del responsable23h55 tanto inmediata como en recuperación/pedidos; autorización de envío la vuelve a comprobar. Se conserva la ventana del cliente. Migración específica202610030001 aplicada con precondiciones remotas; no repetir toda la carpeta. Pendiente histórico conservado, sin reenviar mensajes.
+- 99 pruebas Node/26 grupos DB, lint/build, SQL y diagnóstico publicado aprobados. Meta/esquema conectados y bot público activo. n8n sin cambios; MCP nativo requiere autenticación y plugin tuvo error interno. Versión7a0006c7 es la última conocida, no revalidada hoy.
+- Avisos por API fuera de24h requieren plantilla aprobada también hacia el número personal. Las Utility aprobadas disponibles son confirmación de pedido y dos ejemplos de bienvenida; ninguna adecuada para avisos internos. Plantilla específica sigue pendiente; no afirmar aviso histórico entregado ni disponibilidad indefinida. Samuel indicó que sus avisos son internos, con autorización existente; no pedir permiso otra vez ni confundirlos con campañas.
+- Horarios anteriores comprobados realmente el03/10: aviso de cierre08:55 y reapertura09:01, ambos Meta read. Evidencia privada y detalles en [docs/BOT_REVIEW_20261003.md](docs/BOT_REVIEW_20261003.md). Sin borrado, pantalla ni commit/push.
 
 ## Revisión de interacciones y captura conjunta — 02/10
 
@@ -216,4 +231,4 @@ Samuel fijó atención09:00–20:00 y domicilios09:00–19:00, America/Bogota. H
 
 Worker6b15ebaf-04d6-4dd3-8ace-12fdf3826134 al100%; migración202610020002 aplicada específicamente con guardas sobre las definiciones remotas. n8n7a0006c7 sin cambios. Nuevos `src/bot-hours.js`, tabla `bot_service_waits`, funciones de reloj/espera/reapertura y `BOT_SERVICE_HOURS_ENABLED=true`. SQL valida otra vez al guardar y enviar. Recuperación: un trabajo por invocación, aviso idempotente, solo confirmación Meta completa el trabajo; control manual, mensaje nuevo o baja cancelan, ventana de respuesta vencida queda expired sin envío libre. Conservadas vinculaciones/runtime y cambios de Auth/PQRS/chat.
 
-95 pruebas Node/25 grupos DB, lint/build y diagnóstico remoto aprobados. Falta observar la siguiente reapertura en un chat real, no reenviar historial para simularla. Evidencia y límites en `docs/BOT_SERVICE_HOURS_20261002.md`. Respaldo privado `~/.config/grupo-el-rey/hours-20261002/`. Limpieza manual anterior no ejecutada: nueva tabla requiere revisar aquel SQL; no correrlo por CLI. Sin commit/push de Codex.
+95 pruebas Node/25 grupos DB, lint/build y diagnóstico remoto aprobados. Reapertura observada realmente el03/10 a las09:01 Colombia, después de aviso de cierre08:55; ambos Meta read. No se reenvió historial para simularla. Evidencia y límites en `docs/BOT_SERVICE_HOURS_20261002.md` y revisión del03/10. Respaldo privado `~/.config/grupo-el-rey/hours-20261002/`. Limpieza manual anterior no ejecutada: nueva tabla requiere revisar aquel SQL; no correrlo por CLI. Sin commit/push de Codex.

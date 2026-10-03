@@ -25,6 +25,11 @@ export async function campaignTemplates(env,name=''){
  const d=await graph(env,`${env.WHATSAPP_BUSINESS_ACCOUNT_ID||WABA}/message_templates?${query}`);
  return (d.data||[]).map(templateDetails).filter(Boolean);
 }
+export async function ownerNotificationTemplates(env){
+ const query=new URLSearchParams({fields:'name,language,status,category,components',limit:'100'});
+ const result=await graph(env,`${env.WHATSAPP_BUSINESS_ACCOUNT_ID||WABA}/message_templates?${query}`);
+ return (result.data||[]).filter(t=>t.category==='UTILITY').map(({name,language,status,components})=>({name,language,status,components}));
+}
 export function buildCampaignTemplate(t,values){
  if(!Array.isArray(values)||values.length!==t.variables||values.some(v=>typeof v!=='string'||!v.trim()||v.length>500))throw Error('Completa los campos de la plantilla.');
  const components=values.length?[{type:'body',parameters:values.map(text=>({type:'text',text:text.trim()}))}]:[];

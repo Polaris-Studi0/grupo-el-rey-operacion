@@ -298,6 +298,23 @@ const privateNotice=(await one("select queue_outbound_whatsapp_message($1,'priva
 assert.equal((await one('select claim_outbound_whatsapp_message($1,gen_random_uuid()) r',[privateNotice.message_id])).r.to,'CO.TESTPRIVATE123');
 console.log('PASS private-identity ingress and real SQL outbound claim preserve recipient without a phone');
 
+
+// Owner window is separate: a customer message does not open the owner's window.
+const lateOwnerChat=await chat('+570000000099');const lateOwnerMid=await inbound(lateOwnerChat);
+await db.query("update whatsapp_messages set created_at=now()-interval '23 hours 20 minutes' where id=$1",[lateOwnerMid]);
+const lateClient=await chat('+570000000230');await inbound(lateClient);const lateTask=(await one("select (create_human_task($1,'late-owner-test','general','normal','Dato','Confirmar referencia','{\"pilot_engine\":\"new-whatsapp-v1\"}',null,'+570000000099',null)).id id",[lateClient])).id;
+assert.equal((await one("select next_public_bot_task('+570000000099') r")).r.id,lateTask);
+const lateInternal=(await one("select queue_outbound_whatsapp_message($1,'late-owner-notice','system','text','Consulta pendiente','{\"internal_notification\":true}') r",[lateOwnerChat])).r;
+assert.equal((await one('select claim_outbound_whatsapp_message($1,gen_random_uuid()) r',[lateInternal.message_id])).r.send,true);
+const afterWindow=(await one("select queue_outbound_whatsapp_message($1,'closed-owner-notice','system','text','Consulta pendiente','{\"internal_notification\":true}') r",[lateOwnerChat])).r;
+await db.query("update whatsapp_messages set created_at=now()-interval '24 hours' where id=$1",[lateOwnerMid]);
+assert.equal((await one('select claim_outbound_whatsapp_message($1,gen_random_uuid()) r',[afterWindow.message_id])).r.reason,'owner_reply_window_expired');
+assert.equal((await one('select send_started_at from whatsapp_messages where id=$1',[afterWindow.message_id])).send_started_at,null);
+const generalLines=await one("select branch_id,content from branch_knowledge where id='58b54750-c012-4ae0-a890-2febce5eaa1c'");assert.equal(generalLines.branch_id,null);assert.match(generalLines.content,/hogar, aseo, cosméticos, electrodomésticos, belleza y juguetería/);assert.match(generalLines.content,/no certifica existencias/);
+// Remove only this synthetic recovery event from contention in later test groups.
+await db.query("update human_tasks set admin_notified_at=now() where id=$1",[lateTask]);
+console.log('PASS owner alert at 23h20m, send-time expiry at 24h, distinct customer window and global business facts without stock');
+
 // New v1 hours are tested with an isolated clock; production always uses now().
 for(const [at,attention,delivery] of [['2026-10-02T13:59:59Z',false,false],['2026-10-02T14:00:00Z',true,true],['2026-10-03T00:00:00Z',true,false],['2026-10-03T01:00:00Z',false,false]]){
  const win=(await one('select bot_service_window($1) r',[at])).r;assert.equal(win.attention_open,attention);assert.equal(win.delivery_open,delivery);
