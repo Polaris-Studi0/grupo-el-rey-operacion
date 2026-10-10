@@ -22,6 +22,7 @@ async function scenario(options={},run){
     const u=new URL(String(url));
     if(u.hostname==='intranetelrey.app.n8n.cloud'){
       trace.push('model');const p=JSON.parse(init.body);assert.equal(p.mode,'pilot');assert.equal(p.turn_id,p.snapshot.human_resolution?tid:mid);assert.ok(!JSON.stringify(p.snapshot.history).includes('PRIVATE-NOTICE'));
+      options.inspectModel?.(p);
       if(options.modelFails)throw Error('Model unavailable');
       options.duringModel?.(db);
       return Response.json({contract:'el-rey.bot.decision.v1',status:'decision_ready',mode:'pilot',source:'intranet',turn_id:p.turn_id,conversation_id:cid,expected_control_version:2,expected_context_version:p.context_version,expected_context_fingerprint:p.context_fingerprint,expires_at:p.snapshot.expires_at,send_allowed:false,mutations_executed:[],decision:options.decision||{intent:'information',reply_text:p.snapshot.human_resolution?'En esta sede no tenemos cargadores para carros eléctricos.':'Cerramos a las 20:00.',actions:[]}});
@@ -35,7 +36,7 @@ async function scenario(options={},run){
     if(table==='whatsapp_messages'&&u.searchParams.get('idempotency_key')==='like.privacy-notice:pilot:*')return Response.json(db[table].filter(m=>m.direction==='outbound'&&m.idempotency_key?.startsWith('privacy-notice:pilot:')&&['sent','delivered','read'].includes(m.delivery_status)));
     if(table==='whatsapp_messages'&&u.searchParams.has('idempotency_key'))return Response.json(options.cached?[{id:tid,delivery_status:'queued'}]:[]);
     if(table==='whatsapp_messages'&&u.searchParams.get('direction')==='eq.outbound')return Response.json(db[table].filter(m=>m.direction==='outbound'&&['sent','delivered','read'].includes(m.delivery_status)&&!m.raw_payload?.internal_notification).slice(0,1));
-    if(table==='whatsapp_messages'&&u.searchParams.get('direction')==='eq.inbound')return Response.json(db[table].filter(m=>m.direction==='inbound').slice(0,1));
+    if(table==='whatsapp_messages'&&u.searchParams.get('direction')==='eq.inbound')return Response.json(db[table].filter(m=>m.direction==='inbound').slice(0,Number(u.searchParams.get('limit')||1)));
     return Response.json(db[table]);
   };
   const rpc=async(name,body)=>{
@@ -261,5 +262,47 @@ test('the last general product question is answered from confirmed business know
 test('owner alerts remain eligible at 23h20m and expire only at 23h55m, independently of customer windows',async()=>{
  for(const [age,eligible] of [[23*60+20,true],[23*60+54,true],[24*60,false]])await scenario({setup:db=>db.whatsapp_messages[0].created_at=new Date(Date.now()-age*60*1000).toISOString()},async s=>{
   await notifyPilotTask(tid,env,s.dependencies);assert.equal(s.trace.includes('claim_automation_event'),eligible);assert.equal(s.sent.length,eligible?1:0);
+ });
+});
+
+test('plain website branch greeting survives consent and avoids the model and repeated menu',async()=>scenario({grantConsent:true,modelFails:true,setup:db=>{
+ Object.assign(db.whatsapp_conversations[0],{branch_id:null,consent_status:'pending',consented_at:null,consent_version:null});db.branches=[{id:'b8',name:'La Estrella'}];
+ db.whatsapp_messages[0].body='ACEPTO';db.whatsapp_messages.push({id:tid,direction:'outbound',delivery_status:'read',body:'Soy el asistente virtual',idempotency_key:'privacy-notice:pilot:start'}, {id:uid,direction:'inbound',sender_type:'customer',body:'Hola, quiero comunicarme con la sede La Estrella.'});
+}},async s=>{
+ await processPilotWebhook(payload([{id:'wamid.intake',from:env.BOT_PILOT_PHONE,type:'text',text:{body:'ACEPTO'}}]),env,s.dependencies);
+ assert.equal(s.db.whatsapp_conversations[0].branch_id,'b8');assert.equal(s.trace.includes('model'),false);assert.equal(s.tasks.length,0);assert.match(s.events.find(e=>e.name==='queue_outbound_whatsapp_message').body.p_body,/La Estrella.*Qué necesitas/);
+}));
+test('courtesy during a pending product enquiry creates no additional task even with the model unavailable',async()=>{
+ for(const text of ['Ok','Daleee','Gracias','Quedo atento','¿Y el precio?'])await scenario({modelFails:true,setup:db=>{db.whatsapp_messages[0].body=text;db.human_tasks=[{id:tid,branch_id:'b1',status:'pending',task_type:'general',question:'Confirmar precio del producto',context:{pilot_engine:'new-whatsapp-v1'}}];}},async s=>{
+  await processPilotWebhook(payload([{id:'wamid.wait',from:env.BOT_PILOT_PHONE,type:'text',text:{body:text}}]),env,s.dependencies);
+  assert.equal(s.trace.includes('model'),false);assert.equal(s.tasks.length,0);assert.equal(s.sent.length,1);assert.match(s.events.find(e=>e.name==='commit_bot_commerce_turn').body.p_decision.reply_text,/pendiente.*confirmación/);
+ });
+});
+test('a branch greeting from the website replaces the old branch without using AI',async()=>scenario({modelFails:true,setup:db=>db.branches.push({id:'b6',name:'Floresta'})},async s=>{
+ await processPilotWebhook(payload([{id:'wamid.branch',from:env.BOT_PILOT_PHONE,type:'text',text:{body:'Hola, quiero comunicarme con la sede Floresta.'}}]),env,s.dependencies);
+ assert.equal(s.db.whatsapp_conversations[0].branch_id,'b6');assert.equal(s.trace.includes('model'),false);assert.equal(s.tasks.length,0);
+}));
+test('branch selection carries the unanswered question into the model turn without changing its message identity',async()=>scenario({inspectModel:p=>{
+ assert.equal(p.snapshot.onboarding_request,'¿Cuánto cuesta el champú de prueba?');assert.equal(p.snapshot.message.text,'1');assert.equal(p.snapshot.message.id,mid);
+},setup:db=>{
+ db.whatsapp_conversations[0].branch_id=null;db.whatsapp_messages[0].body='1';
+ db.whatsapp_messages.push({id:tid,direction:'outbound',sender_type:'system',delivery_status:'read',body:'¿En cuál sede te atendemos?',raw_payload:{branch_options:['b1']}},{id:uid,direction:'inbound',sender_type:'customer',message_type:'text',body:'¿Cuánto cuesta el champú de prueba?'});
+}},async s=>{
+ await processPilotWebhook(payload([{id:'wamid.selection',from:env.BOT_PILOT_PHONE,type:'text',text:{body:'1'}}]),env,s.dependencies);
+ assert.equal(s.trace.includes('model'),true);assert.equal(s.sent.length,1);
+}));
+test('a website branch directive cannot replace the branch of an active purchase',async()=>scenario({modelFails:true,setup:db=>{
+ db.branches.push({id:'b6',name:'Floresta'});db.whatsapp_conversations[0].sales_state.pilot_commerce={stage:'collecting',pending_selection:{name:'Artículo confirmado'}};
+}},async s=>{
+ await processPilotWebhook(payload([{id:'wamid.branch',from:env.BOT_PILOT_PHONE,type:'text',text:{body:'Hola, quiero comunicarme con la sede Floresta.'}}]),env,s.dependencies);
+ assert.equal(s.db.whatsapp_conversations[0].branch_id,'b1');assert.equal(s.trace.includes('model'),false);assert.match(s.events.find(e=>e.name==='queue_outbound_whatsapp_message').body.p_body,/compra en curso/);
+}));
+test('an exact catalogue price uses counted stock directly without AI, a cart or another pending task',async t=>{
+ t.mock.timers.enable({apis:['Date'],now:Date.parse('2026-10-09T15:00:00Z')});
+ await scenario({modelFails:true,setup:db=>{
+  db.whatsapp_messages[0].body='¿Cuánto cuesta el artículo de prueba?';db.branch_inventory=[{branch_id:'b1',product_id:uid,product:{id:uid,name:'Artículo de prueba',active:true},price:50000,available_qty:2,reserved_qty:0,active:true,stock_confirmed_at:new Date().toISOString()}];
+ }},async s=>{
+  await processPilotWebhook(payload([{id:'wamid.price',from:env.BOT_PILOT_PHONE,type:'text',text:{body:'¿Cuánto cuesta el artículo de prueba?'}}]),env,s.dependencies);
+  const d=s.events.find(e=>e.name==='commit_bot_commerce_turn').body.p_decision;assert.equal(d.intent,'discovery');assert.match(d.reply_text,/50.000/);assert.deepEqual(d.actions,[]);assert.equal(d.quote,undefined);assert.equal(s.trace.includes('model'),false);assert.equal(s.tasks.length,0);
  });
 });

@@ -1,4 +1,5 @@
 import {businessOverviewReply,OWNER_REPLY_WINDOW_MS} from './bot-business.js';
+import {socialReply,verifiedPriceReply,isBranchArrival,onboardingRequest,fallbackQuestion,naturalResolutionText} from './bot-conversation.js';
 import {hoursEnabled,serviceWindow,closedNotice,deferServiceTurn} from './bot-hours.js';
 import {whatsappIdentity,whatsappContactMatches,validWhatsappIdentity} from './whatsapp-identity.js';
 import {campaignTemplates,ownerNotificationTemplates} from './whatsapp-campaigns.js';
@@ -56,6 +57,7 @@ export async function processPilotWebhook(payload,env,{rpc,persistMedia,deliver}
 }
 
 async function processTurn(inbound,env,{rpc,deliver}){
+  let onboarding=false;
   let c=(await readBotRows(env,'whatsapp_conversations',{id:`eq.${inbound.conversation_id}`,select:'*',limit:'1'}))[0];
   if(!c||c.status==='closed')return;
   const expected=()=>({conversation_id:c.id,inbound_message_id:inbound.message_id,control_version:c.automation_control_version,require_consent:c.consent_status==='granted'});
@@ -96,6 +98,7 @@ async function processTurn(inbound,env,{rpc,deliver}){
     if(consent?.recognized&&!consent.granted)return;
     if(!consent?.granted){await sendFixed(NOTICE+(hoursEnabled(env)&&!serviceWindow().attention_open?'\n\n'+closedNotice().replace('te escribiré para continuar','podremos continuar cuando autorices el uso de tus datos'):''),true);return;}
     c=(await readBotRows(env,'whatsapp_conversations',{id:`eq.${c.id}`,select:'*',limit:'1'}))[0];
+    onboarding=true;
   }
   if(hoursEnabled(env)&&!serviceWindow().attention_open){await deferServiceTurn(c,inbound,'attention',env,{rpc,deliver});return;}
   if(asksForBranches(inbound.body)){
@@ -107,7 +110,7 @@ async function processTurn(inbound,env,{rpc,deliver}){
     const lastReply=(await readBotRows(env,'whatsapp_messages',{conversation_id:`eq.${c.id}`,direction:'eq.outbound',delivery_status:'in.(sent,delivered,read)',or:'(raw_payload->>internal_notification.is.null,raw_payload->>internal_notification.eq.false)',select:'raw_payload',order:'created_at.desc,id.desc',limit:'1'}))[0];
     offeredBranches=lastReply?.raw_payload?.branch_options||[];
   }
-  if(c.branch_id&&(asksToChangeBranch(inbound.body)||offeredBranches.length)){
+  if(c.branch_id&&(asksToChangeBranch(inbound.body)||isBranchArrival(inbound.body)||offeredBranches.length)){
     const branches=await readBotRows(env,'branches',{active:'eq.true',select:'id,name',limit:'20'});
     const selected=branchSelection(inbound.body,branches,offeredBranches).selected;
     if(selected||asksToChangeBranch(inbound.body)){
@@ -129,20 +132,23 @@ async function processTurn(inbound,env,{rpc,deliver}){
     let {selected,choices}=branchSelection(inbound.body,branches,priorOptions);
     if(!selected&&!priorOptions.length){
       const arrivals=await readBotRows(env,'whatsapp_messages',{conversation_id:`eq.${c.id}`,direction:'eq.inbound',sender_type:'eq.customer',select:'body',order:'created_at.asc,id.asc',limit:'10'});
-      const tagged=arrivals.find(m=>/\[SEDE:/i.test(m.body||''));
+      const tagged=arrivals.find(m=>isBranchArrival(m.body));
       if(tagged)selected=branchSelection(tagged.body,branches).selected;
     }
-    if(selected){const rows=await patch(env,'whatsapp_conversations',{id:`eq.${c.id}`,branch_id:'is.null',automation_control_version:`eq.${c.automation_control_version}`},{branch_id:selected.id});if(!rows.length)return;c=rows[0];}
+    if(selected){const rows=await patch(env,'whatsapp_conversations',{id:`eq.${c.id}`,branch_id:'is.null',automation_control_version:`eq.${c.automation_control_version}`},{branch_id:selected.id});if(!rows.length)return;c=rows[0];onboarding=true;}
     else{const list=choices||orderedBranches(branches);await sendFixed(branchMenu(list),false,{branch_options:list.map(b=>b.id)});return;}
   }
   if(normalize(inbound.body)==='probar bot'&&inbound.is_owner){await sendFixed('El piloto del nuevo bot está activo en este chat. Puedes preguntarme por información de la sede o consultar productos. Las compras y los pagos necesitan confirmación del equipo.');return;}
   const context=await loadPreviewContext(env,{role:'admin'},c.id,c.automation_control_version);
   if(context.snapshot.message.id!==inbound.message_id)return;
+  const intake=onboarding?onboardingRequest(context.snapshot.history,context.snapshot.message.text):'';
+  if(onboarding&&!intake){await sendFixed(`Claro, te atendemos en ${context.snapshot.branch.name}. ¿Qué necesitas?`);return;}
+  const packet=intake?{...context,snapshot:{...context.snapshot,onboarding_request:intake}}:context;
   let decision;
-  try{const direct=businessOverviewReply(context)||orderStatusReply(context)||checkoutReply(context);decision=direct?{decision:direct}:await requestBotDecision(env,context,'pilot',inbound.message_id);}
+  try{const direct=verifiedPriceReply(packet.snapshot)||(intake?null:businessOverviewReply(context)||orderStatusReply(context)||checkoutReply(context)||socialReply(context));decision=direct?{decision:direct}:await requestBotDecision(env,packet,'pilot',inbound.message_id);}
   catch(error){
     console.error('Pilot decision unavailable',JSON.stringify({code:error.code||'request_failed',status:error.upstream_status||null}));
-    decision={decision:{intent:'handoff',reply_text:'Dame un momento y te confirmo.',actions:[{type:'propose_human_task',reason:'missing_information',question:`Revisar la consulta porque la respuesta automática no estuvo disponible: ${String(inbound.body).slice(0,650)}`}]}};
+    decision={decision:{intent:'handoff',reply_text:'Dame un momento y te confirmo.',actions:[{type:'propose_human_task',reason:'missing_information',question:fallbackQuestion(intake?{...context.snapshot,message:{...context.snapshot.message,text:intake}}:context.snapshot)}]}};
   }
 
   if(decision.decision.intent==='checkout')decision.decision.checkout={...recoveredCheckoutFields(context),...Object.fromEntries(Object.entries(decision.decision.checkout||{}).filter(([,value])=>value))};
@@ -238,7 +244,7 @@ export async function resumePilotTask(taskId,env,{rpc,deliver}){
       try{
         const result=await requestBotDecision(env,packet,'pilot',task.id);
         if(result.decision.intent==='information'&&Array.isArray(result.decision.actions)&&!result.decision.actions.length&&!/el equipo responde|según (?:el administrador|la intranet)|sobre tu consulta/i.test(result.decision.reply_text)){
-          body=result.decision.reply_text;style='contextual';
+          body=naturalResolutionText(result.decision.reply_text,resolution.answer);style='contextual';
         }
       }catch{/* Delivery can continue with the approved answer, without new facts. */}
       const current=await loadPreviewContext(env,{role:'admin'},c.id,c.automation_control_version);

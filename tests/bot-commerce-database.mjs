@@ -20,6 +20,14 @@ try {
 const uid='20000000-0000-4000-8000-000000000001',pid='20000000-0000-4000-8000-000000000002';
 await db.exec(`insert into auth.users(id,email) values('${uid}','admin@example.invalid');update profiles set role='admin' where id='${uid}';select set_config('test.user','${uid}',false);`);
 const one=async(sql,args=[]) => (await db.query(sql,args)).rows[0];
+// Check real boundaries before isolating the service clock for the entire suite.
+for(const [at,attention,delivery] of [['2026-10-02T13:59:59Z',false,false],['2026-10-02T14:00:00Z',true,true],['2026-10-03T00:00:00Z',true,false],['2026-10-03T01:00:00Z',false,false]]){
+ const win=(await one('select bot_service_window($1) r',[at])).r;assert.equal(win.attention_open,attention);assert.equal(win.delivery_open,delivery);
+}
+await db.exec(`alter function public.bot_service_window(timestamptz) rename to bot_service_window_real;
+ create function public.bot_service_window(p_at timestamptz default now()) returns jsonb language sql stable as $$select public.bot_service_window_real(coalesce(nullif(current_setting('test.service_clock',true),'')::timestamptz,p_at))$$;`);
+const clock=async(at)=>db.query("select set_config('test.service_clock',$1,false)",[at]);
+await clock('2026-10-09T15:00:00Z');
 assert.equal(Number((await one("select extract(epoch from bot_stock_valid_until('2026-09-29T15:00:00Z')) value")).value),Date.parse('2026-09-30T01:00:00Z')/1000);
 // Freeze only stock validity for transaction scenarios, independent of test wall clock.
 await db.exec(`create or replace function public.bot_stock_valid_until(p_confirmed timestamptz) returns timestamptz language sql immutable as $$select $1+interval '24 hours'$$;`);
@@ -315,10 +323,7 @@ const generalLines=await one("select branch_id,content from branch_knowledge whe
 await db.query("update human_tasks set admin_notified_at=now() where id=$1",[lateTask]);
 console.log('PASS owner alert at 23h20m, send-time expiry at 24h, distinct customer window and global business facts without stock');
 
-// New v1 hours are tested with an isolated clock; production always uses now().
-for(const [at,attention,delivery] of [['2026-10-02T13:59:59Z',false,false],['2026-10-02T14:00:00Z',true,true],['2026-10-03T00:00:00Z',true,false],['2026-10-03T01:00:00Z',false,false]]){
- const win=(await one('select bot_service_window($1) r',[at])).r;assert.equal(win.attention_open,attention);assert.equal(win.delivery_open,delivery);
-}
+// New v1 hours are tested with the isolated clock; production always uses now().
 for(const fn of ['defer_bot_service_turn(uuid,uuid,integer,text,boolean)','prepare_next_bot_service_reminder()','finish_bot_service_reminder(uuid)'])assert.equal((await one("select has_function_privilege('authenticated',$1,'execute') ok",['public.'+fn])).ok,false);
 const pendingCid=await chat('+570000000201');
 await db.query("update whatsapp_conversations set consent_status='pending',consented_at=null,consent_version=null where id=$1",[pendingCid]);
@@ -338,9 +343,6 @@ await db.query("update whatsapp_messages set delivery_status='sent',sent_at=now(
 const no=await consentMsg(noCid,'No');assert.equal((await record(noCid,no,'No')).granted,false);assert.equal((await one('select status from whatsapp_conversations where id=$1',[noCid])).status,'closed');
 console.log('PASS exact SI/ACEPTO consent after notice; preserves literal evidence, rejects vague/before-notice SI and respects NO');
 
-await db.exec(`alter function public.bot_service_window(timestamptz) rename to bot_service_window_real;
- create function public.bot_service_window(p_at timestamptz default now()) returns jsonb language sql stable as $$select public.bot_service_window_real(coalesce(nullif(current_setting('test.service_clock',true),'')::timestamptz,p_at))$$;`);
-const clock=async(at)=>db.query("select set_config('test.service_clock',$1,false)",[at]);
 const defer=async(cid,mid,kind='attention',notify=true)=>(await one('select defer_bot_service_turn($1,$2,(select automation_control_version from whatsapp_conversations where id=$1),$3,$4) r',[cid,mid,kind,notify])).r;
 await clock('2026-10-03T01:00:00Z');
 const waitCid=await chat('+570000000203'),waitMid=await inbound(waitCid,'Consulta fuera de horario');
@@ -398,6 +400,17 @@ const paidLateReview=await commit(paidLateCid,{intent:'handoff',actions:[{type:'
 await db.query("select resolve_bot_commerce_task($1,'resolved','{\"approved\":true,\"amount\":260000}')",[paidLateReview.task_ids[0]]);
 await clock('2026-10-03T00:00:00Z');const holdApproved=await commit(paidLateCid,{service_hours_enforced:true},paidLateMid,paidLateReview.task_ids[0]);assert.equal(holdApproved.delivery_deferred,true);assert.equal(holdApproved.order_id,null);assert.equal((await state(paidLateCid)).approved_payment_task_id,paidLateReview.task_ids[0]);assert.match((await body(holdApproved)).body,/no hagas otra transferencia/);
 console.log('PASS 19:00 dispatch lease blocks a late QR; late payment approval retains proof and approval without an order or another payment');
+
+{
+const pendingCid=await chat('+570000000240'),otherPendingCid=await chat('+570000000241');
+await assert.rejects(()=>db.query("insert into human_tasks(conversation_id,branch_id,status,task_type,title,question,context) values($1,'b2','pending','general','Consulta','Pregunta','{\"pilot_engine\":\"new-whatsapp-v1\"}')",[pendingCid]),/sede del pendiente/);
+for(const [conversation_id,branch_id,status,task_type,context] of [[pendingCid,'b1','pending','general',{pilot_engine:'new-whatsapp-v1'}],[pendingCid,'b1','resolved','general',{pilot_engine:'new-whatsapp-v1'}],[pendingCid,'b1','pending','payment_verification',{pilot_engine:'new-whatsapp-v1',commerce:true}],[otherPendingCid,'b1','pending','general',{pilot_engine:'new-whatsapp-v1'}]]){
+ await db.query('insert into human_tasks(conversation_id,branch_id,status,task_type,title,question,context,resolution,resolved_at) values($1,$2,$3,$4,$5,$6,$7,$8,$9)',[conversation_id,branch_id,status,task_type,'Consulta de prueba','Confirmar el precio de un artículo',context,status==='resolved'?{answer:'Respuesta confirmada'}:null,status==='resolved'?new Date():null]);
+}
+const pendingSnapshot=(await one('select snapshot from bot_context_snapshot($1)',[pendingCid])).snapshot;
+assert.equal(pendingSnapshot.pendingTasks.length,1);assert.equal(pendingSnapshot.pendingTasks[0].status,'pending');assert.ok(pendingSnapshot.productImages);assert.equal((await one("select has_function_privilege('authenticated','public.bot_context_snapshot(uuid)','execute') ok")).ok,false);
+console.log('PASS grouped pending context includes only this branch/conversation and excludes resolved/commercial tasks');
+}
 
 
 }catch(e){console.error(e.message,e.where||'',e.detail||'');process.exitCode=1;}finally{await db.close();}

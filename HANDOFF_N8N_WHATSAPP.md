@@ -1,17 +1,25 @@
 # Traspaso vigente — bot de Grupo Almacenes El Rey
 
-Actualizado el **03/10/2026**. Este documento determina el estado real; los documentos de arquitectura describen el objetivo.
+Actualizado el **09/10/2026**. Este documento determina el estado real; los documentos de arquitectura describen el objetivo.
 
 ## Publicado y autorizado
 
-- Aplicación real: `/Users/samuel/Desktop/Cowork for Grupo El Rey/Plataforma`. Samuel autorizó editar código y publicar mejoras del bot. **No manejar pantalla; usar MCP/CLI. No commit/push**: Samuel usa GitHub Desktop. HEAD inicial de Samuel: `70f33f9 manual marca`; durante la revisión Samuel creó `5f7900d oct 2`, que ya incluye las mejoras y la evidencia. Codex no hizo commit/push.
-- Worker `grupo-el-rey-operacion`: **`48b10c7d-10f1-4218-ac4c-da55618fc25f`**, 100%, categorías generales y ventana de avisos del responsable corregida. Anterior inmediata de Samuel `f597c87b-ff3e-48f5-a810-5060343af349`. Las25 vinculaciones y configuración de ejecución íntegramente preservadas. Conserva captura conjunta de domicilio, horarios, acceso, contraste de caja, privacidad y chat interno. Codex no hizo commit/push.
-- [Motor nuevo de n8n](https://intranetelrey.app.n8n.cloud/workflow/pGxqUgjYE6NCyiwZ), 17 nodos, gpt-5-mini mediante Gateway. Publicado **`7a0006c7-ab76-4738-ad65-b3aeebb427fa`**. Datos de domicilio en listas/frases, recordatorios de faltantes, continuidad de selección y audio sin transcripción. Conexiones, credenciales y configuración de privacidad intactas.
+- Aplicación real: `/Users/samuel/Desktop/Cowork for Grupo El Rey/Plataforma`. Samuel autorizó editar código y publicar mejoras del bot. **No manejar pantalla; usar MCP/CLI. No commit/push**: Samuel usa GitHub Desktop. HEAD de Samuel al iniciar esta revisión: `2ddcd6e update bot`. Codex no hizo commit/push.
+- Worker `grupo-el-rey-operacion`: **`4134d63b-d099-416d-a066-7c10a2aa1ee7`**, 100%, continuidad y atención comercial del09/10. Versión inicial de Samuel `26069818-36c1-463a-9219-d52f6b67a00f`. Las25 vinculaciones y configuración de ejecución íntegramente preservadas. Conserva captura conjunta de domicilio, horarios, acceso, contraste de caja, privacidad y chat interno. Codex no hizo commit/push.
+- [Motor nuevo de n8n](https://intranetelrey.app.n8n.cloud/workflow/pGxqUgjYE6NCyiwZ), 17 nodos, gpt-5-mini mediante Gateway. Publicado **`b2801dd4-1753-4315-8fe7-ba45a9c1f21e`**, borrador coincidente. Consulta original al elegir sede, pendientes de esta conversación, precio sin compra y aclaraciones completas. Conexiones, credenciales y configuración de privacidad intactas.
 - Webhook privado `POST /webhook/el-rey-assistant-turn-v1`. Solo propone: no envía ni escribe en la base. No guardar datos de ejecuciones exitosas/fallidas/manuales ni progreso.
 - **Samuel autorizó explícitamente abrir el bot a todos el 01/10. Publicado.** WhatsApp empresarial +57 314 789 9116; propietario/avisos +57 312 737 8289. BOT_PUBLIC_ENABLED=true; mensajes públicos desde `2026-10-01T19:39:54.198Z`. Se conservan consentimiento, sede, control manual, sesión tras 24 h de inactividad y validaciones comerciales.
 - Todos los teléfonos nuevos usan el motor nuevo. Ruta heredada suprimida en modo público; no se reactivó la IA antigua ni se reenvían eventos históricos. El comando PROBAR BOT solo puede quitar control manual al propietario, nunca a otros clientes.
 
 - Meta autenticado; contexto remoto legible. Durante el incidente, La Estrella tenía **0 productos activos y 0 QR activos**. El diagnóstico debe comprobar de nuevo la sede elegida y sus recursos. Samuel pidió no cargar promociones todavía; las subirá cuando existan. No sembrar productos ficticios.
+
+## Revisión completa de chats — 09/10
+
+- Leídas las24 conversaciones conservadas/380 mensajes. Cortesías y seguimiento simple de precio ya pendiente no crean tareas duplicadas. Saludo del sitio con sede reconocido; pregunta inicial preservada sin interpretar el número de sede como cantidad. Precio de un producto exacto y confirmado responde directamente sin carrito; ambigüedades siguen el modelo.
+- Respuestas humanas completas y naturales, conservando preguntas explícitas del operador; si falta evidencia de herramienta en una propuesta solo informativa, se devuelve la fuente literal aprobada sin acciones. Contexto reciente de adjuntos preservado, sin lectura visual ni reutilización del ID entrante como imagen para enviar.
+- Migración específica202610090001 aplicada al envoltorio de contexto agrupado. pendingTasks limitadas a conversación/sede, tareas generales pendientes del motor nuevo; conserva productImages y permisos exclusivos de service_role.24 contextos verificados, cero tareas fuera de alcance. No ejecutar carpeta completa de migraciones ni limpiezas.
+- 115 pruebas Node/27 grupos PostgreSQL, ocho decisiones sintéticas del modelo al primer intento y seis comprobaciones de conexión aprobadas; ESLint/build. Diagnóstico final HTTP200, público/esquema/Meta activos. n8n mostraba trial vencido; Samuel activó el plan y se completaron las pruebas del modelo. No hubo nueva entrega real por WhatsApp. Evidencia, hallazgos y límites en [docs/BOT_REVIEW_20261009.md](docs/BOT_REVIEW_20261009.md).
+- Catálogo todavía reducido. Completar desde intranet productos/fotos/stock diario y conocimientos por sede. No sembrar datos ficticios ni promover automáticamente respuestas privadas a hechos globales. Sin mensajes de prueba a clientes ni replay; sin commit/push.
 
 ## SEO local de la web pública — 03/10
 

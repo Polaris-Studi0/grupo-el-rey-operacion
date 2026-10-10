@@ -16,6 +16,34 @@ function guard(context,output,tools=[]){
 const decision=(patch={})=>({intent:'clarification',reply_text:'¿Cuál producto te interesa?',product_ids:[],quote_items:[],qr_asset_id:'',human_reason:'',human_question:'',...patch});
 function noEffects(response){assert.equal(response.send_allowed,false);assert.deepEqual(response.mutations_executed,[]);}
 
+test('intake and scoped pending enquiries reach the model, without turning a pending question into a confirmed fact',()=>{
+ const p=attentionFixture('horario');p.snapshot.onboarding_request='¿Qué precio tiene el producto de prueba?';p.snapshot.pending_tasks=[{id:'10000000-0000-4000-8000-000000000005',status:'pending',question:'Confirmar precio'},{id:'invalid',status:'resolved',question:'No incluir'}];
+ const r=validate(p);assert.equal(r.context.pending_tasks.length,1);assert.match(r.llm_input,/onboarding_request/);assert.match(r.llm_input,/Confirmar precio/);assert.equal(JSON.parse(r.llm_input).current_message.text,p.snapshot.onboarding_request);assert.equal(r.context.message.text,p.snapshot.message.text);assert.ok(!r.context.information.some(i=>i.text==='Confirmar precio'));
+});
+test('resolution guard preserves an operator question and never leaves dangling pronouns when removing an invented invitation',()=>{
+ const p=attentionFixture('horario');p.snapshot.human_resolution={task_id:'10000000-0000-4000-8000-000000000004',inbound_message_id:p.snapshot.message.id,question:'¿Qué precio tiene?',answer:'Precio 72.000'};
+ const c=validate(p).context;
+ assert.equal(guard(c,decision({intent:'information',reply_text:'Cuesta $72.000. ¿Lo quieres comprar?'}),['consultar_informacion']).decision.reply_text,'Cuesta $72.000.');
+ c.human_resolution.answer='Sí, disponible. ¿Lo necesitas a domicilio o para recoger?';const generated='Sí, está disponible. ¿Lo prefieres a domicilio o para recoger?';assert.equal(guard(c,decision({intent:'information',reply_text:generated}),['consultar_informacion']).decision.reply_text,generated);
+});
+test('missing information tool evidence falls back to the approved literal answer and cannot pass generated claims',()=>{
+ const p=attentionFixture('horario');p.snapshot.human_resolution={task_id:'10000000-0000-4000-8000-000000000004',inbound_message_id:p.snapshot.message.id,question:'¿Qué precio tiene?',answer:'Cuesta $72.000.'};
+ const r=guard(validate(p).context,decision({intent:'information',reply_text:'Cuesta $2 y ya enviamos el pedido.'}));assert.equal(r.status,'decision_ready');assert.equal(r.decision.reply_text,'Cuesta $72.000.');assert.deepEqual(r.decision.actions,[]);assert.equal(r.evidence.literal_answer_fallback,true);
+ assert.equal(guard(validate(p).context,decision({intent:'information',reply_text:'Ya enviamos.',checkout:{payment_method:'transfer'}})).status,'missing_tool_evidence');
+});
+test('a repeated pending price cannot create another task, while active checkout remains eligible',()=>{
+ const p=attentionFixture('horario');p.snapshot.message.text='¿Y el precio?';p.snapshot.pending_tasks=[{id:'10000000-0000-4000-8000-000000000005',status:'pending',question:'Confirmar disponibilidad y precio'}];
+ const attempted=decision({intent:'handoff',human_reason:'missing_information',human_question:'Preguntar nuevamente el precio'});
+ const r=guard(validate(p).context,attempted);assert.equal(r.decision.intent,'clarification');assert.deepEqual(r.decision.actions,[]);assert.match(r.decision.reply_text,/pendiente/);
+ p.snapshot.checkout={stage:'collecting',pending_selection:{name:'Producto'}};assert.equal(guard(validate(p).context,attempted).decision.intent,'handoff');
+});
+test('a verified price-only quotation is presented without starting a cart; explicit purchases keep their quote',()=>{
+ const p=attentionFixture('horario');p.snapshot.onboarding_request='¿Cuánto cuesta el peluche de prueba?';p.snapshot.message.text='7';
+ const attempted=decision({intent:'quote',reply_text:'Cuesta 300.000. ¿Lo reservo?',quote_items:[{product_id:'TEST-OSO',quantity:1}]});
+ const r=guard(validate(p).context,structuredClone(attempted),['cotizar_carrito']);assert.equal(r.decision.intent,'discovery');assert.equal(r.decision.quote,null);assert.deepEqual(r.decision.actions,[]);assert.match(r.decision.reply_text,/300.000/);assert.doesNotMatch(r.decision.reply_text,/reserv/);
+ p.snapshot.onboarding_request='Quiero comprar el peluche de prueba';assert.equal(guard(validate(p).context,attempted,['cotizar_carrito']).decision.intent,'quote');
+});
+
 test('only bound preview and synthetic test packets can reach the model',()=>{
   const packet=attentionFixture('horario');assert.equal(validate(packet).allow_ai,true);
   packet.mode='preview';assert.equal(validate(packet).allow_ai,false);
@@ -37,6 +65,7 @@ test('an image type alone never confirms receipt of a payment attachment',()=>{
   const p=attentionFixture('pago_sin_archivo');p.snapshot.message.kind='image';assert.equal(validate(p).context.message.attachment_received,false);
   p.snapshot.message.attachment={id:'FILE',message_id:'WRONG',persisted:true};assert.equal(validate(p).context.message.attachment_received,false);
   p.snapshot.message.attachment.message_id=p.snapshot.message.id;assert.equal(validate(p).context.message.attachment_received,true);
+  const safe=validate(p);assert.equal(JSON.parse(safe.llm_input).current_message.attachment_id,undefined);assert.equal(safe.context.message.attachment_id,'FILE','the server retains the attachment reference for its guards');
 });
 test('quote totals are recomputed and unavailable or excessive quantities fail',()=>{
   const c=validate(attentionFixture('opciones')).context;

@@ -1,0 +1,223 @@
+{
+  "checked_at": "2026-10-10T04:56:45.806Z",
+  "workflow_version": "b2801dd4-1753-4315-8fe7-ba45a9c1f21e",
+  "scope": "published_model_synthetic_decisions_only_no_sends_or_commits",
+  "results": [
+    {
+      "name": "consulta_antes_de_elegir_sede",
+      "status": "decision_ready",
+      "attempts": 1,
+      "duration_ms": 9687,
+      "decision": {
+        "media_ids": [],
+        "intent": "discovery",
+        "reply_text": "El Peluche de prueba cuesta $300.000 por unidad. ¿Te gustaría comprarlo?",
+        "offered_product_ids": [
+          "TEST-OSO"
+        ],
+        "quote": null,
+        "actions": [],
+        "checkout": {},
+        "confirmed_item": null,
+        "accept_summary": false,
+        "cancel_cart": false
+      },
+      "passed": true
+    },
+    {
+      "name": "precio_ya_pendiente",
+      "status": "decision_ready",
+      "attempts": 1,
+      "duration_ms": 7547,
+      "decision": {
+        "media_ids": [],
+        "intent": "clarification",
+        "reply_text": "Estoy pendiente de la confirmación del precio. Te respondo por aquí cuando la tenga.",
+        "offered_product_ids": [],
+        "quote": null,
+        "actions": [],
+        "checkout": {},
+        "confirmed_item": null,
+        "accept_summary": false,
+        "cancel_cart": false
+      },
+      "passed": true
+    },
+    {
+      "name": "producto_no_registrado",
+      "status": "decision_ready",
+      "attempts": 1,
+      "duration_ms": 6406,
+      "decision": {
+        "media_ids": [],
+        "intent": "handoff",
+        "reply_text": "Dame un momento y te confirmo.",
+        "offered_product_ids": [],
+        "quote": null,
+        "actions": [
+          {
+            "type": "propose_human_task",
+            "reason": "missing_information",
+            "question": "¿Tienen inflador de prueba en la Sede de prueba? Cliente solicita 2 unidades y pregunta precio. Confirmen disponibilidad, precio unitario y si aplican variantes (modelo, inflado eléctrico/manual). Adjuntar foto o referencia si hay.",
+            "related_message_id": "TEST-MSG-producto_no_registrado"
+          }
+        ],
+        "checkout": {
+          "customer_name": "",
+          "recipient_name": "",
+          "recipient_phone": "",
+          "fulfillment_type": "",
+          "delivery_address": "",
+          "delivery_zone": "",
+          "payment_method": ""
+        },
+        "confirmed_item": null,
+        "accept_summary": false,
+        "cancel_cart": false
+      },
+      "passed": true
+    },
+    {
+      "name": "foto_con_contexto",
+      "status": "decision_ready",
+      "attempts": 1,
+      "duration_ms": 8771,
+      "decision": {
+        "media_ids": [],
+        "intent": "handoff",
+        "reply_text": "Dame un momento y te confirmo.",
+        "offered_product_ids": [],
+        "quote": null,
+        "actions": [
+          {
+            "type": "propose_human_task",
+            "reason": "missing_information",
+            "question": "En la Sede de prueba: ¿tienen disponibles las luces de Navidad que aparecen en la foto adjunta (modelo que “brilla” que envió el cliente)?",
+            "related_message_id": "TEST-MSG-foto_con_contexto"
+          }
+        ],
+        "checkout": {
+          "customer_name": "",
+          "recipient_name": "",
+          "recipient_phone": "",
+          "fulfillment_type": "",
+          "delivery_address": "",
+          "delivery_zone": "",
+          "payment_method": ""
+        },
+        "confirmed_item": null,
+        "accept_summary": false,
+        "cancel_cart": false
+      },
+      "passed": true
+    },
+    {
+      "name": "precio_humano_completo",
+      "status": "decision_ready",
+      "attempts": 1,
+      "duration_ms": 4865,
+      "decision": {
+        "media_ids": [],
+        "intent": "information",
+        "reply_text": "El artículo de prueba cuesta 72.000 pesos.",
+        "offered_product_ids": [],
+        "quote": null,
+        "actions": [],
+        "checkout": {
+          "customer_name": "",
+          "recipient_name": "",
+          "recipient_phone": "",
+          "fulfillment_type": "",
+          "delivery_address": "",
+          "delivery_zone": "",
+          "payment_method": ""
+        },
+        "confirmed_item": null,
+        "accept_summary": false,
+        "cancel_cart": false
+      },
+      "passed": true
+    },
+    {
+      "name": "pregunta_explicita_del_equipo",
+      "status": "decision_ready",
+      "attempts": 1,
+      "duration_ms": 5665,
+      "decision": {
+        "media_ids": [],
+        "intent": "information",
+        "reply_text": "Sí — el artículo de prueba está disponible a 72.000 pesos. ¿Lo quieres a domicilio o lo pasarás a recoger en la sede?",
+        "offered_product_ids": [],
+        "quote": null,
+        "actions": [],
+        "checkout": {
+          "customer_name": "",
+          "recipient_name": "",
+          "recipient_phone": "",
+          "fulfillment_type": "",
+          "delivery_address": "",
+          "delivery_zone": "",
+          "payment_method": ""
+        },
+        "confirmed_item": null,
+        "accept_summary": false,
+        "cancel_cart": false
+      },
+      "passed": true
+    },
+    {
+      "name": "visita_sin_reserva_inventada",
+      "status": "decision_ready",
+      "attempts": 1,
+      "duration_ms": 3088,
+      "decision": {
+        "media_ids": [],
+        "intent": "close",
+        "reply_text": "Perfecto, te esperamos en Sede de prueba. Cualquier cosa me escribes.",
+        "offered_product_ids": [],
+        "quote": null,
+        "actions": [],
+        "checkout": {
+          "customer_name": "",
+          "recipient_name": "",
+          "recipient_phone": "",
+          "fulfillment_type": "",
+          "delivery_address": "",
+          "delivery_zone": "",
+          "payment_method": ""
+        },
+        "confirmed_item": null,
+        "accept_summary": false,
+        "cancel_cart": false
+      },
+      "passed": true
+    },
+    {
+      "name": "domicilio_datos_en_un_mensaje",
+      "status": "decision_ready",
+      "attempts": 1,
+      "duration_ms": 3175,
+      "decision": {
+        "media_ids": [],
+        "intent": "checkout",
+        "reply_text": "Continúo con tu selección y los datos que indicas. El resumen y el pago requieren las comprobaciones de la compra.",
+        "offered_product_ids": [],
+        "quote": null,
+        "actions": [],
+        "checkout": {
+          "customer_name": "Ana",
+          "recipient_name": "Ana",
+          "recipient_phone": "3001234567",
+          "fulfillment_type": "delivery",
+          "delivery_address": "Calle 10 # 20-30, apto 402",
+          "delivery_zone": "Prado",
+          "payment_method": ""
+        },
+        "confirmed_item": null,
+        "accept_summary": false,
+        "cancel_cart": false
+      },
+      "passed": true
+    }
+  ]
+}

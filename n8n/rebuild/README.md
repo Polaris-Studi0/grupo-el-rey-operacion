@@ -1,8 +1,12 @@
-# Bot de WhatsApp — 03/10/2026
+# Bot de WhatsApp — 09/10/2026
 
 Estado vigente y límites: [HANDOFF_N8N_WHATSAPP.md](../../HANDOFF_N8N_WHATSAPP.md).
 
-[Motor de atención](https://intranetelrey.app.n8n.cloud/workflow/pGxqUgjYE6NCyiwZ), última versión conocida `7a0006c7-ab76-4738-ad65-b3aeebb427fa`; Worker vigente `48b10c7d-10f1-4218-ac4c-da55618fc25f`. El03/10 MCP nativo requirió autenticación y el plugin devolvió error interno; no se modificó ni revalidó el workflow ese día. Apertura pública y demo individual autorizados y publicados el01/10; campañas completas aplazadas.
+[Motor de atención](https://intranetelrey.app.n8n.cloud/workflow/pGxqUgjYE6NCyiwZ), publicado `b2801dd4-1753-4315-8fe7-ba45a9c1f21e`; Worker vigente `4134d63b-d099-416d-a066-7c10a2aa1ee7`, al100%. El09/10 se comprobaron acceso MCP y versiones remotas. Samuel reactivó el plan n8n durante las pruebas. Apertura pública y demo individual autorizados y publicados el01/10; campañas completas aplazadas.
+
+## Continuidad y atención comercial — 09/10
+
+Revisión de las24 conversaciones conservadas/380 mensajes. Consulta inicial antes de sede/consentimiento preservada; saludos del sitio reconocidos; cortesías y precio ya solicitado sin pendientes duplicados; precio confirmado sin abrir compra; aclaraciones humanas completas; contexto de fotos sin atribuir lectura visual. Migración específica202610090001 aplicada: pending_tasks generales de esta conversación/sede en contexto agrupado y huella, conservando imágenes/permisos.115 pruebas Node/27 grupos DB, ocho decisiones sintéticas del modelo, seis comprobaciones de conexión y lint/build aprobados; diagnóstico publicado HTTP200, público/esquema/Meta activos. Evidencia sintética y límites en [revisión](../../docs/BOT_REVIEW_20261009.md). No reproducir mensajes anteriores ni enviar pruebas a clientes. `node scripts/check-bot-conversation-review.mjs --verify-saved` revalida la evidencia sin consumir modelo ni enviar mensajes.
 
 ## Categorías generales y avisos internos — 03/10
 
@@ -48,7 +52,7 @@ Otros casos/evidencia: `acceptance-cases.json` (no todos ejecutados), `attention
 
 ## Pendientes
 
-Samuel no quiere cargar promociones todavía; las subirá a la intranet cuando existan. No crear catálogo ficticio. Faltan compra real completa y QR por sede, horarios/recordatorios, lectura de medios, respuesta humana por WhatsApp citado y plantillas fuera de ventana. Todos los números usan ahora el motor nuevo; no se restauró el bot antiguo. Ver límites de avisos fuera de ventana y recuperación en el traspaso.
+Samuel carga promociones desde la intranet cuando existan. No crear catálogo ficticio. Completar productos, fotos, stock diario y conocimientos por sede. Pedido piloto real REY-1003 y horarios/reapertura ya tienen evidencia histórica; no son pruebas nuevas de esta revisión. Siguen pendientes la lectura visual/transcripción y una plantilla apropiada para avisos internos fuera de ventana. Todos los números usan el motor nuevo; no se restauró el bot antiguo. Ver límites de avisos y recuperación en el traspaso.
 
 Migraciones 202609290001 a 202609290004 y 202609300001/002/003/004 aplicadas; v2 del 20/09 no aplicada. Limpieza manual de Samuel terminada: no repetirla. No commit/push automático. Información detallada, accesos y versiones en el traspaso principal.
 
