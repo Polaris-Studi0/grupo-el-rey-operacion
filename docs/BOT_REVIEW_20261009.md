@@ -1,5 +1,7 @@
 # Revisión de conversaciones y atención comercial — 09/10/2026
 
+Actualización posterior10/10: Samuel pidió guardar el historial de ejecuciones. n8n publicado3c353d90 conserva la lógica de esta revisión y activa exitosas/fallidas/manuales, sin progreso incremental. Las versiones y pruebas que siguen corresponden al corte del09/10. Estado vigente en HANDOFF_N8N_WHATSAPP.md.
+
 ## Alcance y evidencia
 
 Se leyeron completas las **24 conversaciones conservadas, con 380 mensajes**, desde el 01/10 hasta el 09/10, hora Colombia. La lectura incluyó respuestas del bot, aclaraciones del equipo y avisos internos. En el corte inicial había 44 tareas humanas, 43 avisos internos y 107 registros de ejecución del bot: son tipos de registros diferentes, **no un conteo de fallos**. Un resultado transaccional correcto en `ai_runs` puede corresponder a una derivación de respaldo; no prueba que el modelo haya respondido correctamente.

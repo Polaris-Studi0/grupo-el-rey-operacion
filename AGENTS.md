@@ -1,6 +1,6 @@
 # Instrucciones para continuar Grupo El Rey
 
-Leer primero `HANDOFF_N8N_WHATSAPP.md`, actualizado el 09/10/2026, y `n8n/rebuild/README.md`.
+Leer primero `HANDOFF_N8N_WHATSAPP.md`, actualizado el 10/10/2026, y `n8n/rebuild/README.md`.
 
 - Aplicación real: esta carpeta Plataforma. La carpeta de chat en Documents es otro repositorio.
 - Samuel autorizó el 01/10 abrir el bot a TODOS los clientes entrantes y un demo de una imagen a un único número. Alcance publicado; no pedir autorización otra vez para trabajo rutinario. Campañas masivas completas siguen aplazadas.
@@ -14,6 +14,10 @@ Leer primero `HANDOFF_N8N_WHATSAPP.md`, actualizado el 09/10/2026, y `n8n/rebuil
 - Samuel prefiere commit/push manual desde GitHub Desktop. Dejar título descriptivo; no crear commit/push salvo petición.
 - Comunicar avances breves en español. Evitar agentes paralelos salvo solicitud explícita.
 - Documentos en `docs/archivo/` son históricos.
+
+- 10/10: Samuel pidió activar el historial de n8n para diagnosticar errores. Motor publicado3c353d90: guardar ejecuciones exitosas/fallidas/manuales, sin progreso incremental. Esta autorización reemplaza las instrucciones antiguas de no guardar ejecuciones. Registros privados; no copiar cabeceras/datos de clientes a Git/chat. Lógica, credenciales y conexiones intactas; Worker/base sin cambios. Ver comprobación de historial en HANDOFF.
+
+- 10/10: Samuel pidió retirar pendientes antiguos repetidos. Limpieza puntual ejecutada:17 tareas generales duplicadas/ya atendidas canceladas;4 consultas únicas siguen pendientes. Respaldo privado en ~/.config/grupo-el-rey/pending-cleanup-20261010/. No borrado físico ni mensajes de cierre, sin reanudar chats. Las23 tareas resueltas y los cuatro pendientes conservados no cambiaron; chats/pedidos/outbox preservados. No repetir la limpieza ni interpretar esto como autorización para vaciar todos los pendientes. Detalles en HANDOFF.
 
 - 09/10: leídas las 24 conversaciones conservadas/380 mensajes. Continuidad de consulta inicial y saludo web con sede, cortesías y precio ya pendiente sin tareas duplicadas, precio exacto confirmado sin carrito, aclaraciones completas y contexto de adjuntos publicados. Worker4134d63b, n8n b2801dd4; migración específica202610090001 aplicada. Mantener el alcance de pending_tasks (conversación/sede, generales, motor nuevo) y su huella; no tratar pendientes como hechos confirmados. 115 pruebas Node/27 grupos DB, ocho decisiones sintéticas del modelo, seis comprobaciones de conexión y diagnóstico publicado aprobados. Samuel reactivó el plan n8n; distinguir pruebas sintéticas de entrega real. Detalles y evidencia en docs/BOT_REVIEW_20261009.md. No sembrar catálogo ni convertir respuestas de chats en conocimiento global automáticamente; no commit/push.
 

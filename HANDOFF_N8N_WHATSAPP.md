@@ -1,17 +1,33 @@
 # Traspaso vigente — bot de Grupo Almacenes El Rey
 
-Actualizado el **09/10/2026**. Este documento determina el estado real; los documentos de arquitectura describen el objetivo.
+Actualizado el **10/10/2026**. Este documento determina el estado real; los documentos de arquitectura describen el objetivo.
 
 ## Publicado y autorizado
 
 - Aplicación real: `/Users/samuel/Desktop/Cowork for Grupo El Rey/Plataforma`. Samuel autorizó editar código y publicar mejoras del bot. **No manejar pantalla; usar MCP/CLI. No commit/push**: Samuel usa GitHub Desktop. HEAD de Samuel al iniciar esta revisión: `2ddcd6e update bot`. Codex no hizo commit/push.
 - Worker `grupo-el-rey-operacion`: **`4134d63b-d099-416d-a066-7c10a2aa1ee7`**, 100%, continuidad y atención comercial del09/10. Versión inicial de Samuel `26069818-36c1-463a-9219-d52f6b67a00f`. Las25 vinculaciones y configuración de ejecución íntegramente preservadas. Conserva captura conjunta de domicilio, horarios, acceso, contraste de caja, privacidad y chat interno. Codex no hizo commit/push.
-- [Motor nuevo de n8n](https://intranetelrey.app.n8n.cloud/workflow/pGxqUgjYE6NCyiwZ), 17 nodos, gpt-5-mini mediante Gateway. Publicado **`b2801dd4-1753-4315-8fe7-ba45a9c1f21e`**, borrador coincidente. Consulta original al elegir sede, pendientes de esta conversación, precio sin compra y aclaraciones completas. Conexiones, credenciales y configuración de privacidad intactas.
-- Webhook privado `POST /webhook/el-rey-assistant-turn-v1`. Solo propone: no envía ni escribe en la base. No guardar datos de ejecuciones exitosas/fallidas/manuales ni progreso.
+- [Motor nuevo de n8n](https://intranetelrey.app.n8n.cloud/workflow/pGxqUgjYE6NCyiwZ), 17 nodos, gpt-5-mini mediante Gateway. Publicado **`3c353d90-ec8a-4e92-95df-a699bbd7ed89`**, borrador coincidente. Mantiene las mejoras del09/10; historial activado el10/10 por Samuel. Conexiones y credenciales intactas.
+- Webhook privado `POST /webhook/el-rey-assistant-turn-v1`. Solo propone: no envía ni escribe en la base. Guardar ejecuciones exitosas, fallidas y manuales; progreso incremental desactivado. Registros privados para diagnóstico.
 - **Samuel autorizó explícitamente abrir el bot a todos el 01/10. Publicado.** WhatsApp empresarial +57 314 789 9116; propietario/avisos +57 312 737 8289. BOT_PUBLIC_ENABLED=true; mensajes públicos desde `2026-10-01T19:39:54.198Z`. Se conservan consentimiento, sede, control manual, sesión tras 24 h de inactividad y validaciones comerciales.
 - Todos los teléfonos nuevos usan el motor nuevo. Ruta heredada suprimida en modo público; no se reactivó la IA antigua ni se reenvían eventos históricos. El comando PROBAR BOT solo puede quitar control manual al propietario, nunca a otros clientes.
 
 - Meta autenticado; contexto remoto legible. Durante el incidente, La Estrella tenía **0 productos activos y 0 QR activos**. El diagnóstico debe comprobar de nuevo la sede elegida y sus recursos. Samuel pidió no cargar promociones todavía; las subirá cuando existan. No sembrar productos ficticios.
+
+## Historial de ejecuciones — 10/10
+
+Samuel solicitó expresamente conservar el historial de n8n para ver errores. Publicados `saveDataSuccessExecution=all`, `saveDataErrorExecution=all`, `saveManualExecutions=true`; se mantiene `saveExecutionProgress=false`, timeout120s y zona Colombia. Cambio únicamente de ajustes de guardado y nota de arquitectura; parámetros de los16 nodos funcionales, conexiones y credenciales comparados e intactos. Exportación local actualizada con active:false. No cambios de Worker, base ni código de atención; sin commit/push.
+
+Esto reemplaza las instrucciones históricas de no guardar ejecuciones. Aplica a nuevas ejecuciones; no recupera datos anteriores que no se guardaron ni modifica la retención del plan. No copiar cabeceras privadas o datos de clientes al chat/repositorio. Fallos que el flujo captura y devuelve como agent_unavailable pueden tener estado Success en n8n; revisar también el resultado del nodo de validación/respuesta.
+
+Verificación remota: ajustes leídos de vuelta y versión activa coincidente; prueba sintética sin envíos ni escrituras comerciales retornó decision_ready HTTP200 y quedó guardada como ejecución373, Success, a las00:04 Colombia del10/10. No se forzó un error ni se enviaron mensajes a clientes. Las ejecuciones fallidas/manuales quedaron habilitadas por configuración.
+
+## Limpieza de pendientes repetidos — 10/10
+
+Samuel pidió retirar los pendientes pasados que se repetían. Revisadas las21 tareas generales activas contra sus mensajes y respuestas posteriores: **17 canceladas y4 consultas únicas conservadas**. Se retiraron duplicados de consultas ya atendidas, cortesías/aceptación que generaron tareas y una consulta antigua sustituida por otra más precisa. Conservadas: presentaciones Click Hair en Floresta, ollas novedosas en San Antonio de Prado, topper happy birthday sin brillo en La Estrella e Igora Royal7.77 (disponibilidad/precio) en La80.
+
+Cancelación puntual, no borrado físico, para sacarlas de la lista activa conservando trazabilidad. Cada tarea incluye motivo de limpieza en resolution, sin answer ni conocimiento generado. Respaldo previo completo y plan de17 IDs fuera de Git, ~/.config/grupo-el-rey/pending-cleanup-20261010/, permisos0700/0600. SQL con comparación de filas completas y bloqueo: aborta si cambió alguna tarea o hay eventos sin procesar; dry-run revertido antes de aplicar. No usar resolve_human_task ni activar respuestas/outbox para esta limpieza.
+
+Verificado remotamente a las00:09 Colombia:17 canceladas,4 pendientes,23 resueltas intactas; total44 tareas,24 conversaciones,383 mensajes y1 pedido conservados. Todas las tareas no seleccionadas y todos los eventos de outbox idénticos al respaldo. Sin envíos/reanudaciones, sin cambios de esquema/Worker/n8n y sin commit/push. No repetir ni ampliar esta operación a consultas reales o a una limpieza general de datos.
 
 ## Revisión completa de chats — 09/10
 

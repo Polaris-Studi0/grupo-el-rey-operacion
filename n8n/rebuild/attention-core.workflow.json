@@ -292,7 +292,7 @@
     },
     {
       "parameters": {
-        "content": "## Motor nuevo · piloto de WhatsApp\nEntrada privada → validación → IA y seis herramientas → propuesta validada → Worker.\n\nModos: test (sintético), preview (intranet sin efectos) y pilot (solo el contacto de prueba autorizado por Worker).\nEl Worker recibe y guarda el mensaje/adjuntos, revalida contexto y control, registra respuesta durable y la entrega por Meta. Reutiliza transacciones revisadas de la intranet, sin activar el agente anterior.\n\nSi falta información: pendiente propio del piloto → aviso al WhatsApp personal configurado → respuesta en intranet → mensaje al cliente. Los avisos internos se excluyen de la memoria pública. Recuperación por cron y leases existentes; no reenvío ciego de entregas inciertas.\n\nEl consumidor comercial ya implementa carrito, resumen aceptado, reservas, QR exacto y pedido idempotente. El pago requiere aprobación explícita del operador; la IA nunca lo aprueba. Stock manual confirmado hasta las 20:00 Colombia de ese día. Faltan compras reales de aceptación cuando Samuel cargue promociones.\n\nSedes: el Worker consulta las sedes activas y responde con nombres/números, sin IDs internos ni IA. Contexto comercial leído en una consulta consistente. Cliente primero, aviso al dueño después. Recuperación acotada por ejecución.\nControl manual se respeta. El dueño puede iniciar su prueba con PROBAR BOT desde el único número permitido. No ampliar a otros clientes todavía.\n\nNo guardar datos de ejecuciones: la cabecera privada y el historial del cliente son sensibles.",
+        "content": "## Motor nuevo · piloto de WhatsApp\nEntrada privada → validación → IA y seis herramientas → propuesta validada → Worker.\n\nModos: test (sintético), preview (intranet sin efectos) y pilot (solo el contacto de prueba autorizado por Worker).\nEl Worker recibe y guarda el mensaje/adjuntos, revalida contexto y control, registra respuesta durable y la entrega por Meta. Reutiliza transacciones revisadas de la intranet, sin activar el agente anterior.\n\nSi falta información: pendiente propio del piloto → aviso al WhatsApp personal configurado → respuesta en intranet → mensaje al cliente. Los avisos internos se excluyen de la memoria pública. Recuperación por cron y leases existentes; no reenvío ciego de entregas inciertas.\n\nEl consumidor comercial ya implementa carrito, resumen aceptado, reservas, QR exacto y pedido idempotente. El pago requiere aprobación explícita del operador; la IA nunca lo aprueba. Stock manual confirmado hasta las 20:00 Colombia de ese día. Faltan compras reales de aceptación cuando Samuel cargue promociones.\n\nSedes: el Worker consulta las sedes activas y responde con nombres/números, sin IDs internos ni IA. Contexto comercial leído en una consulta consistente. Cliente primero, aviso al dueño después. Recuperación acotada por ejecución.\nControl manual se respeta. El dueño puede iniciar su prueba con PROBAR BOT desde el único número permitido. No ampliar a otros clientes todavía.\n\nHistorial de ejecuciones activado por Samuel el 10/10/2026: guardar exitosas, fallidas y manuales; progreso por nodo desactivado. Registros privados para diagnóstico; no compartir ni copiar cabeceras o datos de clientes al repositorio.",
         "height": 430,
         "width": 900,
         "color": 5
@@ -498,9 +498,9 @@
     "availableInMCP": true,
     "timezone": "America/Bogota",
     "saveExecutionProgress": false,
-    "saveManualExecutions": false,
-    "saveDataErrorExecution": "none",
-    "saveDataSuccessExecution": "none",
+    "saveManualExecutions": true,
+    "saveDataErrorExecution": "all",
+    "saveDataSuccessExecution": "all",
     "executionTimeout": 120,
     "binaryMode": "separate"
   },

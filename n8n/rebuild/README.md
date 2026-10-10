@@ -1,8 +1,8 @@
-# Bot de WhatsApp — 09/10/2026
+# Bot de WhatsApp — 10/10/2026
 
 Estado vigente y límites: [HANDOFF_N8N_WHATSAPP.md](../../HANDOFF_N8N_WHATSAPP.md).
 
-[Motor de atención](https://intranetelrey.app.n8n.cloud/workflow/pGxqUgjYE6NCyiwZ), publicado `b2801dd4-1753-4315-8fe7-ba45a9c1f21e`; Worker vigente `4134d63b-d099-416d-a066-7c10a2aa1ee7`, al100%. El09/10 se comprobaron acceso MCP y versiones remotas. Samuel reactivó el plan n8n durante las pruebas. Apertura pública y demo individual autorizados y publicados el01/10; campañas completas aplazadas.
+[Motor de atención](https://intranetelrey.app.n8n.cloud/workflow/pGxqUgjYE6NCyiwZ), publicado `3c353d90-ec8a-4e92-95df-a699bbd7ed89`; Worker vigente `4134d63b-d099-416d-a066-7c10a2aa1ee7`, al100%. Historial de ejecuciones exitosas/fallidas/manuales activado el10/10 por solicitud de Samuel; lógica del09/10 intacta. Apertura pública y demo individual autorizados y publicados el01/10; campañas completas aplazadas.
 
 ## Continuidad y atención comercial — 09/10
 
@@ -26,7 +26,7 @@ n8n usa gpt-5-mini y seis herramientas acotadas. Entrada privada `el-rey.bot.tur
 
 El Worker y Supabase validan las acciones: carrito, stock confirmado hasta el cierre del día, tarifa humana, resumen entregado/aceptado, reserva, QR exacto, comprobante y aprobación humana explícita. El bot nunca aprueba pagos. Un pedido solo se anuncia después de insertarlo de forma idempotente. Las aclaraciones humanas se incorporan naturalmente, sin atribuciones internas.
 
-`attention-core.workflow.json` es la exportación vigente con `active:false` para evitar activación al importar. Actualizar el ID existente por MCP. **No guardar ejecuciones**: las cabeceras y el contexto incluyen información privada.
+`attention-core.workflow.json` es la exportación vigente con `active:false` para evitar activación al importar. Actualizar el ID existente por MCP. **Guardar ejecuciones exitosas/fallidas/manuales**, por solicitud de Samuel del10/10; progreso incremental desactivado. Historial privado para diagnóstico, sin copiar cabeceras ni datos de clientes a Git/chat. La evidencia del09/10 corresponde a su versión anterior; los parámetros funcionales no cambiaron al activar el historial.
 
 ## Corrección de sedes y envíos
 
